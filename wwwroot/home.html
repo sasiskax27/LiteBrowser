@@ -32,6 +32,9 @@
   .foot { position: fixed; bottom: 18px; color: var(--dim); font-size: 12.5px; display: flex; gap: 20px; }
   .foot b { color: var(--ok); font-weight: 600; }
   .foot .off b { color: var(--bad); }
+  .private { display: none; margin: -18px 0 30px; padding: 10px 18px; border-radius: 14px; font-size: 13.5px; color: #d9c8ff;
+             background: rgba(176,124,255,.12); border: 1px solid rgba(176,124,255,.3); }
+  .private.show { display: block; }
   @media (max-width: 760px) { .tiles { grid-template-columns: repeat(3, 100px); } }
 </style>
 </head>
@@ -40,6 +43,7 @@
 <div class="time" id="time">--:--</div>
 <div class="date" id="date"></div>
 <div class="hello" id="hello"></div>
+<div class="private" id="private">🕶 Режим инкогнито: история, cookies и данные сайтов удалятся, когда вы закроете это окно</div>
 
 <form action="https://lite.home/search" method="get" autocomplete="off">
   <span class="lens icon">&#xE721;</span>

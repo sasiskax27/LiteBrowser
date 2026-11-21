@@ -2,21 +2,22 @@ if (window.top !== window) document.documentElement.innerHTML = '';
 
 const $ = id => document.getElementById(id);
 const wv = window.chrome && window.chrome.webview;
-let state = null, engines = [], toastTimer = 0;
+let state = null, info = null, toastTimer = 0, saveTimer = 0;
 
 function toast(text) {
   $('toastText').textContent = text;
   $('toast').classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => $('toast').classList.remove('show'), 1600);
+  toastTimer = setTimeout(() => $('toast').classList.remove('show'), 1800);
 }
 
-function save() { wv.postMessage({ type: 'save', settings: state }); }
+function save() { clearTimeout(saveTimer); wv.postMessage({ type: 'save', settings: state }); }
+function saveLater() { clearTimeout(saveTimer); saveTimer = setTimeout(save, 600); }
 
-function render() {
+function renderEngines() {
   const box = $('engines');
   box.innerHTML = '';
-  for (const en of engines) {
+  for (const en of info.engines) {
     const el = document.createElement('button');
     el.className = 'engine' + (en.id === state.engine ? ' on' : '');
     el.innerHTML = '<div class="en-name"></div><div class="en-desc"></div>' +
@@ -24,17 +25,72 @@ function render() {
       '<span class="check icon">&#xE73E;</span>';
     el.querySelector('.en-name').textContent = en.name;
     el.querySelector('.en-desc').textContent = en.desc;
-    el.onclick = () => { if (state.engine === en.id) return; state.engine = en.id; render(); save(); };
+    el.onclick = () => { if (state.engine === en.id) return; state.engine = en.id; renderEngines(); save(); };
     box.appendChild(el);
   }
-  $('https').checked = state.httpsOnly;
-  $('ads').checked = state.blockAds;
-  document.querySelectorAll('#theme button').forEach(b => b.classList.toggle('on', b.dataset.v === state.siteTheme));
 }
 
-$('https').onchange = e => { state.httpsOnly = e.target.checked; save(); };
-$('ads').onchange = e => { state.blockAds = e.target.checked; save(); };
-document.querySelectorAll('#theme button').forEach(b => b.onclick = () => { state.siteTheme = b.dataset.v; render(); save(); });
+function renderProxy() {
+  const on = state.proxyMode !== 'off';
+  $('proxyExtra').classList.toggle('hidden', !on);
+  $('sitesBox').classList.toggle('hidden', state.proxyMode !== 'list');
+  $('restartBanner').classList.toggle('show', !!info.restartNeeded);
+  $('proxyDot').classList.toggle('on', info.proxyRunning && !info.restartNeeded);
+  $('proxyState').textContent = info.restartNeeded ? 'Нужен перезапуск' : info.proxyRunning ? 'Работает' : 'Выключено';
+}
+
+function render() {
+  renderEngines();
+  document.querySelectorAll('input[data-key]').forEach(i => i.checked = !!state[i.dataset.key]);
+  document.querySelectorAll('.seg[data-seg]').forEach(seg => {
+    const v = String(state[seg.dataset.seg]);
+    seg.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  });
+  if (document.activeElement !== $('pHost')) $('pHost').value = state.proxyHost;
+  if (document.activeElement !== $('pPort')) $('pPort').value = state.proxyPort;
+  if (document.activeElement !== $('sites')) $('sites').value = state.proxySites.join('\n');
+  renderProxy();
+
+  const bl = info.blocklist;
+  $('blStatus').textContent = bl.updating ? 'Загружается список…'
+    : bl.count > 0 ? `Загружено ${bl.count.toLocaleString('ru-RU')} доменов, обновлено ${bl.updated}` : 'Список ещё не загружен';
+
+  $('about').innerHTML = '';
+  for (const line of [
+    'Версия LiteBrowser: ' + info.version,
+    'Движок: Chromium (Microsoft WebView2) ' + info.browserVersion + '. Обновляется автоматически вместе с Windows',
+    'Данные браузера хранятся только на этом компьютере',
+  ]) { const d = document.createElement('div'); d.textContent = line; $('about').appendChild(d); }
+}
+
+// Переключатели
+document.querySelectorAll('input[data-key]').forEach(i => i.onchange = () => { state[i.dataset.key] = i.checked; save(); });
+document.querySelectorAll('.seg[data-seg]').forEach(seg => seg.querySelectorAll('button').forEach(b => b.onclick = () => {
+  state[seg.dataset.seg] = seg.dataset.num ? Number(b.dataset.v) : b.dataset.v;
+  render(); save();
+}));
+
+// Прокси
+$('pHost').oninput = () => { state.proxyHost = $('pHost').value.trim(); saveLater(); };
+$('pPort').oninput = () => { const p = parseInt($('pPort').value, 10); if (p > 0 && p < 65536) { state.proxyPort = p; saveLater(); } };
+$('sites').oninput = () => { state.proxySites = $('sites').value.split('\n').map(s => s.trim()).filter(Boolean); saveLater(); };
+$('resetSites').onclick = () => { state.proxySites = info.defaultSites.slice(); $('sites').value = state.proxySites.join('\n'); save(); };
+document.querySelectorAll('.chip').forEach(c => c.onclick = () => {
+  state.proxyHost = '127.0.0.1'; state.proxyPort = Number(c.dataset.port); state.proxyType = 'socks5';
+  if (state.proxyMode === 'off') state.proxyMode = 'list';
+  $('pHost').value = state.proxyHost; $('pPort').value = state.proxyPort;
+  render(); save();
+});
+$('test').onclick = () => {
+  $('testResult').className = 'test'; $('testResult').textContent = 'Проверяю…';
+  wv.postMessage({ type: 'testProxy', host: $('pHost').value.trim(), port: parseInt($('pPort').value, 10) });
+};
+$('restart').onclick = () => wv.postMessage({ type: 'restart' });
+
+// Остальное
+$('blUpdate').onclick = () => wv.postMessage({ type: 'updateBlocklist' });
+$('shortcuts').onclick = () => wv.postMessage({ type: 'shortcuts' });
+$('defaultBrowser').onclick = () => wv.postMessage({ type: 'defaultBrowser' });
 $('clear').onclick = () => {
   if (confirm('Удалить историю, cookies, кэш и данные сайтов?\nВы выйдете из всех аккаунтов.')) wv.postMessage({ type: 'clear' });
 };
@@ -42,16 +98,14 @@ $('clear').onclick = () => {
 if (wv) {
   wv.addEventListener('message', e => {
     const m = e.data;
-    if (m.type === 'settings') {
-      state = m.settings; engines = m.engines; render();
-      $('about').innerHTML = '';
-      for (const line of ['Версия LiteBrowser: ' + m.version, 'Движок: Chromium (Microsoft WebView2) ' + m.browserVersion,
-                          'Движок обновляется автоматически вместе с Windows']) {
-        const d = document.createElement('div'); d.textContent = line; $('about').appendChild(d);
-      }
+    if (m.type === 'settings') { state = m.settings; info = m; render(); }
+    else if (m.type === 'saved') { if (info) { info.restartNeeded = m.restartNeeded; renderProxy(); } toast('Сохранено'); }
+    else if (m.type === 'proxyTest') {
+      $('testResult').className = 'test ' + (m.ok ? 'ok' : 'bad');
+      $('testResult').textContent = m.ok ? `✓ Прокси отвечает (${m.ms} мс)` : '✕ Нет ответа. Запущен ли VPN-клиент и верен ли порт?';
     }
-    else if (m.type === 'saved') toast('Сохранено');
-    else if (m.type === 'cleared') toast('Данные удалены');
+    else if (m.type === 'done') toast(m.text);
+    else if (m.type === 'error') toast('Ошибка: ' + m.text);
   });
   wv.postMessage({ type: 'get' });
 }

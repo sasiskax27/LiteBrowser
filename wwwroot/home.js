@@ -13,6 +13,7 @@ function tick() {
 }
 tick();
 setInterval(tick, 1000);
+if (new URLSearchParams(location.search).has('private')) $('private').classList.add('show');
 
 const item = (name, on) => `<span class="${on ? '' : 'off'}">${name}: <b>${on ? 'вкл' : 'выкл'}</b></span>`;
 
@@ -26,7 +27,8 @@ if (wv) {
     $('engineName').textContent = en ? en.name : '';
     $('q').placeholder = 'Поиск в ' + name + ' или адрес сайта';
     $('foot').innerHTML = item('Только HTTPS', m.settings.httpsOnly) +
-      item('Блокировка рекламы и трекеров', m.settings.blockAds) + item('SmartScreen', true);
+      item('Блокировка рекламы и трекеров', m.settings.blockAds) + item('SmartScreen', true) +
+      (m.proxyRunning ? item('Обход блокировок', true) : '');
   });
   wv.postMessage({ type: 'get' });
 }

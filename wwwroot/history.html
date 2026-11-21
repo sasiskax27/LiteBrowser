@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<title>История</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  body { overflow-y: auto; }
+  .bar { display: flex; gap: 10px; margin-bottom: 18px; position: sticky; top: 0; padding: 12px 0; z-index: 5;
+         background: linear-gradient(var(--bg) 75%, transparent); }
+  .bar input { flex: 1; }
+  .day { color: var(--dim); font-size: 13px; font-weight: 600; margin: 22px 4px 8px; text-transform: capitalize; }
+  .list { background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  .item { display: flex; align-items: center; gap: 14px; padding: 10px 14px; text-decoration: none; color: var(--text); }
+  .item + .item { border-top: 1px solid var(--line); }
+  .item:hover { background: rgba(255,255,255,.05); }
+  .time { color: var(--dim); font-size: 12.5px; width: 42px; flex: none; }
+  .txt { flex: 1; min-width: 0; }
+  .title { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .url { color: var(--dim); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .del { opacity: 0; border: 0; background: none; color: var(--dim); cursor: pointer; width: 30px; height: 30px; border-radius: 50%; font-size: 11px; }
+  .item:hover .del { opacity: 1; }
+  .del:hover { background: rgba(255,255,255,.1); color: var(--text); }
+  .empty { color: var(--dim); text-align: center; padding: 60px 0; font-size: 14px; }
+  .off { color: var(--warn); font-size: 13px; margin-bottom: 10px; display: none; }
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<main>
+  <header>
+    <div class="logo">L</div>
+    <div><h1>История</h1><div class="sub">Хранится только на этом компьютере</div></div>
+  </header>
+  <div class="off" id="off">Сохранение истории выключено в <a href="settings.html#bookmarks" style="color:var(--accent)">настройках</a>.</div>
+  <div class="bar">
+    <input class="text" id="q" placeholder="Поиск по истории" autofocus spellcheck="false">
+    <button class="btn danger" id="clear">Очистить всё</button>
+  </div>
+  <div id="out"></div>
+</main>
+<div class="toast" id="toast"><span class="icon">&#xE73E;</span><span id="toastText"></span></div>
+<script src="history.js"></script>
+</body>
+</html>

@@ -7,16 +7,10 @@
 <link rel="stylesheet" href="common.css">
 <style>
   body { overflow-y: auto; }
-  main { max-width: 780px; margin: 0 auto; padding: 48px 24px 80px; }
-  header { display: flex; align-items: center; gap: 16px; margin-bottom: 34px; }
-  .logo { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; font-size: 26px;
-          background: linear-gradient(135deg, var(--accent), var(--accent2)); box-shadow: 0 10px 30px rgba(124,156,255,.35); }
-  h1 { font-size: 30px; font-weight: 600; margin: 0; }
-  .sub { color: var(--dim); font-size: 14px; margin-top: 2px; }
-  section { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 22px 22px 18px; margin-bottom: 18px;
-            backdrop-filter: blur(14px); }
-  h2 { font-size: 15px; font-weight: 600; margin: 0 0 14px; display: flex; gap: 10px; align-items: center; }
-  h2 .icon { color: var(--accent); font-size: 16px; }
+  nav { position: sticky; top: 0; z-index: 5; display: flex; gap: 6px; flex-wrap: wrap; padding: 10px 0 14px; margin-bottom: 6px;
+        background: linear-gradient(var(--bg) 70%, transparent); }
+  nav a { color: var(--dim); text-decoration: none; font-size: 13px; padding: 6px 12px; border-radius: 10px; background: rgba(255,255,255,.04); }
+  nav a:hover { color: var(--text); background: rgba(255,255,255,.09); }
   .engines { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
   .engine { text-align: left; font: inherit; color: var(--text); background: rgba(255,255,255,.035); border: 1px solid var(--line);
             border-radius: 14px; padding: 14px 14px 12px; cursor: pointer; transition: .18s; position: relative; }
@@ -30,28 +24,28 @@
   .tag { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 10px; }
   .tag.ok { color: var(--ok); background: rgba(110,207,150,.12); }
   .tag.warn { color: var(--warn); background: rgba(255,184,107,.12); }
-  .row { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 12px 2px; }
-  .row + .row { border-top: 1px solid var(--line); }
-  .row-title { font-size: 14.5px; }
-  .row-sub { color: var(--dim); font-size: 12.5px; margin-top: 3px; line-height: 1.35; }
-  .switch { position: relative; width: 46px; height: 26px; flex: none; }
-  .switch input { opacity: 0; width: 0; height: 0; }
-  .slider { position: absolute; inset: 0; border-radius: 13px; background: #3a3d4a; cursor: pointer; transition: .2s; }
-  .slider::before { content: ""; position: absolute; width: 20px; height: 20px; left: 3px; top: 3px; border-radius: 50%; background: #fff; transition: .2s; }
-  .switch input:checked + .slider { background: linear-gradient(135deg, var(--accent), var(--accent2)); }
-  .switch input:checked + .slider::before { transform: translateX(20px); }
-  .seg { display: inline-flex; background: rgba(255,255,255,.05); border: 1px solid var(--line); border-radius: 12px; padding: 3px; flex: none; }
-  .seg button { font: inherit; font-size: 13px; color: var(--dim); background: none; border: 0; padding: 7px 14px; border-radius: 9px; cursor: pointer; transition: .15s; }
-  .seg button.on { background: var(--accent); color: #0d1020; font-weight: 600; }
-  .danger { font: inherit; font-size: 13.5px; color: var(--bad); background: rgba(255,120,120,.08); border: 1px solid rgba(255,120,120,.3);
-            padding: 9px 16px; border-radius: 11px; cursor: pointer; transition: .15s; flex: none; }
-  .danger:hover { background: rgba(255,120,120,.16); }
-  .about { color: var(--dim); font-size: 13px; line-height: 1.7; }
-  .toast { position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 20px); opacity: 0; transition: .25s;
-           background: #2a2d38; border: 1px solid var(--line); padding: 10px 18px; border-radius: 12px; font-size: 13.5px;
-           display: flex; gap: 8px; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,.4); }
-  .toast.show { opacity: 1; transform: translate(-50%, 0); }
-  .toast .icon { color: var(--ok); }
+  .banner { display: none; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 16px; border-radius: 14px; margin: 4px 0 14px;
+            background: rgba(255,184,107,.1); border: 1px solid rgba(255,184,107,.35); font-size: 13.5px; }
+  .banner.show { display: flex; }
+  .status { display: inline-flex; gap: 8px; align-items: center; font-size: 13px; padding: 6px 12px; border-radius: 10px; background: rgba(255,255,255,.05); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+  .dot.on { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  .grid2 { display: grid; grid-template-columns: 1fr 140px; gap: 10px; margin: 6px 0 4px; }
+  .label { color: var(--dim); font-size: 12px; margin: 10px 0 6px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font: inherit; font-size: 12.5px; color: var(--text); background: rgba(255,255,255,.06); border: 1px solid var(--line);
+          border-radius: 20px; padding: 5px 12px; cursor: pointer; }
+  .chip:hover { border-color: var(--accent); }
+  textarea.text { width: 100%; min-height: 150px; resize: vertical; font-family: Consolas, monospace; font-size: 13px; line-height: 1.5; }
+  .proxy-extra.hidden, .hidden { display: none; }
+  .test { font-size: 13px; margin-left: 10px; }
+  .test.ok { color: var(--ok); } .test.bad { color: var(--bad); }
+  details { margin-top: 12px; }
+  summary { cursor: pointer; color: var(--accent); font-size: 13px; }
+  details ol { color: var(--dim); font-size: 13px; line-height: 1.7; padding-left: 20px; }
+  details b { color: var(--text); }
+  .about { color: var(--dim); font-size: 13px; line-height: 1.8; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
 </style>
 </head>
 <body>
@@ -59,45 +53,146 @@
 <main>
   <header>
     <div class="logo">L</div>
-    <div><h1>Настройки</h1><div class="sub">LiteBrowser — лёгкий и безопасный браузер</div></div>
+    <div><h1>Настройки</h1><div class="sub">LiteBrowser — лёгкий и безопасный браузер. Любую функцию можно выключить.</div></div>
   </header>
 
-  <section>
+  <nav>
+    <a href="#search">Поиск</a><a href="#security">Безопасность</a><a href="#proxy">Обход блокировок</a>
+    <a href="#tabs">Вкладки</a><a href="#bookmarks">Закладки и история</a><a href="#look">Вид</a><a href="#system">Система</a><a href="#data">Данные</a>
+  </nav>
+
+  <section id="search">
     <h2><span class="icon">&#xE721;</span>Поисковая система</h2>
     <div class="engines" id="engines"></div>
   </section>
 
-  <section>
+  <section id="security">
     <h2><span class="icon">&#xEA18;</span>Безопасность</h2>
     <div class="row">
       <div><div class="row-title">Только защищённые сайты (HTTPS)</div>
         <div class="row-sub">Браузер сам переходит на защищённое соединение и предупреждает, если сайт его не поддерживает</div></div>
-      <label class="switch"><input type="checkbox" id="https"><span class="slider"></span></label>
+      <label class="switch"><input type="checkbox" data-key="httpsOnly"><span class="slider"></span></label>
     </div>
     <div class="row">
       <div><div class="row-title">Блокировка рекламы и трекеров</div>
-        <div class="row-sub">Запросы к рекламным и следящим сервисам не уходят в сеть — страницы грузятся быстрее</div></div>
-      <label class="switch"><input type="checkbox" id="ads"><span class="slider"></span></label>
+        <div class="row-sub">Запросы к рекламным и следящим сервисам не уходят в сеть, поэтому страницы грузятся быстрее</div></div>
+      <label class="switch"><input type="checkbox" data-key="blockAds"><span class="slider"></span></label>
+    </div>
+    <div class="row">
+      <div><div class="row-title">Расширенная защита</div>
+        <div class="row-sub">Большой список (StevenBlack, около 80 000 доменов) рекламы, трекеров и вредоносных сайтов. Обновляется раз в неделю.
+          <br><span id="blStatus"></span></div></div>
+      <div class="actions"><button class="btn" id="blUpdate">Обновить</button>
+        <label class="switch"><input type="checkbox" data-key="extendedBlocklist"><span class="slider"></span></label></div>
     </div>
   </section>
 
-  <section>
+  <section id="proxy">
+    <h2><span class="icon">&#xE774;</span>Обход блокировок</h2>
+    <p class="note">Браузер сам не может обойти блокировки: для этого нужен сервер за границей. Запустите ваш <b>VPN-клиент</b>
+      (v2rayN, Hiddify, NekoBox, Clash, Outline) или <b>Tor Browser</b>, и LiteBrowser пустит трафик через него.
+      Можно отправлять через прокси все сайты или только заблокированные, а остальные откроются напрямую и быстро.</p>
+    <div class="banner" id="restartBanner"><span>Чтобы изменения прокси заработали, нужно перезапустить браузер. Вкладки сохранятся.</span>
+      <button class="btn primary" id="restart">Перезапустить</button></div>
+    <div class="row">
+      <div><div class="row-title">Режим</div><div class="row-sub"><span class="status"><span class="dot" id="proxyDot"></span><span id="proxyState"></span></span></div></div>
+      <div class="seg" data-seg="proxyMode"><button data-v="off">Выключено</button><button data-v="list">Только выбранные сайты</button><button data-v="all">Все сайты</button></div>
+    </div>
+    <div class="proxy-extra" id="proxyExtra">
+      <div class="row">
+        <div><div class="row-title">Тип прокси</div><div class="row-sub">Большинство VPN-клиентов дают SOCKS5, Tor тоже</div></div>
+        <div class="seg" data-seg="proxyType"><button data-v="socks5">SOCKS5</button><button data-v="http">HTTP</button></div>
+      </div>
+      <div class="label">Адрес и порт прокси</div>
+      <div class="grid2">
+        <input class="text" id="pHost" placeholder="127.0.0.1" spellcheck="false">
+        <input class="text" id="pPort" placeholder="10808" inputmode="numeric">
+      </div>
+      <div class="label">Быстрый выбор: порт по умолчанию у популярных программ</div>
+      <div class="chips">
+        <button class="chip" data-port="10808">v2rayN · 10808</button>
+        <button class="chip" data-port="12334">Hiddify · 12334</button>
+        <button class="chip" data-port="2080">NekoBox · 2080</button>
+        <button class="chip" data-port="7890">Clash · 7890</button>
+        <button class="chip" data-port="1080">Outline / Shadowsocks · 1080</button>
+        <button class="chip" data-port="9150">Tor Browser · 9150</button>
+        <button class="chip" data-port="9050">Tor · 9050</button>
+      </div>
+      <div style="margin-top:14px"><button class="btn" id="test">Проверить соединение</button><span class="test" id="testResult"></span></div>
+      <div id="sitesBox">
+        <div class="label">Сайты, которые открывать через прокси (по одному в строке, поддомены включаются автоматически)</div>
+        <textarea class="text" id="sites" spellcheck="false"></textarea>
+        <div style="margin-top:8px"><button class="btn" id="resetSites">Вернуть список по умолчанию</button></div>
+      </div>
+      <details>
+        <summary>Как это настроить?</summary>
+        <ol>
+          <li>Установите VPN-клиент (например, <b>v2rayN</b> или <b>Hiddify</b>) и добавьте в него свой сервер или подписку.</li>
+          <li>Подключитесь. Системный VPN включать не обязательно: браузеру хватит локального прокси.</li>
+          <li>Нажмите кнопку с вашей программой выше (или впишите порт из её настроек) и выберите режим.</li>
+          <li>Нажмите «Проверить соединение», затем «Перезапустить».</li>
+          <li>Вариант без своего сервера: запустите <b>Tor Browser</b> и выберите «Tor Browser · 9150». Будет медленнее, зато бесплатно.
+            Если Tor не подключается, включите в нём мосты (snowflake или obfs4).</li>
+        </ol>
+      </details>
+    </div>
+  </section>
+
+  <section id="tabs">
+    <h2><span class="icon">&#xE737;</span>Вкладки и память</h2>
+    <div class="row">
+      <div><div class="row-title">Открывать вкладки прошлого сеанса</div>
+        <div class="row-sub">При запуске браузер вернёт вкладки, которые были открыты. Они загружаются, только когда вы на них переключитесь</div></div>
+      <label class="switch"><input type="checkbox" data-key="restoreSession"><span class="slider"></span></label>
+    </div>
+    <div class="row">
+      <div><div class="row-title">Заморозка неактивных вкладок</div>
+        <div class="row-sub">Вкладки, которые давно не открывали, выгружаются из памяти. Вкладки со звуком не замораживаются</div></div>
+      <div class="seg" data-seg="freezeMinutes" data-num="1"><button data-v="0">Выкл</button><button data-v="5">5 мин</button><button data-v="15">15 мин</button><button data-v="30">30 мин</button><button data-v="60">1 час</button></div>
+    </div>
+  </section>
+
+  <section id="bookmarks">
+    <h2><span class="icon">&#xE734;</span>Закладки, история и загрузки</h2>
+    <div class="row">
+      <div><div class="row-title">Панель закладок</div><div class="row-sub">Под адресной строкой (Ctrl+Shift+B)</div></div>
+      <label class="switch"><input type="checkbox" data-key="showBookmarksBar"><span class="slider"></span></label>
+    </div>
+    <div class="row">
+      <div><div class="row-title">Сохранять историю</div><div class="row-sub">В режиме инкогнито история не сохраняется никогда. <a href="history.html" style="color:var(--accent)">Открыть историю</a></div></div>
+      <label class="switch"><input type="checkbox" data-key="saveHistory"><span class="slider"></span></label>
+    </div>
+    <div class="row">
+      <div><div class="row-title">Встроенный менеджер загрузок</div><div class="row-sub">Красивое окно загрузок с прогрессом. Если выключить, будет стандартное окно движка</div></div>
+      <label class="switch"><input type="checkbox" data-key="builtInDownloads"><span class="slider"></span></label>
+    </div>
+  </section>
+
+  <section id="look">
     <h2><span class="icon">&#xE790;</span>Внешний вид</h2>
     <div class="row">
-      <div><div class="row-title">Тема сайтов</div>
-        <div class="row-sub">Сайты, которые поддерживают тёмную тему, будут показываться в выбранной</div></div>
-      <div class="seg" id="theme">
-        <button data-v="auto">Как в Windows</button><button data-v="dark">Тёмная</button><button data-v="light">Светлая</button>
-      </div>
+      <div><div class="row-title">Тема сайтов</div><div class="row-sub">Сайты, которые поддерживают тёмную тему, будут показываться в выбранной</div></div>
+      <div class="seg" data-seg="siteTheme"><button data-v="auto">Как в Windows</button><button data-v="dark">Тёмная</button><button data-v="light">Светлая</button></div>
     </div>
   </section>
 
-  <section>
+  <section id="system">
+    <h2><span class="icon">&#xE7F8;</span>Система</h2>
+    <div class="row">
+      <div><div class="row-title">Ярлыки</div><div class="row-sub">Создать ярлык LiteBrowser на рабочем столе и в меню «Пуск»</div></div>
+      <button class="btn" id="shortcuts">Создать ярлыки</button>
+    </div>
+    <div class="row">
+      <div><div class="row-title">Браузер по умолчанию</div><div class="row-sub">Ссылки из Telegram, Discord и других программ будут открываться в LiteBrowser. Windows попросит подтвердить выбор</div></div>
+      <button class="btn" id="defaultBrowser">Сделать основным</button>
+    </div>
+  </section>
+
+  <section id="data">
     <h2><span class="icon">&#xE74D;</span>Данные</h2>
     <div class="row">
-      <div><div class="row-title">Очистить историю, cookies и кэш</div>
-        <div class="row-sub">Вы выйдете из всех аккаунтов на сайтах</div></div>
-      <button class="danger" id="clear">Очистить</button>
+      <div><div class="row-title">Очистить историю, cookies и кэш</div><div class="row-sub">Вы выйдете из всех аккаунтов на сайтах</div></div>
+      <button class="btn danger" id="clear">Очистить</button>
     </div>
   </section>
 

@@ -53,15 +53,56 @@ static class Theme
     [DllImport("dwmapi.dll")]
     static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
 
+    public static readonly Color IncognitoFrame = Color.FromArgb(34, 24, 50);
+    public static readonly Color Menu = Color.FromArgb(32, 34, 41);
+
     /// <summary>Тёмный заголовок окна в цвет полосы вкладок (Windows 11).</summary>
-    public static void StyleTitleBar(IntPtr hwnd)
+    public static void StyleTitleBar(IntPtr hwnd, Color frame)
     {
-        int on = 1, caption = ColorTranslator.ToWin32(Frame), text = ColorTranslator.ToWin32(Text);
+        int on = 1, caption = ColorTranslator.ToWin32(frame), text = ColorTranslator.ToWin32(Text);
         DwmSetWindowAttribute(hwnd, 20, ref on, 4);       // тёмный режим
         DwmSetWindowAttribute(hwnd, 34, ref caption, 4);  // цвет рамки
         DwmSetWindowAttribute(hwnd, 35, ref caption, 4);  // цвет заголовка
         DwmSetWindowAttribute(hwnd, 36, ref text, 4);     // цвет текста заголовка
     }
+
+    /// <summary>Скруглённые углы и тёмная рамка для всплывающих окон.</summary>
+    public static void StylePopup(IntPtr hwnd)
+    {
+        int round = 2, on = 1, border = ColorTranslator.ToWin32(Line);
+        DwmSetWindowAttribute(hwnd, 20, ref on, 4);
+        DwmSetWindowAttribute(hwnd, 33, ref round, 4);
+        DwmSetWindowAttribute(hwnd, 34, ref border, 4);
+    }
+
+    public static ContextMenuStrip NewMenu()
+    {
+        return new ContextMenuStrip
+        {
+            Renderer = new DarkMenuRenderer(),
+            ShowImageMargin = false,
+            Font = new Font("Segoe UI", 9.5f),
+            BackColor = Menu,
+            ForeColor = Text,
+            Padding = new Padding(4),
+        };
+    }
+
+    public static ToolStripMenuItem Item(string text, Action click, string? keys = null)
+    {
+        var item = new ToolStripMenuItem(text) { ForeColor = Text, Padding = new Padding(6, 5, 6, 5) };
+        if (keys != null) item.ShortcutKeyDisplayString = keys;
+        item.Click += (_, _) => click();
+        return item;
+    }
+
+    public static string FormatSize(long bytes) => bytes switch
+    {
+        < 1024 => $"{bytes} Б",
+        < 1024 * 1024 => $"{bytes / 1024.0:0} КБ",
+        < 1024L * 1024 * 1024 => $"{bytes / 1048576.0:0.0} МБ",
+        _ => $"{bytes / 1073741824.0:0.00} ГБ",
+    };
 
     public static Icon MakeAppIcon()
     {
@@ -81,6 +122,82 @@ static class Theme
 
     public const TextFormatFlags Center =
         TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding | TextFormatFlags.SingleLine;
+}
+
+sealed class DarkColors : ProfessionalColorTable
+{
+    public override Color ToolStripDropDownBackground => Theme.Menu;
+    public override Color MenuBorder => Theme.Line;
+    public override Color MenuItemBorder => Theme.Hover;
+    public override Color MenuItemSelected => Theme.Hover;
+    public override Color MenuItemSelectedGradientBegin => Theme.Hover;
+    public override Color MenuItemSelectedGradientEnd => Theme.Hover;
+    public override Color MenuItemPressedGradientBegin => Theme.Pressed;
+    public override Color MenuItemPressedGradientEnd => Theme.Pressed;
+    public override Color ImageMarginGradientBegin => Theme.Menu;
+    public override Color ImageMarginGradientMiddle => Theme.Menu;
+    public override Color ImageMarginGradientEnd => Theme.Menu;
+    public override Color SeparatorDark => Theme.Line;
+    public override Color SeparatorLight => Theme.Line;
+}
+
+sealed class DarkMenuRenderer : ToolStripProfessionalRenderer
+{
+    public DarkMenuRenderer() : base(new DarkColors()) { RoundedEdges = false; }
+
+    protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+    {
+        e.TextColor = e.Item.Enabled ? Theme.Text : Theme.TextDim;
+        base.OnRenderItemText(e);
+    }
+
+    protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e)
+    {
+        e.ArrowColor = Theme.Text;
+        base.OnRenderArrow(e);
+    }
+}
+
+/// <summary>Тёмное окно ввода текста.</summary>
+sealed class InputDialog : Form
+{
+    readonly TextBox box = new() { BorderStyle = BorderStyle.FixedSingle };
+
+    InputDialog(string title, string value)
+    {
+        Text = title;
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        MaximizeBox = MinimizeBox = ShowInTaskbar = false;
+        StartPosition = FormStartPosition.CenterParent;
+        BackColor = Theme.Toolbar;
+        ForeColor = Theme.Text;
+        Font = new Font("Segoe UI", 10f);
+        ClientSize = new Size(Theme.S(380), Theme.S(110));
+        box.Text = value;
+        box.BackColor = Theme.Field;
+        box.ForeColor = Theme.Text;
+        box.SetBounds(Theme.S(16), Theme.S(18), Theme.S(348), Theme.S(28));
+        var ok = new Button { Text = "Сохранить", DialogResult = DialogResult.OK, FlatStyle = FlatStyle.Flat, BackColor = Theme.Accent, ForeColor = Color.FromArgb(13, 16, 32) };
+        var cancel = new Button { Text = "Отмена", DialogResult = DialogResult.Cancel, FlatStyle = FlatStyle.Flat, BackColor = Theme.Hover, ForeColor = Theme.Text };
+        ok.FlatAppearance.BorderSize = cancel.FlatAppearance.BorderSize = 0;
+        ok.SetBounds(Theme.S(160), Theme.S(64), Theme.S(110), Theme.S(32));
+        cancel.SetBounds(Theme.S(278), Theme.S(64), Theme.S(86), Theme.S(32));
+        Controls.AddRange(new Control[] { box, ok, cancel });
+        AcceptButton = ok;
+        CancelButton = cancel;
+    }
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        try { Theme.StyleTitleBar(Handle, Theme.Toolbar); } catch { }
+    }
+
+    public static string? Ask(IWin32Window owner, string title, string value)
+    {
+        using var d = new InputDialog(title, value);
+        return d.ShowDialog(owner) == DialogResult.OK ? d.box.Text.Trim() : null;
+    }
 }
 
 /// <summary>Панель без мерцания.</summary>
