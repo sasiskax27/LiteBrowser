@@ -26,10 +26,12 @@ if (wv) {
     const name = en ? en.name : 'интернете';
     $('engineName').textContent = en ? en.name : '';
     $('q').placeholder = 'Поиск в ' + name + ' или адрес сайта';
+    $('import').classList.toggle('show', !!m.importSuggest);
     $('foot').innerHTML = item('Только HTTPS', m.settings.httpsOnly) +
       item('Блокировка рекламы и трекеров', m.settings.blockAds) + item('SmartScreen', true) +
       (m.proxyRunning ? item('Обход блокировок', true) : '');
   });
   wv.postMessage({ type: 'get' });
+  $('importClose').onclick = () => { $('import').classList.remove('show'); wv.postMessage({ type: 'dismissImport' }); };
 }
 $('q').focus();

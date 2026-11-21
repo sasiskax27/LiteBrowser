@@ -36,6 +36,9 @@ sealed class AppSettings
         "signal.org", "torproject.org", "proton.me", "protonvpn.com",
     };
 
+    public static readonly int[] UiScales = { 75, 80, 90, 100, 110, 125 };
+    public static readonly int[] ZoomSteps = { 25, 33, 50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300 };
+
     // Поиск
     public string Engine { get; set; } = "duckduckgo";
     // Безопасность
@@ -57,6 +60,10 @@ sealed class AppSettings
     public bool BuiltInDownloads { get; set; } = true;
     // Внешний вид
     public string SiteTheme { get; set; } = "auto";     // auto | dark | light
+    public int UiScale { get; set; } = 100;             // размер интерфейса, %
+    public int PageZoom { get; set; } = 100;            // масштаб страниц по умолчанию, %
+    // Предложение перенести данные на стартовой странице уже показано/скрыто
+    public bool ImportOffered { get; set; } = false;
 
     static readonly Regex HostRx = new(@"^[a-z0-9]([a-z0-9\-\.]*[a-z0-9])?$", RegexOptions.Compiled);
 
@@ -71,6 +78,8 @@ sealed class AppSettings
         if (!HostRx.IsMatch(ProxyHost)) ProxyHost = "127.0.0.1";
         if (ProxyPort is < 1 or > 65535) ProxyPort = 10808;
         if (FreezeMinutes is not (0 or 5 or 15 or 30 or 60)) FreezeMinutes = 15;
+        if (!UiScales.Contains(UiScale)) UiScale = 100;
+        if (!ZoomSteps.Contains(PageZoom)) PageZoom = 100;
         ProxySites = (ProxySites ?? new()).Select(CleanSite).Where(s => s.Length > 0 && HostRx.IsMatch(s))
             .Distinct().Take(2000).ToList();
         return this;

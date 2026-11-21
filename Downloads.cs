@@ -78,12 +78,12 @@ static class Downloads
 /// <summary>Всплывающее окно загрузок.</summary>
 sealed class DownloadsPopup : Form
 {
-    readonly Font nameFont = new("Segoe UI", 9.5f, FontStyle.Bold);
-    readonly Font infoFont = new("Segoe UI", 8.5f);
-    readonly Font headFont = new("Segoe UI", 11f, FontStyle.Bold);
-    readonly Font iconFont = new(Theme.IconFont, 11f);
-    readonly Font bigIcon = new(Theme.IconFont, 16f);
-    readonly Font linkFont = new("Segoe UI", 9f);
+    Font nameFont => Theme.GetFont("Segoe UI", 9.5f, FontStyle.Bold);
+    Font infoFont => Theme.GetFont("Segoe UI", 8.5f);
+    Font headFont => Theme.GetFont("Segoe UI", 11f, FontStyle.Bold);
+    Font iconFont => Theme.GetFont(Theme.IconFont, 11f);
+    Font bigIcon => Theme.GetFont(Theme.IconFont, 16f);
+    Font linkFont => Theme.GetFont("Segoe UI", 9f);
     int hoverRow = -1, hoverButton = -1;
     bool hoverFolder, hoverClear;
     public DateTime HiddenAt { get; private set; }

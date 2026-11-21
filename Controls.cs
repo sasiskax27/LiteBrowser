@@ -31,7 +31,7 @@ sealed class IconButton : Control
     string glyph;
     float progress = -1;
     Color? glyphColor;
-    static readonly Font SmallFont = new(Theme.IconFont, 8.8f);
+    static Font SmallFont => Theme.GetFont(Theme.IconFont, 8.8f);
 
     public IconButton(string glyph, string tip, ToolTip tips)
     {
@@ -46,6 +46,8 @@ sealed class IconButton : Control
     }
 
     public string Glyph { get => glyph; set { if (glyph != value) { glyph = value; Invalidate(); } } }
+    /// <summary>Показывать обычный текст (например «100%») вместо значка.</summary>
+    public bool TextMode { get; set; }
     public Color? GlyphColor { get => glyphColor; set { if (glyphColor != value) { glyphColor = value; Invalidate(); } } }
     /// <summary>-1 — без кольца, 0..1 — прогресс.</summary>
     public float Progress { get => progress; set { if (Math.Abs(progress - value) > 0.003f) { progress = value; Invalidate(); } } }
@@ -64,7 +66,12 @@ sealed class IconButton : Control
         if (Enabled && (hover || down))
         {
             using var b = new SolidBrush(down ? Theme.Pressed : Theme.Hover);
-            g.FillEllipse(b, 1, 1, Width - 3, Height - 3);
+            if (TextMode)
+            {
+                using var p = Theme.Round(new RectangleF(1, 1, Width - 3, Height - 3), (Height - 3) / 2f);
+                g.FillPath(b, p);
+            }
+            else g.FillEllipse(b, 1, 1, Width - 3, Height - 3);
         }
         if (progress >= 0)
         {
@@ -76,7 +83,8 @@ sealed class IconButton : Control
             g.DrawArc(pen, r, -90, Math.Max(8, 360 * progress));
         }
         var color = !Enabled ? Color.FromArgb(78, 82, 96) : glyphColor ?? Theme.Text;
-        TextRenderer.DrawText(g, glyph, progress >= 0 ? SmallFont : Font, ClientRectangle, color, Theme.Center);
+        var font = TextMode ? Theme.GetFont("Segoe UI", 9f, FontStyle.Bold) : progress >= 0 ? SmallFont : Theme.GetFont(Theme.IconFont, 11f);
+        TextRenderer.DrawText(g, glyph, font, ClientRectangle, color, Theme.Center);
     }
 }
 
@@ -84,9 +92,9 @@ sealed class IconButton : Control
 sealed class AddressBox : Control
 {
     public readonly TextBox Box = new() { BorderStyle = BorderStyle.None };
-    readonly Font iconFont = new(Theme.IconFont, 9.5f);
-    readonly Font starFont = new(Theme.IconFont, 11f);
-    readonly Font smallFont = new("Segoe UI", 8.5f, FontStyle.Bold);
+    Font iconFont => Theme.GetFont(Theme.IconFont, 9.5f);
+    Font starFont => Theme.GetFont(Theme.IconFont, 11f);
+    Font smallFont => Theme.GetFont("Segoe UI", 8.5f, FontStyle.Bold);
     string lockGlyph = "";
     Color lockColor = Theme.TextDim;
     int blocked;
@@ -101,7 +109,7 @@ sealed class AddressBox : Control
         BackColor = Theme.Toolbar;
         Box.BackColor = Theme.Field;
         Box.ForeColor = Theme.Text;
-        Box.Font = new Font("Segoe UI", 10.5f);
+        Box.Font = Theme.GetFont("Segoe UI", 10.5f);
         Controls.Add(Box);
         Box.GotFocus += (_, _) => Invalidate();
         Box.LostFocus += (_, _) => Invalidate();
@@ -142,6 +150,13 @@ sealed class AddressBox : Control
         if (starVisible && StarRect.Contains(e.Location)) StarClicked?.Invoke();
         else { Box.Focus(); Box.SelectAll(); }
         base.OnMouseDown(e);
+    }
+
+    public void ApplyScale()
+    {
+        Box.Font = Theme.GetFont("Segoe UI", 10.5f);
+        PerformLayout();
+        Invalidate();
     }
 
     public void SetLock(string glyph, Color color)
@@ -217,11 +232,11 @@ sealed class AddressBox : Control
 sealed class TabStrip : Control
 {
     readonly List<BrowserTab> tabs;
-    readonly Font titleFont = new("Segoe UI", 9f);
-    readonly Font iconFont = new(Theme.IconFont, 10f);
-    readonly Font smallIcon = new(Theme.IconFont, 7f);
-    readonly Font audioFont = new(Theme.IconFont, 8.5f);
-    readonly Font badgeFont = new("Segoe UI", 8.5f, FontStyle.Bold);
+    Font titleFont => Theme.GetFont("Segoe UI", 9f);
+    Font iconFont => Theme.GetFont(Theme.IconFont, 10f);
+    Font smallIcon => Theme.GetFont(Theme.IconFont, 7f);
+    Font audioFont => Theme.GetFont(Theme.IconFont, 8.5f);
+    Font badgeFont => Theme.GetFont("Segoe UI", 8.5f, FontStyle.Bold);
     BrowserTab? selected, dragTab;
     Point dragStart;
     bool dragging;
@@ -458,8 +473,8 @@ sealed class TabStrip : Control
 /// <summary>Панель закладок под адресной строкой.</summary>
 sealed class BookmarksBar : Control
 {
-    readonly Font font = new("Segoe UI", 9f);
-    readonly Font iconFont = new(Theme.IconFont, 9f);
+    Font font => Theme.GetFont("Segoe UI", 9f);
+    Font iconFont => Theme.GetFont(Theme.IconFont, 9f);
     readonly List<(Bookmark b, Rectangle r)> items = new();
     readonly List<Bookmark> overflow = new();
     readonly Dictionary<string, Image?> icons = new();
@@ -484,6 +499,7 @@ sealed class BookmarksBar : Control
     }
 
     void OnChanged() { Relayout(); Invalidate(); }
+    public void Rescale() => OnChanged();
 
     Image? IconOf(Bookmark b)
     {
@@ -559,7 +575,7 @@ sealed class BookmarksBar : Control
                 using var br = new SolidBrush(Theme.Hover);
                 g.FillPath(br, p);
             }
-            TextRenderer.DrawText(g, "»", new Font("Segoe UI", 11f), moreRect, Theme.Text, Theme.Center);
+            TextRenderer.DrawText(g, "»", Theme.GetFont("Segoe UI", 11f), moreRect, Theme.Text, Theme.Center);
         }
     }
 

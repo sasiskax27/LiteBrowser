@@ -86,6 +86,35 @@ static class Store
         BookmarksChanged?.Invoke();
     }
 
+    /// <summary>Добавляет закладки без дублей. Возвращает, сколько добавлено.</summary>
+    public static int ImportBookmarks(IEnumerable<(string title, string url)> items)
+    {
+        var known = new HashSet<string>(Bookmarks.Select(b => b.Url));
+        int added = 0;
+        foreach (var (title, url) in items)
+        {
+            if (!known.Add(url)) continue;
+            Bookmarks.Add(new Bookmark { Title = title.Length > 200 ? title[..200] : title, Url = url });
+            added++;
+        }
+        if (added > 0) { bookmarksDirty = true; BookmarksChanged?.Invoke(); Flush(); }
+        return added;
+    }
+
+    /// <summary>Сливает историю с имеющейся, оставляя самые свежие записи.</summary>
+    public static int ImportHistory(IEnumerable<HistoryEntry> items)
+    {
+        var known = new HashSet<string>(History.Select(h => h.Url + "|" + h.Time.Ticks / TimeSpan.TicksPerMinute));
+        var fresh = items.Where(h => known.Add(h.Url + "|" + h.Time.Ticks / TimeSpan.TicksPerMinute)).ToList();
+        if (fresh.Count == 0) return 0;
+        History.AddRange(fresh);
+        History.Sort((a, b) => a.Time.CompareTo(b.Time));
+        if (History.Count > MaxHistory) History.RemoveRange(0, History.Count - MaxHistory);
+        historyDirty = true;
+        Flush();
+        return fresh.Count;
+    }
+
     // ---- История ----
 
     public static HistoryEntry AddHistory(string url, string title)

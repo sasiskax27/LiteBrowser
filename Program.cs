@@ -10,6 +10,19 @@ static class Program
     [STAThread]
     static void Main(string[] args)
     {
+        // Диагностика переноса: только читает данные других браузеров и пишет сводку в файл
+        if (args.Length == 2 && args[0] == "--import-check")
+        {
+            var lines = new List<string>();
+            foreach (var p in Importer.Scan())
+            {
+                try { lines.Add($"{p.Browser} / {p.Profile}: закладок {Importer.ReadBookmarks(p).Count}, истории {Importer.ReadHistory(p).Count}"); }
+                catch (Exception ex) { lines.Add($"{p.Browser} / {p.Profile}: ошибка — {ex.Message}"); }
+            }
+            File.WriteAllLines(args[1], lines.Count > 0 ? lines : new List<string> { "браузеры не найдены" });
+            return;
+        }
+
         bool restore = args.Contains("--restore");
         bool incognito = args.Contains("--incognito");
         string? url = args.FirstOrDefault(a => !a.StartsWith("--"));

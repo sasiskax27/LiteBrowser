@@ -21,8 +21,22 @@ static class Theme
     public static readonly Color Danger = Color.FromArgb(255, 120, 120);
     public const string IconFont = "Segoe Fluent Icons";
 
-    public static float Dpi = 1f;
+    /// <summary>Масштаб экрана Windows.</summary>
+    public static float SystemDpi = 1f;
+    /// <summary>Размер интерфейса браузера из настроек (0.8 – 1.25).</summary>
+    public static float UiScale = 1f;
+    public static float Dpi => SystemDpi * UiScale;
     public static int S(float v) => (int)Math.Round(v * Dpi);
+
+    static readonly Dictionary<(string, float, FontStyle), Font> fonts = new();
+
+    /// <summary>Шрифт с учётом размера интерфейса (кэшируется).</summary>
+    public static Font GetFont(string family, float points, FontStyle style = FontStyle.Regular)
+    {
+        var key = (family, (float)Math.Round(points * UiScale, 2), style);
+        if (!fonts.TryGetValue(key, out var f)) fonts[key] = f = new Font(family, key.Item2, style);
+        return f;
+    }
 
     public static GraphicsPath Round(RectangleF r, float rad)
     {
@@ -81,7 +95,7 @@ static class Theme
         {
             Renderer = new DarkMenuRenderer(),
             ShowImageMargin = false,
-            Font = new Font("Segoe UI", 9.5f),
+            Font = GetFont("Segoe UI", 9.5f),
             BackColor = Menu,
             ForeColor = Text,
             Padding = new Padding(4),

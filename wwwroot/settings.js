@@ -87,6 +87,40 @@ $('test').onclick = () => {
 };
 $('restart').onclick = () => wv.postMessage({ type: 'restart' });
 
+// Перенос из других браузеров
+function renderImport(items) {
+  const box = $('importList');
+  box.innerHTML = '';
+  if (!items.length) {
+    box.innerHTML = '<div class="row-sub">Другие браузеры не найдены. Можно загрузить закладки из HTML-файла.</div>';
+    return;
+  }
+  for (const it of items) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = '<div><div class="row-title"></div><div class="row-sub"></div><div class="imp-result"></div></div>' +
+      '<div class="actions"><label class="chk"><input type="checkbox" class="b" checked>Закладки</label>' +
+      '<label class="chk"><input type="checkbox" class="h" checked>История</label>' +
+      '<button class="btn primary go">Перенести</button></div>';
+    row.querySelector('.row-title').textContent = it.browser;
+    row.querySelector('.row-sub').textContent = 'Профиль: ' + it.profile;
+    const b = row.querySelector('.b'), h = row.querySelector('.h');
+    if (!it.bookmarks) { b.checked = false; b.disabled = true; }
+    if (!it.history) { h.checked = false; h.disabled = true; }
+    row.querySelector('.go').onclick = () => {
+      if (!b.checked && !h.checked) return;
+      const res = row.querySelector('.imp-result');
+      res.className = 'imp-result'; res.textContent = 'Переношу…';
+      currentImportRow = row;
+      wv.postMessage({ type: 'importRun', id: it.id, bookmarks: b.checked, history: h.checked });
+    };
+    box.appendChild(row);
+  }
+}
+let currentImportRow = null;
+$('importHtml').onclick = () => { currentImportRow = null; wv.postMessage({ type: 'importHtml' }); };
+$('exportHtml').onclick = () => wv.postMessage({ type: 'exportHtml' });
+
 // Остальное
 $('blUpdate').onclick = () => wv.postMessage({ type: 'updateBlocklist' });
 $('shortcuts').onclick = () => wv.postMessage({ type: 'shortcuts' });
@@ -104,8 +138,15 @@ if (wv) {
       $('testResult').className = 'test ' + (m.ok ? 'ok' : 'bad');
       $('testResult').textContent = m.ok ? `✓ Прокси отвечает (${m.ms} мс)` : '✕ Нет ответа. Запущен ли VPN-клиент и верен ли порт?';
     }
+    else if (m.type === 'importList') renderImport(m.items);
+    else if (m.type === 'importResult') {
+      const res = currentImportRow && currentImportRow.querySelector('.imp-result');
+      if (res) { res.className = 'imp-result ' + (m.ok ? 'ok' : 'bad'); res.textContent = (m.ok ? '✓ ' : '✕ ') + m.text; }
+      toast(m.text);
+    }
     else if (m.type === 'done') toast(m.text);
     else if (m.type === 'error') toast('Ошибка: ' + m.text);
   });
   wv.postMessage({ type: 'get' });
+  wv.postMessage({ type: 'importScan' });
 }

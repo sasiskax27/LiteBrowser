@@ -45,7 +45,11 @@
   details ol { color: var(--dim); font-size: 13px; line-height: 1.7; padding-left: 20px; }
   details b { color: var(--text); }
   .about { color: var(--dim); font-size: 13px; line-height: 1.8; }
-  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .chk { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--dim); cursor: pointer; }
+  .chk input { accent-color: var(--accent); width: 16px; height: 16px; }
+  .imp-result { font-size: 13px; margin: 6px 2px 4px; }
+  .imp-result.ok { color: var(--ok); } .imp-result.bad { color: var(--bad); }
 </style>
 </head>
 <body>
@@ -58,7 +62,7 @@
 
   <nav>
     <a href="#search">Поиск</a><a href="#security">Безопасность</a><a href="#proxy">Обход блокировок</a>
-    <a href="#tabs">Вкладки</a><a href="#bookmarks">Закладки и история</a><a href="#look">Вид</a><a href="#system">Система</a><a href="#data">Данные</a>
+    <a href="#tabs">Вкладки</a><a href="#bookmarks">Закладки и история</a><a href="#look">Вид и масштаб</a><a href="#import">Перенос</a><a href="#system">Система</a><a href="#data">Данные</a>
   </nav>
 
   <section id="search">
@@ -173,6 +177,26 @@
     <div class="row">
       <div><div class="row-title">Тема сайтов</div><div class="row-sub">Сайты, которые поддерживают тёмную тему, будут показываться в выбранной</div></div>
       <div class="seg" data-seg="siteTheme"><button data-v="auto">Как в Windows</button><button data-v="dark">Тёмная</button><button data-v="light">Светлая</button></div>
+    </div>
+    <div class="row">
+      <div><div class="row-title">Размер интерфейса</div><div class="row-sub">Вкладки, кнопки и адресная строка. Меняется сразу</div></div>
+      <div class="seg" data-seg="uiScale" data-num="1"><button data-v="75">75%</button><button data-v="80">80%</button><button data-v="90">90%</button><button data-v="100">100%</button><button data-v="110">110%</button><button data-v="125">125%</button></div>
+    </div>
+    <div class="row">
+      <div><div class="row-title">Масштаб страниц</div><div class="row-sub">Для всех сайтов. Для одной вкладки: кнопка «100%» сверху, Ctrl + колёсико мыши или Ctrl + / Ctrl −</div></div>
+      <div class="seg" data-seg="pageZoom" data-num="1"><button data-v="67">67%</button><button data-v="75">75%</button><button data-v="80">80%</button><button data-v="90">90%</button><button data-v="100">100%</button><button data-v="110">110%</button><button data-v="125">125%</button></div>
+    </div>
+  </section>
+
+  <section id="import">
+    <h2><span class="icon">&#xE8DE;</span>Перенос из другого браузера</h2>
+    <p class="note">Перенесите закладки и историю из Chrome, Edge, Яндекс Браузера, Opera, Brave, Vivaldi или Firefox.
+      Тот браузер ничего не заметит: данные только читаются. <b>Пароли и входы в аккаунты не переносятся</b>:
+      браузеры шифруют их, а LiteBrowser пароли не хранит.</p>
+    <div id="importList"><div class="row-sub">Ищу установленные браузеры…</div></div>
+    <div class="row">
+      <div><div class="row-title">HTML-файл закладок</div><div class="row-sub">Этот формат понимают все браузеры: можно перенести закладки откуда угодно или куда угодно</div></div>
+      <div class="actions"><button class="btn" id="importHtml">Загрузить из файла</button><button class="btn" id="exportHtml">Сохранить в файл</button></div>
     </div>
   </section>
 

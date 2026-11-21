@@ -35,6 +35,13 @@
   .private { display: none; margin: -18px 0 30px; padding: 10px 18px; border-radius: 14px; font-size: 13.5px; color: #d9c8ff;
              background: rgba(176,124,255,.12); border: 1px solid rgba(176,124,255,.3); }
   .private.show { display: block; }
+  .import { display: none; align-items: center; gap: 14px; margin: -18px 0 28px; padding: 8px 8px 8px 18px; border-radius: 16px; font-size: 13.5px;
+            background: rgba(124,156,255,.1); border: 1px solid rgba(124,156,255,.3); }
+  .import.show { display: flex; }
+  .btn-mini { color: #0d1020; background: linear-gradient(135deg, var(--accent), var(--accent2)); text-decoration: none; font-weight: 600;
+              padding: 6px 14px; border-radius: 10px; font-size: 13px; }
+  .x { border: 0; background: none; color: var(--dim); cursor: pointer; width: 28px; height: 28px; border-radius: 50%; font-size: 10px; }
+  .x:hover { background: rgba(255,255,255,.1); color: var(--text); }
   @media (max-width: 760px) { .tiles { grid-template-columns: repeat(3, 100px); } }
 </style>
 </head>
@@ -43,6 +50,11 @@
 <div class="time" id="time">--:--</div>
 <div class="date" id="date"></div>
 <div class="hello" id="hello"></div>
+<div class="import" id="import">
+  <span>Перенести закладки и историю из другого браузера?</span>
+  <a class="btn-mini" href="settings.html#import">Перенести</a>
+  <button class="x icon" id="importClose" title="Не показывать">&#xE711;</button>
+</div>
 <div class="private" id="private">🕶 Режим инкогнито: история, cookies и данные сайтов удалятся, когда вы закроете это окно</div>
 
 <form action="https://lite.home/search" method="get" autocomplete="off">

@@ -50,6 +50,68 @@ static class LitePages
     }
 }
 
+/// <summary>Строка меню масштаба: [−] 100% [+] Сброс.</summary>
+sealed class ZoomRow : Control
+{
+    readonly Func<int> value;
+    int hover = -1; // 0 — минус, 1 — плюс, 2 — сброс
+    public event Action<int>? Step;
+    public event Action? Reset;
+
+    public ZoomRow(Func<int> value)
+    {
+        this.value = value;
+        SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint, true);
+        BackColor = Theme.Menu;
+        Size = new Size(Theme.S(310), Theme.S(46));
+    }
+
+    Rectangle Minus => new(Theme.S(150), (Height - Theme.S(30)) / 2, Theme.S(30), Theme.S(30));
+    Rectangle Value => new(Minus.Right, 0, Theme.S(56), Height);
+    Rectangle Plus => new(Value.Right, Minus.Y, Theme.S(30), Theme.S(30));
+    Rectangle ResetR => new(Plus.Right + Theme.S(6), Minus.Y, Width - Plus.Right - Theme.S(12), Theme.S(30));
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        g.Clear(BackColor);
+        var text = Theme.GetFont("Segoe UI", 9.5f);
+        TextRenderer.DrawText(g, "Масштаб страницы", text, new Rectangle(Theme.S(12), 0, Theme.S(140), Height), Theme.Text,
+            TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
+        var icon = Theme.GetFont(Theme.IconFont, 9f);
+        void Circle(Rectangle r, int i, string glyph)
+        {
+            using var b = new SolidBrush(hover == i ? Theme.Pressed : Theme.Hover);
+            g.FillEllipse(b, r);
+            TextRenderer.DrawText(g, glyph, icon, r, Theme.Text, Theme.Center);
+        }
+        Circle(Minus, 0, "");
+        Circle(Plus, 1, "");
+        TextRenderer.DrawText(g, value() + "%", Theme.GetFont("Segoe UI", 10.5f, FontStyle.Bold), Value, Theme.Text, Theme.Center);
+        TextRenderer.DrawText(g, "Сброс", text, ResetR, hover == 2 ? Theme.Text : Theme.Accent, Theme.Center);
+    }
+
+    protected override void OnMouseMove(MouseEventArgs e)
+    {
+        int h = Minus.Contains(e.Location) ? 0 : Plus.Contains(e.Location) ? 1 : ResetR.Contains(e.Location) ? 2 : -1;
+        Cursor = h >= 0 ? Cursors.Hand : Cursors.Default;
+        if (h != hover) { hover = h; Invalidate(); }
+        base.OnMouseMove(e);
+    }
+
+    protected override void OnMouseLeave(EventArgs e) { hover = -1; Invalidate(); base.OnMouseLeave(e); }
+
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        if (e.Button != MouseButtons.Left) return;
+        if (hover == 0) Step?.Invoke(-1);
+        else if (hover == 1) Step?.Invoke(1);
+        else if (hover == 2) Reset?.Invoke();
+        base.OnMouseDown(e);
+    }
+}
+
 sealed class MainForm : Form
 {
     readonly List<BrowserTab> tabs = new();
@@ -75,6 +137,9 @@ sealed class MainForm : Form
     FormWindowState stateBeforeFullscreen;
     float phase;
     bool runtimeErrorShown;
+    int appliedUiScale, appliedPageZoom;
+    bool showDownloads, showProxy;
+    readonly IconButton zoomBtn;
 
     public bool Incognito { get; }
 
@@ -86,7 +151,10 @@ sealed class MainForm : Form
         this.startUrl = startUrl;
         this.startTabs = startTabs;
         this.startActive = startActive;
-        Theme.Dpi = DeviceDpi / 96f;
+        Theme.SystemDpi = DeviceDpi / 96f;
+        Theme.UiScale = Cfg.UiScale / 100f;
+        appliedUiScale = Cfg.UiScale;
+        appliedPageZoom = Cfg.PageZoom;
         frame = incognito ? Theme.IncognitoFrame : Theme.Frame;
         homeUrl = incognito ? LitePages.Home + "?private=1" : LitePages.Home;
 
@@ -118,6 +186,8 @@ sealed class MainForm : Form
         proxyBtn = new IconButton("", "Обход блокировок", tips) { GlyphColor = Theme.Secure, Visible = false };
         downloadsBtn = new IconButton("", "Загрузки (Ctrl+J)", tips) { Visible = false };
         menuBtn = new IconButton("", "Меню", tips);
+        zoomBtn = new IconButton("100%", "Масштаб страницы и размер интерфейса", tips) { TextMode = true };
+        zoomBtn.Click += (_, _) => ShowZoomMenu();
 
         back.Click += (_, _) => active?.Core?.GoBack();
         forward.Click += (_, _) => active?.Core?.GoForward();
@@ -138,7 +208,7 @@ sealed class MainForm : Form
         };
         address.Box.Enter += (_, _) => BeginInvoke(address.Box.SelectAll);
 
-        toolbar.Controls.AddRange(new Control[] { back, forward, reload, home, address, proxyBtn, downloadsBtn, menuBtn });
+        toolbar.Controls.AddRange(new Control[] { back, forward, reload, home, address, zoomBtn, proxyBtn, downloadsBtn, menuBtn });
         toolbar.Resize += (_, _) => LayoutToolbar();
         toolbar.Paint += PaintProgress;
 
@@ -163,6 +233,7 @@ sealed class MainForm : Form
         };
 
         Load += (_, _) => OpenStartTabs();
+        Shown += (_, _) => LayoutToolbar();
         ApplyChrome();
     }
 
@@ -183,11 +254,15 @@ sealed class MainForm : Form
         int s = Theme.S(36), y = (toolbar.Height - s) / 2, x = Theme.S(10);
         foreach (var b in new[] { back, forward, reload, home }) { b.SetBounds(x, y, s, s); x += s + Theme.S(2); }
         int right = toolbar.Width - Theme.S(10);
-        foreach (var b in new[] { menuBtn, downloadsBtn, proxyBtn })
+        foreach (var b in new[] { menuBtn, downloadsBtn, proxyBtn, zoomBtn })
         {
-            if (!b.Visible) continue;
-            right -= s;
-            b.SetBounds(right, y, s, s);
+            // Visible до показа окна всегда false, поэтому храним желаемое состояние отдельно
+            bool want = b == downloadsBtn ? showDownloads : b == proxyBtn ? showProxy : true;
+            b.Visible = want;
+            if (!want) continue;
+            int w = b == zoomBtn ? Theme.S(58) : s;
+            right -= w;
+            b.SetBounds(right, y, w, s);
             right -= Theme.S(2);
         }
         int ah = Theme.S(36), ax = x + Theme.S(8);
@@ -243,6 +318,8 @@ sealed class MainForm : Form
             else await tab.View.EnsureCoreWebView2Async(env);
             if (tab.View.IsDisposed || tab.Core == null) return;
             Configure(tab, env);
+            tab.View.ZoomFactor = Cfg.PageZoom / 100.0;
+            tab.View.ZoomFactorChanged += (_, _) => { if (tab == active) UpdateZoomLabel(); };
             var url = tab.PendingUrl;
             tab.PendingUrl = null;
             if (url != null) tab.Core.Navigate(url);
@@ -518,7 +595,7 @@ sealed class MainForm : Form
             if (!Cfg.BuiltInDownloads) return;
             e.Handled = true;
             Downloads.Track(e.DownloadOperation);
-            BeginInvoke(() => { downloadsBtn.Visible = true; LayoutToolbar(); downloadsPopup.ShowBelow(downloadsBtn); });
+            BeginInvoke(() => { showDownloads = true; LayoutToolbar(); downloadsPopup.ShowBelow(downloadsBtn); });
         };
 
         core.WebMessageReceived += async (_, e) =>
@@ -604,6 +681,7 @@ sealed class MainForm : Form
         version = AppEnv.Version,
         browserVersion = AppEnv.GetEnvironment().IsCompletedSuccessfully ? AppEnv.GetEnvironment().Result.BrowserVersionString : "",
         incognito = Incognito,
+        importSuggest = !Incognito && !Cfg.ImportOffered && Store.Bookmarks.Count == 0,
         restartNeeded = AppEnv.RestartNeeded,
         proxyRunning = AppEnv.RunningSignature != "off",
         defaultSites = AppSettings.DefaultProxySites,
@@ -683,6 +761,69 @@ sealed class MainForm : Form
                 Store.ClearHistory();
                 Post(core, new { type = "done", text = "История очищена" });
                 break;
+
+            // ---- Перенос из других браузеров ----
+            case "importScan":
+                var found = await Task.Run(Importer.Scan);
+                Post(core, new
+                {
+                    type = "importList",
+                    items = found.Select(x => new { id = x.Id, browser = x.Browser, profile = x.Profile, bookmarks = x.HasBookmarks, history = x.HasHistory }),
+                });
+                break;
+
+            case "importRun":
+                var prof = (await Task.Run(Importer.Scan)).FirstOrDefault(x => x.Id == Str("id"));
+                if (prof == null) { Post(core, new { type = "importResult", ok = false, text = "Профиль не найден" }); break; }
+                bool wantB = root.TryGetProperty("bookmarks", out var wb) && wb.ValueKind == JsonValueKind.True;
+                bool wantH = root.TryGetProperty("history", out var wh) && wh.ValueKind == JsonValueKind.True;
+                try
+                {
+                    var bms = wantB ? await Task.Run(() => Importer.ReadBookmarks(prof)) : new();
+                    var hist = wantH ? await Task.Run(() => Importer.ReadHistory(prof)) : new();
+                    int nb = Store.ImportBookmarks(bms), nh = Store.ImportHistory(hist);
+                    CopyAndSave(x => x.ImportOffered = true);
+                    Post(core, new { type = "importResult", ok = true, text = $"Перенесено из {prof.Browser}: закладок — {nb}, записей истории — {nh}" });
+                }
+                catch (Exception ex)
+                {
+                    Post(core, new { type = "importResult", ok = false, text = ex.Message });
+                }
+                break;
+
+            case "exportHtml":
+                BeginInvoke(() =>
+                {
+                    using var dlg = new SaveFileDialog
+                    {
+                        Title = "Сохранить закладки",
+                        Filter = "HTML-файл закладок|*.html",
+                        FileName = $"LiteBrowser-закладки-{DateTime.Now:yyyy-MM-dd}.html",
+                    };
+                    if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                    File.WriteAllText(dlg.FileName, Importer.ExportHtml(Store.Bookmarks), new System.Text.UTF8Encoding(false));
+                    Post(core, new { type = "done", text = $"Сохранено закладок: {Store.Bookmarks.Count}" });
+                });
+                break;
+
+            case "importHtml":
+                BeginInvoke(() =>
+                {
+                    using var dlg = new OpenFileDialog { Title = "Выберите файл закладок", Filter = "HTML-файл закладок|*.html;*.htm" };
+                    if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                    try
+                    {
+                        if (new FileInfo(dlg.FileName).Length > 50_000_000) throw new IOException("Файл слишком большой");
+                        int n = Store.ImportBookmarks(Importer.ParseHtml(File.ReadAllText(dlg.FileName)));
+                        Post(core, new { type = "importResult", ok = true, text = $"Добавлено закладок: {n}" });
+                    }
+                    catch (Exception ex) { Post(core, new { type = "importResult", ok = false, text = ex.Message }); }
+                });
+                break;
+
+            case "dismissImport":
+                CopyAndSave(x => x.ImportOffered = true);
+                break;
         }
     }
 
@@ -697,27 +838,93 @@ sealed class MainForm : Form
 
     void OnSettingsChanged()
     {
+        bool zoomChanged = Cfg.PageZoom != appliedPageZoom;
+        appliedPageZoom = Cfg.PageZoom;
         foreach (var t in tabs)
         {
             if (t.Core == null) continue;
             t.Core.Profile.PreferredColorScheme = ColorScheme();
             ApplyFilters(t);
+            if (zoomChanged) t.View.ZoomFactor = Cfg.PageZoom / 100.0;
         }
+        if (Cfg.UiScale != appliedUiScale) ApplyScale();
         ApplyChrome();
+    }
+
+    // ================= Масштаб =================
+
+    /// <summary>Меняет размер интерфейса браузера (вкладки, кнопки, адресная строка) без перезапуска.</summary>
+    void ApplyScale()
+    {
+        appliedUiScale = Cfg.UiScale;
+        Theme.UiScale = Cfg.UiScale / 100f;
+        SuspendLayout();
+        strip.Height = Theme.S(44);
+        toolbar.Height = Theme.S(50);
+        bookmarksBar.Height = Theme.S(34);
+        address.ApplyScale();
+        bookmarksBar.Rescale();
+        ResumeLayout(true);
+        LayoutToolbar();
+        strip.Invalidate();
+        foreach (Control c in toolbar.Controls) c.Invalidate();
+        toolbar.Invalidate();
+    }
+
+    int CurrentZoom => active?.Core != null ? (int)Math.Round(active.View.ZoomFactor * 100) : Cfg.PageZoom;
+
+    void UpdateZoomLabel()
+    {
+        int z = CurrentZoom;
+        zoomBtn.Glyph = z + "%";
+        zoomBtn.GlyphColor = z == 100 ? Theme.TextDim : Theme.Accent;
+    }
+
+    void SetZoom(int percent)
+    {
+        if (active?.Core == null) return;
+        active.View.ZoomFactor = Math.Clamp(percent, 25, 300) / 100.0;
+        UpdateZoomLabel();
+    }
+
+    void ZoomStep(int dir)
+    {
+        var steps = AppSettings.ZoomSteps;
+        int cur = CurrentZoom;
+        int next = dir > 0 ? steps.FirstOrDefault(s => s > cur, steps[^1]) : steps.LastOrDefault(s => s < cur, steps[0]);
+        SetZoom(next);
+    }
+
+    void ShowZoomMenu()
+    {
+        var menu = Theme.NewMenu();
+        var row = new ZoomRow(() => CurrentZoom);
+        row.Step += d => { ZoomStep(d); row.Invalidate(); };
+        row.Reset += () => { SetZoom(Cfg.PageZoom); row.Invalidate(); };
+        menu.Items.Add(new ToolStripControlHost(row) { AutoSize = false, Size = row.Size, Margin = Padding.Empty, Padding = Padding.Empty });
+        menu.Items.Add(Theme.Item("Сделать масштабом по умолчанию для всех сайтов", () => { int z = CurrentZoom; CopyAndSave(x => x.PageZoom = z); }));
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(new ToolStripMenuItem("Размер интерфейса (вкладки, кнопки)") { Enabled = false, Padding = new Padding(6, 5, 6, 2) });
+        foreach (var v in AppSettings.UiScales)
+        {
+            int value = v;
+            menu.Items.Add(Theme.Item((v == Cfg.UiScale ? "✓  " : "     ") + v + "%" + (v == 100 ? " (обычный)" : ""),
+                () => CopyAndSave(x => x.UiScale = value)));
+        }
+        menu.Show(zoomBtn, new Point(zoomBtn.Width - menu.PreferredSize.Width, zoomBtn.Height + Theme.S(4)));
     }
 
     void ApplyChrome()
     {
         address.Box.PlaceholderText = $"Поиск в {SearchEngines.Get(Cfg.Engine).Name} или адрес сайта";
         bookmarksBar.Visible = Cfg.ShowBookmarksBar;
-        bool proxyOn = AppEnv.RunningSignature != "off" || Cfg.ProxyMode != "off";
-        proxyBtn.Visible = proxyOn;
+        showProxy = AppEnv.RunningSignature != "off" || Cfg.ProxyMode != "off";
         proxyBtn.GlyphColor = AppEnv.RestartNeeded ? Theme.Danger : Theme.Secure;
         tips.SetToolTip(proxyBtn, AppEnv.RestartNeeded
             ? "Обход блокировок: нужен перезапуск браузера"
             : Cfg.ProxyMode == "all" ? $"Обход блокировок: все сайты через {Cfg.ProxyHost}:{Cfg.ProxyPort}"
             : $"Обход блокировок: {Cfg.ProxySites.Count} сайтов через {Cfg.ProxyHost}:{Cfg.ProxyPort}");
-        downloadsBtn.Visible = Downloads.Items.Count > 0;
+        showDownloads = Downloads.Items.Count > 0;
         LayoutToolbar();
     }
 
@@ -725,7 +932,7 @@ sealed class MainForm : Form
 
     void OnDownloadsChanged()
     {
-        if (!downloadsBtn.Visible) { downloadsBtn.Visible = true; LayoutToolbar(); }
+        if (!showDownloads) { showDownloads = true; LayoutToolbar(); }
         downloadsBtn.Progress = Downloads.Progress;
         downloadsBtn.GlyphColor = Downloads.AnyActive ? Theme.Accent : null;
     }
@@ -734,7 +941,7 @@ sealed class MainForm : Form
     {
         if (downloadsPopup.Visible) { downloadsPopup.Hide(); return; }
         if ((DateTime.Now - downloadsPopup.HiddenAt).TotalMilliseconds < 250) return; // клик по кнопке закрыл окно
-        downloadsBtn.Visible = true;
+        showDownloads = true;
         LayoutToolbar();
         downloadsPopup.ShowBelow(downloadsBtn);
     }
@@ -885,6 +1092,7 @@ sealed class MainForm : Form
 
         address.SetBlocked(active?.Blocked ?? 0);
         UpdateStar();
+        UpdateZoomLabel();
         UpdateTitle();
         toolbar.Invalidate();
     }
@@ -913,11 +1121,16 @@ sealed class MainForm : Form
     {
         var t = text.Trim();
         if (t.Length == 0) return homeUrl;
-        switch (t.ToLowerInvariant())
+        if (t.StartsWith("lite://", StringComparison.OrdinalIgnoreCase))
         {
-            case "lite://settings": return LitePages.Settings;
-            case "lite://history": return LitePages.History;
-            case "lite://home": return homeUrl;
+            int cut = t.IndexOfAny(new[] { '#', '?' });
+            string name = (cut < 0 ? t[7..] : t[7..cut]).Trim('/').ToLowerInvariant(), rest = cut < 0 ? "" : t[cut..];
+            switch (name)
+            {
+                case "settings": return LitePages.Settings + rest;
+                case "history": return LitePages.History + rest;
+                case "home": return homeUrl;
+            }
         }
         if (t.StartsWith("localhost", StringComparison.OrdinalIgnoreCase)) return "http://" + t;
         if (Uri.TryCreate(t, UriKind.Absolute, out var u) && u.Scheme is "http" or "https") return u.ToString();
@@ -942,6 +1155,9 @@ sealed class MainForm : Form
             case Keys.Control | Keys.J: ToggleDownloads(); return true;
             case Keys.Control | Keys.Shift | Keys.B: ToggleBookmarksBar(); return true;
             case Keys.Control | Keys.Oemcomma: OpenLitePage(LitePages.Settings); return true;
+            case Keys.Control | Keys.Oemplus: case Keys.Control | Keys.Add: case Keys.Control | Keys.Shift | Keys.Oemplus: ZoomStep(1); return true;
+            case Keys.Control | Keys.OemMinus: case Keys.Control | Keys.Subtract: ZoomStep(-1); return true;
+            case Keys.Control | Keys.D0: case Keys.Control | Keys.NumPad0: SetZoom(Cfg.PageZoom); return true;
             case Keys.F5: active?.Core?.Reload(); return true;
             case Keys.Alt | Keys.Left: active?.Core?.GoBack(); return true;
             case Keys.Alt | Keys.Right: active?.Core?.GoForward(); return true;
