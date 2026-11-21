@@ -16,6 +16,7 @@ static class LitePages
     public const string Settings = Prefix + "settings.html";
     public const string History = Prefix + "history.html";
     public const string Blocked = Prefix + "blocked.html";
+    public const string Passwords = Prefix + "passwords.html";
 
     public static CoreWebView2WebResourceResponse Response(CoreWebView2Environment env, string uri)
     {
@@ -44,6 +45,7 @@ static class LitePages
         if (src.StartsWith(Home, StringComparison.Ordinal)) return "";
         if (src.StartsWith(Settings, StringComparison.Ordinal)) return "lite://settings";
         if (src.StartsWith(History, StringComparison.Ordinal)) return "lite://history";
+        if (src.StartsWith(Passwords, StringComparison.Ordinal)) return "lite://passwords";
         if (src.StartsWith(Blocked, StringComparison.Ordinal))
             return HttpUtility.ParseQueryString(new Uri(src).Query)["url"] ?? "lite://blocked";
         return null;
@@ -139,6 +141,8 @@ sealed class MainForm : Form
     bool runtimeErrorShown;
     int appliedUiScale, appliedPageZoom;
     bool showDownloads, showProxy;
+    readonly PasswordPopup passwordPopup = new();
+    (string origin, string user, string pass, DateTime time)? pendingCapture;
     readonly IconButton zoomBtn;
 
     public bool Incognito { get; }
@@ -198,6 +202,10 @@ sealed class MainForm : Form
         menuBtn.Click += (_, _) => ShowMainMenu();
 
         address.StarClicked += ToggleBookmark;
+        address.KeyClicked += async () => await ShowKeyMenu();
+        passwordPopup.OpenManager = () => OpenLitePage(LitePages.Passwords);
+        passwordPopup.NeverForSite = origin => { var h = PasswordTools.HostKey(origin); CopyAndSave(x => x.NeverSave.Add(h)); pendingCapture = null; UpdateKey(); };
+        passwordPopup.Saved += () => { pendingCapture = null; UpdateKey(); };
         address.Box.KeyDown += (_, e) =>
         {
             if (e.KeyCode == Keys.Escape) { e.SuppressKeyPress = true; UpdateUi(force: true); active?.View.Focus(); return; }
@@ -224,12 +232,15 @@ sealed class MainForm : Form
         AppEnv.SettingsChanged += OnSettingsChanged;
         Store.BookmarksChanged += OnBookmarksChanged;
         Downloads.Changed += OnDownloadsChanged;
+        Vault.Changed += OnVaultChanged;
         FormClosed += (_, _) =>
         {
             AppEnv.SettingsChanged -= OnSettingsChanged;
             Store.BookmarksChanged -= OnBookmarksChanged;
             Downloads.Changed -= OnDownloadsChanged;
+            Vault.Changed -= OnVaultChanged;
             downloadsPopup.Dispose();
+            passwordPopup.Dispose();
         };
 
         Load += (_, _) => OpenStartTabs();
@@ -528,6 +539,7 @@ sealed class MainForm : Form
             }
             tab.Loading = true;
             tab.Blocked = 0;
+            tab.HasLoginForm = false;
             StartAnim();
             if (tab == active) UpdateUi();
             strip.Invalidate();
@@ -598,9 +610,17 @@ sealed class MainForm : Form
             BeginInvoke(() => { showDownloads = true; LayoutToolbar(); downloadsPopup.ShowBelow(downloadsBtn); });
         };
 
+        // Скрипт менеджера паролей: находит формы входа на страницах
+        _ = core.AddScriptToExecuteOnDocumentCreatedAsync(PasswordScripts.Page);
+
         core.WebMessageReceived += async (_, e) =>
         {
-            if (!e.Source.StartsWith(LitePages.Prefix, StringComparison.Ordinal)) return;
+            if (!e.Source.StartsWith(LitePages.Prefix, StringComparison.Ordinal))
+            {
+                // Сообщения обычных сайтов — только от скрипта паролей, и только про их собственный адрес
+                try { HandlePageMessage(tab, e.Source, e.WebMessageAsJson); } catch { }
+                return;
+            }
             try { await HandleMessage(core, e.WebMessageAsJson); }
             catch (Exception ex) { Post(core, new { type = "error", text = ex.Message }); }
         };
@@ -670,6 +690,261 @@ sealed class MainForm : Form
             foreach (var h in Blocklist.BuiltIn) { f($"*://{h}/*"); f($"*://*.{h}/*"); }
     }
 
+    // ================= Менеджер паролей =================
+
+    void OnVaultChanged()
+    {
+        if (IsDisposed) return;
+        if (InvokeRequired) { BeginInvoke(OnVaultChanged); return; }
+        UpdateKey();
+    }
+
+    string? ActiveOrigin => active?.Core?.Source is { } s && !s.StartsWith(LitePages.Prefix) ? PasswordTools.Origin(s) : null;
+
+    bool PendingFor(string? origin) =>
+        origin != null && pendingCapture is { } p && PasswordTools.HostKey(p.origin) == PasswordTools.HostKey(origin) &&
+        (DateTime.Now - p.time).TotalMinutes < 10;
+
+    void UpdateKey()
+    {
+        var origin = ActiveOrigin;
+        if (!Cfg.PasswordManager || origin == null) { address.SetKey(false, false); return; }
+        bool saved = Vault.Unlocked && Vault.ForOrigin(origin).Count > 0;
+        bool pending = PendingFor(origin);
+        address.SetKey(active!.HasLoginForm || saved || pending, saved || pending);
+    }
+
+    /// <summary>Сообщение от скрипта паролей на обычной странице. Адрес сайта берём из движка, а не из сообщения.</summary>
+    void HandlePageMessage(BrowserTab tab, string source, string json)
+    {
+        if (!Cfg.PasswordManager || json.Length > 4000) return;
+        var origin = PasswordTools.Origin(source);
+        if (origin == null) return;
+        bool secure = origin.StartsWith("https://") || Uri.TryCreate(origin, UriKind.Absolute, out var lu) && lu.IsLoopback;
+        if (!secure) return; // по незащищённому соединению пароли не сохраняем
+
+        using var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        string Str(string name, int max) =>
+            root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String && (v.GetString()?.Length ?? 0) <= max ? v.GetString() ?? "" : "";
+
+        switch (Str("type", 20))
+        {
+            case "pw:form":
+                tab.HasLoginForm = true;
+                if (tab == active) UpdateKey();
+                break;
+
+            case "pw:user":
+                var u = Str("username", 256).Trim();
+                if (u.Length > 0) tab.LastUser = (origin, u);
+                break;
+
+            case "pw:capture":
+                if (Incognito) return; // в инкогнито ничего не запоминаем
+                var pass = Str("password", 512);
+                var user = Str("username", 256).Trim();
+                if (pass.Length == 0) return;
+                if (user.Length == 0 && tab.LastUser is { } lu2 && PasswordTools.HostKey(lu2.origin) == PasswordTools.HostKey(origin)) user = lu2.user;
+                if (Cfg.NeverSave.Contains(PasswordTools.HostKey(origin))) return;
+                if (Vault.Unlocked && Vault.ForOrigin(origin).Any(x => x.Username == user && x.Password == pass)) return;
+                pendingCapture = (origin, user, pass, DateTime.Now);
+                if (tab == active)
+                {
+                    UpdateKey();
+                    passwordPopup.ShowFor(address, origin, user, pass);
+                }
+                break;
+        }
+    }
+
+    async Task<bool> EnsureUnlocked()
+    {
+        if (Vault.Unlocked) return true;
+        if (!Vault.Exists) { OpenLitePage(LitePages.Passwords); return false; }
+        while (true)
+        {
+            var m = InputDialog.AskPassword(this, "Мастер-пароль менеджера паролей");
+            if (m == null) return false;
+            var (ok, err) = await Task.Run(() => Vault.Unlock(m));
+            if (ok) return true;
+            MessageBox.Show(this, err, "Менеджер паролей", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    async Task ShowKeyMenu()
+    {
+        var origin = ActiveOrigin;
+        if (origin == null || active?.Core == null) return;
+        if (PendingFor(origin) && pendingCapture is { } p)
+        {
+            passwordPopup.ShowFor(address, p.origin, p.user, p.pass);
+            return;
+        }
+        if (!await EnsureUnlocked()) return;
+        var core = active.Core;
+        var list = Vault.ForOrigin(origin);
+
+        var menu = Theme.NewMenu();
+        menu.Items.Add(new ToolStripMenuItem("Пароли для " + PasswordTools.Host(origin)) { Enabled = false, Padding = new Padding(6, 5, 6, 3) });
+        if (list.Count == 0)
+            menu.Items.Add(new ToolStripMenuItem("Сохранённых паролей нет") { Enabled = false, Padding = new Padding(6, 4, 6, 4) });
+        foreach (var e in list)
+        {
+            var entry = e;
+            var label = (entry.Username.Length > 0 ? entry.Username : "(без логина)") + "   ••••••••";
+            menu.Items.Add(Theme.Item(label, () => FillEntry(core, entry)));
+        }
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(Theme.Item("Вставить новый надёжный пароль", async () =>
+        {
+            var pw = PasswordTools.Generate();
+            var n = await core.ExecuteScriptAsync(PasswordScripts.FillGenerated(pw));
+            if (n == "0") { PasswordTools.CopySecret(pw); MessageBox.Show(this, "Пустых полей пароля не нашлось. Пароль скопирован в буфер обмена (очистится через 30 секунд).", "Генератор паролей"); }
+        }));
+        if (list.Count > 0)
+            menu.Items.Add(Theme.Item("Скопировать пароль", () => PasswordTools.CopySecret(list[0].Password)));
+        menu.Items.Add(Theme.Item("Открыть менеджер паролей", () => OpenLitePage(LitePages.Passwords)));
+        var r = RectangleToClient(address.KeyScreenRect);
+        menu.Show(this, new Point(r.Right - menu.PreferredSize.Width, r.Bottom + Theme.S(6)));
+    }
+
+    async void FillEntry(CoreWebView2 core, PasswordEntry entry)
+    {
+        // Перед заполнением ещё раз проверяем, что страница всё та же
+        var now = PasswordTools.Origin(core.Source);
+        if (now == null || PasswordTools.HostKey(now) != PasswordTools.HostKey(entry.Origin)) return;
+        try { await core.ExecuteScriptAsync(PasswordScripts.Fill(entry.Username, entry.Password)); } catch { }
+    }
+
+    object VaultState() => new
+    {
+        type = "pwState",
+        exists = Vault.Exists,
+        unlocked = Vault.Unlocked,
+        count = Vault.Unlocked ? Vault.Count : 0,
+        enabled = Cfg.PasswordManager,
+        autoLock = Cfg.AutoLockMinutes,
+        never = Cfg.NeverSave,
+    };
+
+    static object VaultList()
+    {
+        var all = Vault.All();
+        var reuse = all.GroupBy(e => e.Password).Where(g => g.Count() > 1).SelectMany(g => g).Select(e => e.Id).ToHashSet();
+        static bool Weak(string p) => p.Length < 10 || p.All(char.IsLetter) || p.All(char.IsDigit) ||
+                                      new[] { "password", "qwerty", "123456", "111111", "пароль", "admin" }.Any(w => p.Contains(w, StringComparison.OrdinalIgnoreCase));
+        return new
+        {
+            type = "pwList",
+            items = all.OrderBy(e => PasswordTools.HostKey(e.Origin)).ThenBy(e => e.Username).Select(e => new
+            {
+                id = e.Id, origin = e.Origin, host = PasswordTools.HostKey(e.Origin), username = e.Username,
+                updated = e.Updated.ToString("dd.MM.yyyy"), weak = Weak(e.Password), reused = reuse.Contains(e.Id), length = e.Password.Length,
+            }),
+        };
+    }
+
+    async Task HandleVaultMessage(CoreWebView2 core, string type, JsonElement root)
+    {
+        string Str(string name) => root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
+        switch (type)
+        {
+            case "pw:state": // не продлевает автоблокировку
+                Post(core, VaultState());
+                break;
+            case "pw:create":
+                var cm = Str("master");
+                await Task.Run(() => Vault.Create(cm));
+                Post(core, VaultState());
+                Post(core, VaultList());
+                break;
+            case "pw:unlock":
+                var um = Str("master");
+                var (ok, err) = await Task.Run(() => Vault.Unlock(um));
+                if (!ok) { Post(core, new { type = "pwError", text = err }); break; }
+                Post(core, VaultState());
+                Post(core, VaultList());
+                break;
+            case "pw:lock":
+                Vault.Lock();
+                Post(core, VaultState());
+                break;
+            case "pw:list":
+                if (Vault.Unlocked) Post(core, VaultList());
+                break;
+            case "pw:reveal":
+                var re = Vault.Get(Str("id"));
+                if (re != null) Post(core, new { type = "pwReveal", id = re.Id, password = re.Password });
+                break;
+            case "pw:copy":
+                var ce = Vault.Get(Str("id"));
+                if (ce == null) break;
+                if (Str("field") == "user") Clipboard.SetText(ce.Username.Length > 0 ? ce.Username : " ");
+                else PasswordTools.CopySecret(ce.Password);
+                Post(core, new { type = "done", text = Str("field") == "user" ? "Логин скопирован" : "Пароль скопирован, буфер очистится через 30 секунд" });
+                break;
+            case "pw:save":
+                var url = Str("url").Trim();
+                var origin = PasswordTools.Origin(url.Contains("://") ? url : "https://" + url);
+                if (origin == null) { Post(core, new { type = "pwError", text = "Укажите адрес сайта, например vk.com" }); break; }
+                if (Str("password").Length == 0) { Post(core, new { type = "pwError", text = "Пароль не может быть пустым" }); break; }
+                var sid = Str("id");
+                Vault.Upsert(sid.Length > 0 ? sid : null, origin, Str("username").Trim(), Str("password"));
+                Post(core, VaultList());
+                Post(core, new { type = "done", text = "Сохранено" });
+                break;
+            case "pw:delete":
+                Vault.Delete(Str("id"));
+                Post(core, VaultList());
+                Post(core, new { type = "done", text = "Удалено" });
+                break;
+            case "pw:generate":
+                int len = root.TryGetProperty("length", out var lv) && lv.TryGetInt32(out var li) ? li : 20;
+                bool sym = !root.TryGetProperty("symbols", out var sv) || sv.ValueKind != JsonValueKind.False;
+                Post(core, new { type = "pwGenerated", password = PasswordTools.Generate(len, sym) });
+                break;
+            case "pw:changeMaster":
+                var om = Str("old"); var nm = Str("new");
+                try
+                {
+                    await Task.Run(() => Vault.ChangeMaster(om, nm));
+                    Post(core, new { type = "done", text = "Мастер-пароль изменён" });
+                }
+                catch (Exception ex) { Post(core, new { type = "pwError", text = ex.Message }); }
+                Post(core, VaultState());
+                break;
+            case "pw:importCsv":
+                BeginInvoke(() =>
+                {
+                    using var dlg = new OpenFileDialog { Title = "Файл паролей (CSV) из Chrome, Edge, Яндекса, Opera или Firefox", Filter = "CSV-файл|*.csv" };
+                    if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                    try
+                    {
+                        if (new FileInfo(dlg.FileName).Length > 20_000_000) throw new IOException("Файл слишком большой");
+                        int n = Vault.ImportMany(PasswordTools.ParseCsv(File.ReadAllText(dlg.FileName)));
+                        Post(core, VaultList());
+                        Post(core, new { type = "pwImported", count = n, file = dlg.FileName });
+                    }
+                    catch (Exception ex) { Post(core, new { type = "pwError", text = ex.Message }); }
+                });
+                break;
+            case "pw:deleteFile":
+                var path = Str("file");
+                if (path.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) && File.Exists(path))
+                {
+                    File.Delete(path);
+                    Post(core, new { type = "done", text = "CSV-файл удалён" });
+                }
+                break;
+            case "pw:neverRemove":
+                var host = Str("host");
+                CopyAndSave(x => x.NeverSave.Remove(host));
+                Post(core, VaultState());
+                break;
+        }
+    }
+
     // ================= Сообщения от своих страниц =================
 
     static void Post(CoreWebView2 core, object msg) => core.PostWebMessageAsJson(JsonSerializer.Serialize(msg, AppSettings.Json));
@@ -695,7 +970,14 @@ sealed class MainForm : Form
         var root = doc.RootElement;
         string Str(string name) => root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
 
-        switch (Str("type"))
+        var msgType = Str("type");
+        if (msgType.StartsWith("pw:"))
+        {
+            // Менеджер паролей доступен только со своей страницы паролей
+            if (core.Source.StartsWith(LitePages.Passwords, StringComparison.Ordinal)) await HandleVaultMessage(core, msgType, root);
+            return;
+        }
+        switch (msgType)
         {
             case "get":
                 SendSettings(core);
@@ -954,6 +1236,7 @@ sealed class MainForm : Form
         menu.Items.Add(Theme.Item("Окно инкогнито", () => BrowserApp.Instance.OpenWindow(true), "Ctrl+Shift+N"));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(Theme.Item("История", () => OpenLitePage(LitePages.History), "Ctrl+H"));
+        menu.Items.Add(Theme.Item("Пароли", () => OpenLitePage(LitePages.Passwords), "Ctrl+Shift+P"));
         menu.Items.Add(Theme.Item("Загрузки", ToggleDownloads, "Ctrl+J"));
         menu.Items.Add(Theme.Item(Cfg.ShowBookmarksBar ? "Скрыть панель закладок" : "Показать панель закладок", ToggleBookmarksBar, "Ctrl+Shift+B"));
         menu.Items.Add(Theme.Item("Открыть закрытую вкладку", ReopenClosedTab, "Ctrl+Shift+T"));
@@ -1085,6 +1368,7 @@ sealed class MainForm : Form
         if (src.StartsWith(LitePages.Blocked)) address.SetLock("", Theme.Danger);
         else if (src.StartsWith(LitePages.Settings)) address.SetLock("", Theme.Accent);
         else if (src.StartsWith(LitePages.History)) address.SetLock("", Theme.Accent);
+        else if (src.StartsWith(LitePages.Passwords)) address.SetLock("", Theme.Accent);
         else if (src.StartsWith(LitePages.Prefix)) address.SetLock("", Theme.TextDim);
         else if (src.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) address.SetLock("", Theme.Secure);
         else if (src.StartsWith("http://", StringComparison.OrdinalIgnoreCase)) address.SetLock("", Theme.Danger);
@@ -1093,6 +1377,7 @@ sealed class MainForm : Form
         address.SetBlocked(active?.Blocked ?? 0);
         UpdateStar();
         UpdateZoomLabel();
+        UpdateKey();
         UpdateTitle();
         toolbar.Invalidate();
     }
@@ -1129,6 +1414,7 @@ sealed class MainForm : Form
             {
                 case "settings": return LitePages.Settings + rest;
                 case "history": return LitePages.History + rest;
+                case "passwords": return LitePages.Passwords + rest;
                 case "home": return homeUrl;
             }
         }
@@ -1152,6 +1438,7 @@ sealed class MainForm : Form
             case Keys.Control | Keys.L: case Keys.F6: address.Box.Focus(); address.Box.SelectAll(); return true;
             case Keys.Control | Keys.D: ToggleBookmark(); return true;
             case Keys.Control | Keys.H: OpenLitePage(LitePages.History); return true;
+            case Keys.Control | Keys.Shift | Keys.P: OpenLitePage(LitePages.Passwords); return true;
             case Keys.Control | Keys.J: ToggleDownloads(); return true;
             case Keys.Control | Keys.Shift | Keys.B: ToggleBookmarksBar(); return true;
             case Keys.Control | Keys.Oemcomma: OpenLitePage(LitePages.Settings); return true;

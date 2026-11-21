@@ -22,6 +22,8 @@ sealed class BrowserTab
     public DateTime LastActive { get; set; } = DateTime.Now;
     public string FilterMode { get; set; } = "none";
     public HistoryEntry? HistoryEntry { get; set; }
+    public bool HasLoginForm { get; set; }
+    public (string origin, string user)? LastUser { get; set; }
 }
 
 /// <summary>Круглая кнопка-иконка; умеет показывать кольцо прогресса.</summary>
@@ -99,8 +101,10 @@ sealed class AddressBox : Control
     Color lockColor = Theme.TextDim;
     int blocked;
     bool starVisible, starred, starHover;
+    bool keyVisible, keyActive, keyHover;
 
     public event Action? StarClicked;
+    public event Action? KeyClicked;
 
     public AddressBox()
     {
@@ -126,30 +130,55 @@ sealed class AddressBox : Control
         }
     }
 
+    int IconsRight => Width - Theme.S(6) - (blocked > 0 ? PillWidth + Theme.S(4) : 0);
+
     Rectangle StarRect
     {
         get
         {
-            int sz = Theme.S(28), right = Width - Theme.S(6) - (blocked > 0 ? PillWidth + Theme.S(4) : 0);
+            int sz = Theme.S(28);
+            return new Rectangle(IconsRight - sz, (Height - sz) / 2, sz, sz);
+        }
+    }
+
+    Rectangle KeyRect
+    {
+        get
+        {
+            int sz = Theme.S(28), right = starVisible ? StarRect.X - Theme.S(2) : IconsRight;
             return new Rectangle(right - sz, (Height - sz) / 2, sz, sz);
         }
     }
 
+    /// <summary>Левая граница значков справа — до неё тянется поле ввода.</summary>
+    int IconsLeft => keyVisible ? KeyRect.X : starVisible ? StarRect.X : IconsRight + (blocked > 0 ? Theme.S(4) : Theme.S(6));
+
     protected override void OnMouseMove(MouseEventArgs e)
     {
         bool h = starVisible && StarRect.Contains(e.Location);
-        Cursor = h ? Cursors.Hand : Cursors.IBeam;
-        if (h != starHover) { starHover = h; Invalidate(); }
+        bool k = keyVisible && KeyRect.Contains(e.Location);
+        Cursor = h || k ? Cursors.Hand : Cursors.IBeam;
+        if (h != starHover || k != keyHover) { starHover = h; keyHover = k; Invalidate(); }
         base.OnMouseMove(e);
     }
 
-    protected override void OnMouseLeave(EventArgs e) { starHover = false; Invalidate(); base.OnMouseLeave(e); }
+    protected override void OnMouseLeave(EventArgs e) { starHover = keyHover = false; Invalidate(); base.OnMouseLeave(e); }
 
     protected override void OnMouseDown(MouseEventArgs e)
     {
         if (starVisible && StarRect.Contains(e.Location)) StarClicked?.Invoke();
+        else if (keyVisible && KeyRect.Contains(e.Location)) KeyClicked?.Invoke();
         else { Box.Focus(); Box.SelectAll(); }
         base.OnMouseDown(e);
+    }
+
+    /// <summary>Положение кнопки-ключа на экране (для всплывающих окон).</summary>
+    public Rectangle KeyScreenRect => RectangleToScreen(KeyRect);
+
+    public void SetKey(bool visible, bool active)
+    {
+        if (visible == keyVisible && active == keyActive) return;
+        keyVisible = visible; keyActive = active; PerformLayout(); Invalidate();
     }
 
     public void ApplyScale()
@@ -181,7 +210,7 @@ sealed class AddressBox : Control
     {
         base.OnLayout(e);
         int x = Theme.S(40), bh = Box.PreferredHeight;
-        int right = (starVisible ? StarRect.X : Width - (blocked > 0 ? PillWidth + Theme.S(10) : 0)) - Theme.S(8);
+        int right = IconsLeft - Theme.S(8);
         Box.SetBounds(x, (Height - bh) / 2 + Theme.S(1), Math.Max(10, right - x), bh);
     }
 
@@ -211,6 +240,17 @@ sealed class AddressBox : Control
                 g.FillEllipse(b, sr);
             }
             TextRenderer.DrawText(g, starred ? "" : "", starFont, sr, starred ? Theme.Accent : Theme.TextDim, Theme.Center);
+        }
+
+        if (keyVisible)
+        {
+            var kr = KeyRect;
+            if (keyHover || keyActive)
+            {
+                using var b = new SolidBrush(keyActive && !keyHover ? Color.FromArgb(44, 124, 156, 255) : Theme.Hover);
+                g.FillEllipse(b, kr);
+            }
+            TextRenderer.DrawText(g, "", starFont, kr, keyActive ? Theme.Accent : Theme.TextDim, Theme.Center);
         }
 
         if (blocked > 0)

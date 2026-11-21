@@ -177,8 +177,9 @@ sealed class InputDialog : Form
 {
     readonly TextBox box = new() { BorderStyle = BorderStyle.FixedSingle };
 
-    InputDialog(string title, string value)
+    InputDialog(string title, string value, bool password = false)
     {
+        box.UseSystemPasswordChar = password;
         Text = title;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = MinimizeBox = ShowInTaskbar = false;
@@ -211,6 +212,12 @@ sealed class InputDialog : Form
     {
         using var d = new InputDialog(title, value);
         return d.ShowDialog(owner) == DialogResult.OK ? d.box.Text.Trim() : null;
+    }
+
+    public static string? AskPassword(IWin32Window owner, string title)
+    {
+        using var d = new InputDialog(title, "", password: true);
+        return d.ShowDialog(owner) == DialogResult.OK ? d.box.Text : null;
     }
 }
 

@@ -23,6 +23,50 @@ static class Program
             return;
         }
 
+        // Самотест хранилища паролей во временной папке
+        if (args.Length == 2 && args[0] == "--vault-selftest")
+        {
+            var log = new List<string>();
+            void Check(string name, bool ok) => log.Add((ok ? "OK   " : "FAIL ") + name);
+            var dir = Path.Combine(Path.GetTempPath(), "LiteVaultTest-" + Guid.NewGuid().ToString("N"));
+            Vault.DirOverride = dir;
+            try
+            {
+                Vault.Create("correct horse 1");
+                Vault.Upsert(null, "https://example.com", "user@mail.ru", "S3cret-Пароль!");
+                var raw = File.ReadAllText(Path.Combine(dir, "vault.json"));
+                Check("в файле нет пароля открытым текстом", !raw.Contains("S3cret") && !raw.Contains("user@mail.ru") && !raw.Contains("example.com"));
+                Vault.Lock();
+                Check("после блокировки записи недоступны", !Vault.Unlocked && Vault.Count == 0);
+                Check("неверный мастер-пароль не открывает", !Vault.Unlock("wrong password").ok);
+                Check("верный мастер-пароль открывает", Vault.Unlock("correct horse 1").ok);
+                var e = Vault.ForOrigin("https://www.example.com/login").FirstOrDefault();
+                Check("пароль расшифрован верно и найден по сайту", e?.Password == "S3cret-Пароль!" && e.Username == "user@mail.ru");
+                var bytes = File.ReadAllBytes(Path.Combine(dir, "vault.json"));
+                var json = System.Text.Encoding.UTF8.GetString(bytes);
+                var f = System.Text.Json.JsonSerializer.Deserialize<VaultFile>(json, AppSettings.Json)!;
+                var data = Convert.FromBase64String(f.Data); data[0] ^= 1; f.Data = Convert.ToBase64String(data);
+                File.WriteAllText(Path.Combine(dir, "vault.json"), System.Text.Json.JsonSerializer.Serialize(f, AppSettings.Json));
+                Vault.Lock();
+                Check("подменённый файл не открывается", !Vault.Unlock("correct horse 1").ok);
+                File.WriteAllBytes(Path.Combine(dir, "vault.json"), bytes);
+                Vault.ChangeMaster("correct horse 1", "new master 22");
+                Vault.Lock();
+                Check("после смены старый пароль не подходит", !Vault.Unlock("correct horse 1").ok);
+                Check("после смены новый пароль подходит", Vault.Unlock("new master 22").ok && Vault.Count == 1);
+                var csv = PasswordTools.ParseCsv("name,url,username,password,note\r\nvk,https://vk.com/login,ivan,\"pa,ss\"\"1\",\r\n");
+                Check("CSV Chrome разобран", csv.Count == 1 && csv[0].origin == "https://vk.com" && csv[0].password == "pa,ss\"1");
+                var ff = PasswordTools.ParseCsv("\"url\",\"username\",\"password\",\"httpRealm\"\n\"https://github.com\",\"me\",\"x1\",\"\"\n");
+                Check("CSV Firefox разобран", ff.Count == 1 && ff[0].origin == "https://github.com");
+                var g = PasswordTools.Generate(20);
+                Check("генератор: 20 символов, все группы", g.Length == 20 && g.Any(char.IsUpper) && g.Any(char.IsLower) && g.Any(char.IsDigit) && g.Any(c => !char.IsLetterOrDigit(c)));
+            }
+            catch (Exception ex) { log.Add("FAIL исключение: " + ex); }
+            finally { Vault.Lock(); try { Directory.Delete(dir, true); } catch { } }
+            File.WriteAllLines(args[1], log);
+            return;
+        }
+
         bool restore = args.Contains("--restore");
         bool incognito = args.Contains("--incognito");
         string? url = args.FirstOrDefault(a => !a.StartsWith("--"));
@@ -31,6 +75,9 @@ static class Program
         using var mutex = new Mutex(true, "LiteBrowser-" + Environment.UserName, out bool first);
         if (!first && !restore && SingleInstance.Send((incognito ? "incognito" : "normal") + "\n" + (url ?? "")))
             return;
+
+        // Убираем старую версию, оставшуюся после обновления
+        try { File.Delete(Path.ChangeExtension(Environment.ProcessPath!, ".old")); } catch { }
 
         ApplicationConfiguration.Initialize();
         AppEnv.Init();
@@ -93,8 +140,16 @@ sealed class BrowserApp : ApplicationContext
     {
         Instance = this;
         _ = invoker.Handle;
-        flush.Tick += (_, _) => Store.Flush();
+        flush.Tick += (_, _) =>
+        {
+            Store.Flush();
+            // Автоблокировка менеджера паролей
+            int min = AppEnv.Settings.AutoLockMinutes;
+            if (min > 0 && Vault.Unlocked && (DateTime.Now - Vault.LastUsed).TotalMinutes >= min) Vault.Lock();
+        };
         flush.Start();
+        // Блокируем пароли, когда пользователь блокирует Windows (Win+L)
+        SystemEvents.SessionSwitch += (_, e) => { if (e.Reason == SessionSwitchReason.SessionLock) Vault.Lock(); };
         SingleInstance.Listen(m => invoker.BeginInvoke(() => OnRemote(m)));
 
         List<string>? tabs = null;

@@ -60,6 +60,10 @@ sealed class AppSettings
     public bool BuiltInDownloads { get; set; } = true;
     // Внешний вид
     public string SiteTheme { get; set; } = "auto";     // auto | dark | light
+    // Менеджер паролей
+    public bool PasswordManager { get; set; } = true;
+    public int AutoLockMinutes { get; set; } = 15;      // 0 — до закрытия браузера
+    public List<string> NeverSave { get; set; } = new();
     public int UiScale { get; set; } = 100;             // размер интерфейса, %
     public int PageZoom { get; set; } = 100;            // масштаб страниц по умолчанию, %
     // Предложение перенести данные на стартовой странице уже показано/скрыто
@@ -79,6 +83,8 @@ sealed class AppSettings
         if (ProxyPort is < 1 or > 65535) ProxyPort = 10808;
         if (FreezeMinutes is not (0 or 5 or 15 or 30 or 60)) FreezeMinutes = 15;
         if (!UiScales.Contains(UiScale)) UiScale = 100;
+        if (AutoLockMinutes is not (0 or 5 or 15 or 30 or 60)) AutoLockMinutes = 15;
+        NeverSave = (NeverSave ?? new()).Where(s => s.Length is > 0 and < 300).Distinct().Take(1000).ToList();
         if (!ZoomSteps.Contains(PageZoom)) PageZoom = 100;
         ProxySites = (ProxySites ?? new()).Select(CleanSite).Where(s => s.Length > 0 && HostRx.IsMatch(s))
             .Distinct().Take(2000).ToList();
