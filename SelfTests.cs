@@ -204,6 +204,36 @@ static class DevToolsSelfTest
                 Check("скорость: метрики получены", m.GetValueOrDefault("Nodes") > 0, $"узлов {m.GetValueOrDefault("Nodes")}, память {m.GetValueOrDefault("JSHeapUsedSize") / 1024:0} КБ");
                 var timing = System.Text.Json.JsonSerializer.Deserialize<string>(await core.ExecuteScriptAsync(DevMonitor.TimingScript));
                 Check("скорость: замеры страницы", timing?.Contains("\"ttfb\"") == true, timing?.Length > 160 ? timing[..160] : timing);
+                // Чтение без интернета: снимок MHTML и открытие из файла
+                Offline.UseDir(Path.Combine(root, "offline"));
+                var origText = System.Text.Json.JsonSerializer.Deserialize<string>(await core.ExecuteScriptAsync("document.body.innerText.slice(0, 60)")) ?? "";
+                var saved = await Offline.SaveAsync(core, "Example Domain");
+                Check("офлайн: страница сохранена", File.Exists(Offline.PathOf(saved)) && saved.Size > 500, $"{saved.Size} Б");
+                Check("офлайн: повторное сохранение заменяет", (await Offline.SaveAsync(core, "x")).Id == saved.Id && Offline.All.Count == 1);
+                var offLoaded = new TaskCompletionSource<bool>();
+                void OnDone(object? s, CoreWebView2NavigationCompletedEventArgs e) => offLoaded.TrySetResult(e.IsSuccess);
+                core.NavigationCompleted += OnDone;
+                core.Navigate(Offline.FileUrl(saved));
+                await Task.WhenAny(offLoaded.Task, Task.Delay(15_000));
+                core.NavigationCompleted -= OnDone;
+                var offText = System.Text.Json.JsonSerializer.Deserialize<string>(await core.ExecuteScriptAsync("document.body ? document.body.innerText.slice(0, 200) : ''")) ?? "";
+                Check("офлайн: открывается из файла", origText.Length > 10 && offText.StartsWith(origText), offText.Replace('\n', ' ').Trim());
+                Offline.Remove(saved.Id);
+                Check("офлайн: удаление", Offline.All.Count == 0 && !File.Exists(Offline.PathOf(saved)));
+
+                // Автогруппировка
+                Check("группы: youtube — видео", TabGrouping.Category("https://www.youtube.com/watch?v=1") == "Видео");
+                Check("группы: music.youtube — музыка", TabGrouping.Category("https://music.youtube.com/") == "Музыка");
+                Check("группы: ozon — покупки", TabGrouping.Category("https://www.ozon.ru/product/123") == "Покупки");
+                Check("группы: news.mail.ru — новости", TabGrouping.Category("https://news.mail.ru/") == "Новости");
+                var plan = TabGrouping.Plan(new[] { "https://youtube.com/a", "https://rutube.ru/b", "https://ozon.ru/c", "https://site.org/1", "https://blog.site.org/2", "https://one.com/" });
+                Check("группы: раскладка", plan.GetValueOrDefault(0) == "Видео" && plan.GetValueOrDefault(1) == "Видео" && !plan.ContainsKey(2)
+                    && plan.GetValueOrDefault(3) == "site.org" && plan.GetValueOrDefault(4) == "site.org" && !plan.ContainsKey(5), string.Join(", ", plan.Select(p => p.Key + "=" + p.Value)));
+
+                // Поиск по истории
+                var stems = MainForm.HistoryStems("статья про видеокарты на прошлой неделе");
+                Check("история: основы слов", stems.SequenceEqual(new[] { "видео" }), string.Join(",", stems));
+
                 dev.OnNavigation("https://example.org/");
                 Check("переход очищает журнал сети", dev.Net.Count == 0);
                 dev.Detach();

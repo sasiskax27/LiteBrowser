@@ -33,6 +33,7 @@ sealed class BrowserTab
     public string AdSig { get; set; } = "";
     public (string origin, string user)? LastUser { get; set; }
     public DevMonitor? Dev { get; set; }
+    public BrowserTab? SplitWith { get; set; }   // пара в разделённом экране
 }
 
 /// <summary>Круглая кнопка-иконка; умеет показывать кольцо прогресса.</summary>
@@ -452,6 +453,13 @@ sealed class TabStrip : Control
             {
                 using var p = Theme.TabShape(r, S(9));
                 using var b = new SolidBrush(Theme.Toolbar);
+                g.FillPath(b, p);
+            }
+            else if (selected != null && t.SplitWith == selected)
+            {
+                // Вторая половина разделённого экрана
+                using var p = Theme.TabShape(r, S(9));
+                using var b = new SolidBrush(Color.FromArgb(150, Theme.Toolbar));
                 g.FillPath(b, p);
             }
             else if (isHover)

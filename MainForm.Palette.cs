@@ -41,8 +41,11 @@ sealed partial class MainForm
         Cmd("", "Скриншот всей страницы", () => _ = TakeScreenshot(true), "", "screenshot снимок полный");
         Cmd("", "Скачать видео или аудио со страницы", () => _ = DownloadMedia(), "", "download media");
         Cmd("", "QR-код страницы", ShowQr, "", "qr телефон");
+        Cmd("", "Сохранить для чтения без интернета", () => _ = SaveOffline(), "Ctrl+Shift+Y", "offline офлайн сохранить страницу mhtml");
         Cmd("", "Печать", () => _ = active?.Core?.ExecuteScriptAsync("window.print()"), "Ctrl+P", "print pdf");
         Cmd("", "Боковая панель", () => ToggleSidePanel(!sidePanel.Visible), "Ctrl+B", "sidebar");
+        Cmd("", SplitPartner != null ? "Убрать разделение экрана" : "Разделить экран (две вкладки рядом)", ToggleSplit, "Ctrl+\\", "split view рядом два окна");
+        if (SplitPartner != null) Cmd("", "Поменять половины местами", SwapSplit, "", "split swap");
         Cmd("", "Панель закладок", ToggleBookmarksBar, "Ctrl+Shift+B", "bookmarks bar");
         Cmd("", "Увеличить масштаб", () => ZoomStep(1), "Ctrl++", "zoom");
         Cmd("", "Уменьшить масштаб", () => ZoomStep(-1), "Ctrl+−", "zoom");
@@ -50,6 +53,8 @@ sealed partial class MainForm
         Cmd("", "Во весь экран", () => SetFullscreen(FormBorderStyle != FormBorderStyle.None), "F11", "fullscreen");
         Cmd("", "Выключить / включить звук вкладки", () => { if (active?.Core != null) active.Core.IsMuted = !active.Core.IsMuted; }, "", "mute звук");
         Cmd("", "Закрепить вкладку", () => { if (active != null) TogglePin(active); }, "", "pin");
+        Cmd("", "Сгруппировать вкладки по темам", AutoGroupTabs, "", "group группы темы авто разложить");
+        Cmd("", "Убрать все группы вкладок", UngroupAll, "", "ungroup группы");
         Cmd("", "Дублировать вкладку", () => { var u = active?.Core?.Source; if (u != null) _ = AddTab(u); }, "", "duplicate копия");
         Cmd("", "Экономия трафика (без картинок)", () => { bool v = !Cfg.DataSaver; CopyAndSave(x => x.DataSaver = v); active?.Core?.Reload(); }, "", "data saver картинки");
         Cmd("", "Центр безопасности", () => OpenLitePage(LitePages.Security), "", "security privacy трекеры приватность");
@@ -99,6 +104,15 @@ sealed partial class MainForm
             Add(q.Length == 0 ? 1 : 0, new("tab", "", t.Title, shown, () => SelectTab(tt), t == active ? "текущая" : ""), t.Title, shown);
         }
         foreach (var c in PaletteCommands()) Add(q.Length == 0 ? 0 : 1, c, c.Title, c.Title + " " + c.Extra);
+        if (WorkspacesHere && q.Length > 0)
+        {
+            foreach (var w in Workspaces.All.Where(w => w != Workspaces.Current))
+            {
+                var ws = w;
+                Add(1, new("cmd", "", "Пространство: " + w.Name, $"{w.Session.Tabs.Count} вкладок", () => SwitchWorkspace(ws), "", "workspace"), "пространство " + w.Name, w.Name);
+            }
+            Add(1, new("cmd", "", "Новое рабочее пространство…", "", NewWorkspace, "", "workspace"), "новое рабочее пространство workspace");
+        }
         if (q.Length == 0)
         {
             // Без запроса — вкладки и самые нужные команды
@@ -110,7 +124,8 @@ sealed partial class MainForm
         {
             ("Настройки", LitePages.Settings, "settings параметры"), ("История", LitePages.History, "history"), ("Пароли", LitePages.Passwords, "passwords"),
             ("Загрузки", LitePages.DownloadsPage, "downloads"), ("Закладки", LitePages.BookmarksPage, "bookmarks"), ("Расширения", LitePages.ExtensionsPage, "extensions"),
-            ("Заметки и выделения", LitePages.Notes, "notes"),
+            ("Заметки и выделения", LitePages.Notes, "notes"), ("Сохранённые страницы", LitePages.OfflinePage, "offline офлайн без интернета"),
+            ("Центр безопасности", LitePages.Security, "security"),
         })
         {
             var p = page;

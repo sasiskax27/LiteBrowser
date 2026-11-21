@@ -7,7 +7,7 @@ namespace LiteBrowser;
 /// <summary>Общие для всех окон: папка данных, настройки и движок WebView2.</summary>
 static class AppEnv
 {
-    public const string Version = "3.2.0";
+    public const string Version = "3.3.0";
     /// <summary>Папка данных. LITEBROWSER_DATA — отдельная папка для тестов (тогда и отдельный экземпляр браузера).</summary>
     public static readonly string DataDir = Environment.GetEnvironmentVariable("LITEBROWSER_DATA") is { Length: > 0 } d ? d
         : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LiteBrowser");

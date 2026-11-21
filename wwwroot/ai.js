@@ -59,7 +59,9 @@ function setBusy(b) {
 function ask(action, prompt) {
   if (busy) return;
   if (st && !st.ok && st.provider === 'local') { showSetup(); return; }
-  pending = { action: action || '', prompt: prompt || '', usePage: action ? true : $('usePage').checked };
+  const mode = $('ctx').value;
+  if (!action && (mode === 'tabs' || mode === 'history')) action = mode;
+  pending = { action: action || '', prompt: prompt || '', usePage: action ? true : mode === 'page' };
   send({ type: 'ai:ask', ...pending });
 }
 
@@ -73,7 +75,15 @@ $('send').onclick = () => {
 $('q').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('send').onclick(); } });
 function autosize() { const t = $('q'); t.style.height = 'auto'; t.style.height = Math.min(140, t.scrollHeight) + 'px'; }
 $('q').addEventListener('input', autosize);
-document.querySelectorAll('.chip').forEach(c => c.onclick = () => ask(c.dataset.a));
+document.querySelectorAll('.chip').forEach(c => c.onclick = () => {
+  if (c.dataset.mode) { setMode(c.dataset.mode); $('q').focus(); return; }
+  ask(c.dataset.a);
+});
+const PH = { page: 'Спросите о странице или о чём угодно…', tabs: 'Вопрос по всем открытым вкладкам (например «какой товар дешевле?»)',
+  history: 'Что искать в истории? Например «статья про видеокарты на прошлой неделе»', none: 'Спросите о чём угодно…' };
+function setMode(m) { $('ctx').value = m; $('q').placeholder = PH[m]; try { localStorage.setItem('aiCtx', m === 'history' ? 'page' : m); } catch (e) { } }
+$('ctx').onchange = () => setMode($('ctx').value);
+try { const m = localStorage.getItem('aiCtx'); if (m && PH[m]) setMode(m); } catch (e) { }
 $('newChat').onclick = () => { if (busy) send({ type: 'ai:stop' }); $('chat').innerHTML = ''; send({ type: 'ai:reset' }); };
 
 // ---------- Настройки и модели ----------

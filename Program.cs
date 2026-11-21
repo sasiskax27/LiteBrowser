@@ -312,6 +312,8 @@ sealed class BrowserApp : ApplicationContext
         else OpenWindow(false, url);
     }
 
+    public bool IsMainWindow(MainForm f) => windows.FirstOrDefault(w => !w.Incognito) == f;
+
     public MainForm OpenWindow(bool incognito, string? url = null, List<string>? tabs = null, int active = 0, Session? session = null)
     {
         var f = new MainForm(incognito, url, tabs, active) { StartSession = session };
