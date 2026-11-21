@@ -8,6 +8,7 @@ sealed class SidePanel : Panel
 {
     public static readonly (string glyph, bool text, string tip, string url)[] Presets =
     {
+        ("✦", true, "Lite AI — ИИ-помощник", LitePages.Ai),
         ("", false, "Закладки", LitePages.BookmarksPage),
         ("", false, "История", LitePages.History),
         ("", false, "Загрузки", LitePages.DownloadsPage),

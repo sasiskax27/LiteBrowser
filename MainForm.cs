@@ -1,3 +1,4 @@
+using System.Text;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Text.Json;
@@ -20,6 +21,8 @@ static class LitePages
     public const string ExtensionsPage = Prefix + "extensions.html";
     public const string DownloadsPage = Prefix + "downloads.html";
     public const string BookmarksPage = Prefix + "bookmarks.html";
+    public const string Ai = Prefix + "ai.html";
+    public const string Notes = Prefix + "notes.html";
 
     public static CoreWebView2WebResourceResponse Response(CoreWebView2Environment env, string uri)
     {
@@ -69,6 +72,8 @@ static class LitePages
         if (src.StartsWith(ExtensionsPage, StringComparison.Ordinal)) return "lite://extensions";
         if (src.StartsWith(DownloadsPage, StringComparison.Ordinal)) return "lite://downloads";
         if (src.StartsWith(BookmarksPage, StringComparison.Ordinal)) return "lite://bookmarks";
+        if (src.StartsWith(Notes, StringComparison.Ordinal)) return "lite://notes";
+        if (src.StartsWith(Ai, StringComparison.Ordinal)) return "lite://ai";
         if (src.StartsWith(Blocked, StringComparison.Ordinal))
             return HttpUtility.ParseQueryString(new Uri(src).Query)["url"] ?? "lite://blocked";
         return null;
@@ -202,7 +207,7 @@ sealed class MainForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         KeyPreview = true;
 
-        strip = new TabStrip(tabs) { Dock = DockStyle.Top, Height = Theme.S(44), FrameColor = frame, Badge = incognito ? "Инкогнито" : null };
+        strip = new TabStrip(tabs) { Dock = DockStyle.Top, Height = Theme.S(44), FrameColor = frame, Badge = incognito ? "Инкогнито" : Profiles.Current.Length > 0 ? Profiles.Current : null };
         strip.TabSelected += SelectTab;
         strip.TabClosed += CloseTab;
         strip.TabMuteToggled += t => { if (t.Core != null) t.Core.IsMuted = !t.Core.IsMuted; };
@@ -657,7 +662,16 @@ sealed class MainForm : Form
                 e.Response = LitePages.Response(env, uri);
                 return;
             }
-            if (!Cfg.BlockAds || !Uri.TryCreate(uri, UriKind.Absolute, out var u)) return;
+            if (!Uri.TryCreate(uri, UriKind.Absolute, out var u)) return;
+            // Родительский контроль: запрещённые сайты не загружаются даже внутри других страниц
+            if (Parental.IsBlocked(u.Host)) { e.Response = env.CreateWebResourceResponse(null, 403, "Blocked", ""); return; }
+            // Экономия трафика: без картинок и видео
+            if (Cfg.DataSaver && e.ResourceContext is CoreWebView2WebResourceContext.Image or CoreWebView2WebResourceContext.Media)
+            {
+                e.Response = env.CreateWebResourceResponse(null, 403, "Data saver", "");
+                return;
+            }
+            if (!Cfg.BlockAds) return;
             if (e.ResourceContext == CoreWebView2WebResourceContext.Document && u.Host == tab.PageHost) return; // саму страницу не трогаем
             if (SiteAllowed(tab.PageHost)) return;
             var host = u.Host;
@@ -704,6 +718,13 @@ sealed class MainForm : Form
                 }
                 else if (u.Scheme is "http" or "https")
                 {
+                    if (Parental.IsBlocked(u.Host))
+                    {
+                        e.Cancel = true;
+                        var pp = LitePages.Prefix + "parental.html?host=" + Uri.EscapeDataString(u.Host);
+                        BeginInvoke(() => core.Navigate(pp));
+                        return;
+                    }
                     // Опасный или рекламный сайт — показываем предупреждение
                     if (Cfg.BlockAds && Blocklist.IsBlocked(u.Host, Cfg.ExtendedBlocklist))
                     {
@@ -742,6 +763,8 @@ sealed class MainForm : Form
             tab.Loading = false;
             if (tab == active) UpdateUi();
             strip.Invalidate();
+            if (e.IsSuccess && !Incognito) _ = OfferTranslate(tab);
+            if (e.IsSuccess) _ = ApplyHighlights(tab);
             if (e.IsSuccess || e.WebErrorStatus == CoreWebView2WebErrorStatus.OperationCanceled) return;
             if (!Uri.TryCreate(core.Source, UriKind.Absolute, out var u)) return;
             if (u.Scheme != "https" || !upgraded.Contains(u.Host) || httpAllowed.Contains(u.Host)) return;
@@ -826,6 +849,8 @@ sealed class MainForm : Form
 
         // Скрипт менеджера паролей: находит формы входа на страницах
         _ = core.AddScriptToExecuteOnDocumentCreatedAsync(PasswordScripts.Page);
+        _ = core.AddScriptToExecuteOnDocumentCreatedAsync(PageTools.Gestures);
+        SetupContextMenu(tab, core, env);
 
         core.WebMessageReceived += async (_, e) =>
         {
@@ -1052,7 +1077,7 @@ sealed class MainForm : Form
     {
         var core = tab.Core;
         if (core == null) return;
-        string mode = !Cfg.BlockAds ? "none" : Cfg.ExtendedBlocklist || AdBlock.AnyEnabled(Cfg) ? "all" : "builtin";
+        string mode = Cfg.DataSaver || Cfg.ParentalEnabled ? "all" : !Cfg.BlockAds ? "none" : Cfg.ExtendedBlocklist || AdBlock.AnyEnabled(Cfg) ? "all" : "builtin";
         if (mode == tab.FilterMode) return;
         ForEachFilter(tab.FilterMode, f => core.RemoveWebResourceRequestedFilter(f, CoreWebView2WebResourceContext.All, CoreWebView2WebResourceRequestSourceKinds.All));
         ForEachFilter(mode, f => core.AddWebResourceRequestedFilter(f, CoreWebView2WebResourceContext.All, CoreWebView2WebResourceRequestSourceKinds.All));
@@ -1096,6 +1121,28 @@ sealed class MainForm : Form
         if (json.Length > 4000) return;
         var origin = PasswordTools.Origin(source);
         if (origin == null) return;
+
+        // Жесты мышью (не чаще раза в 400 мс — на случай, если страница сама шлёт такие сообщения)
+        if (json.Contains("\"gesture\""))
+        {
+            if (!Cfg.MouseGestures || tab != active || (DateTime.Now - lastGesture).TotalMilliseconds < 400) return;
+            lastGesture = DateTime.Now;
+            using var gd = JsonDocument.Parse(json);
+            var g = gd.RootElement.TryGetProperty("g", out var gv) ? gv.GetString() ?? "" : "";
+            BeginInvoke(() =>
+            {
+                switch (g)
+                {
+                    case "L": core.GoBack(); break;
+                    case "R": core.GoForward(); break;
+                    case "U": _ = AddTab(homeUrl); break;
+                    case "D": core.Reload(); break;
+                    case "DR": CloseTab(tab); break;
+                    case "UD": ReopenClosedTab(); break;
+                }
+            });
+            return;
+        }
 
         // Блокировщик: страница просит правила скрытия рекламы для своего сайта
         if (json.Contains("\"ab:css\""))
@@ -1494,6 +1541,152 @@ sealed class MainForm : Form
         if (r == "notarticle") infoBar.ShowBar("reader", "", "На этой странице не нашлось статьи для режима чтения", ("OK", () => infoBar.HideBar(), false));
     }
 
+    // ================= Перевод, голос, чтение вслух =================
+
+    readonly HashSet<string> translateOffered = new();
+    DateTime lastGesture;
+
+    // ================= Контекстное меню, выделения, заметки =================
+
+    void SetupContextMenu(BrowserTab tab, CoreWebView2 core, CoreWebView2Environment env)
+    {
+        core.ContextMenuRequested += (_, e) =>
+        {
+            var target = e.ContextMenuTarget;
+            var src = core.Source;
+            if (!src.StartsWith("http")) return;
+            var items = e.MenuItems;
+            CoreWebView2ContextMenuItem Item(string label, Action act)
+            {
+                var it = env.CreateContextMenuItem(label, null, CoreWebView2ContextMenuItemKind.Command);
+                it.CustomItemSelected += (_, _) => BeginInvoke(act);
+                return it;
+            }
+            int pos = 0;
+            if (target.HasSelection)
+            {
+                var text = target.SelectionText.Trim();
+                if (text.Length > 0)
+                {
+                    if (Cfg.AiEnabled)
+                    {
+                        items.Insert(pos++, Item("✦ Объяснить с помощью ИИ", () => OpenAi("explain")));
+                        items.Insert(pos++, Item("✦ Перевести с помощью ИИ", () => OpenAi("translate")));
+                    }
+                    if (!Incognito)
+                        items.Insert(pos++, Item("🖍 Выделить маркером", () =>
+                        {
+                            Store.AddHighlight(new Highlight { Url = Store.PageKey(src), Title = core.DocumentTitle, Text = text.Length > 1000 ? text[..1000] : text });
+                            _ = ApplyHighlights(tab);
+                        }));
+                    items.Insert(pos++, env.CreateContextMenuItem("", null, CoreWebView2ContextMenuItemKind.Separator));
+                }
+            }
+            else if (!target.HasLinkUri)
+            {
+                if (Cfg.AiEnabled) items.Insert(pos++, Item("✦ Пересказать страницу (ИИ)", () => OpenAi("summarize")));
+                if (!Incognito)
+                    items.Insert(pos++, Item("📝 Заметка к странице…", () =>
+                    {
+                        var note = InputDialog.Ask(this, "Заметка к странице", "");
+                        if (!string.IsNullOrWhiteSpace(note))
+                            Store.AddHighlight(new Highlight { Url = Store.PageKey(src), Title = core.DocumentTitle, Note = note });
+                    }));
+                items.Insert(pos++, Item("Перевести страницу", TranslatePage));
+                items.Insert(pos++, Item("QR-код страницы", ShowQr));
+                items.Insert(pos++, env.CreateContextMenuItem("", null, CoreWebView2ContextMenuItemKind.Separator));
+            }
+        };
+    }
+
+    /// <summary>Подсветить сохранённые выделения на странице.</summary>
+    async Task ApplyHighlights(BrowserTab tab)
+    {
+        var core = tab.Core;
+        if (core == null || Incognito) return;
+        var key = Store.PageKey(core.Source);
+        var texts = Store.Highlights.Where(h => h.Url == key && h.Text.Length > 0).Select(h => h.Text).Distinct().Take(100).ToList();
+        if (texts.Count == 0) return;
+        var script = "(texts => { const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT); const nodes = []; " +
+                     "while (walk.nextNode()) nodes.push(walk.currentNode); " +
+                     "for (const t of texts) { for (const n of nodes) { const i = n.nodeValue.indexOf(t); if (i < 0 || n.parentElement.closest('mark.lite-hl, script, style')) continue; " +
+                     "const r = document.createRange(); r.setStart(n, i); r.setEnd(n, i + t.length); const m = document.createElement('mark'); m.className = 'lite-hl'; " +
+                     "m.style.cssText = 'background:#ffe066;color:#111;border-radius:3px;padding:0 1px'; try { r.surroundContents(m); } catch (e) {} break; } } })(" +
+                     JsonSerializer.Serialize(texts) + ")";
+        try { await core.ExecuteScriptAsync(script); } catch { }
+    }
+
+    /// <summary>Открыть ИИ-помощника в боковой панели (и сразу выполнить действие).</summary>
+    void OpenAi(string? action = null)
+    {
+        ToggleSidePanel(true);
+        if (action != null && sidePanel.Core?.Source?.StartsWith(LitePages.Ai) == true)
+            Post(sidePanel.Core, new { type = "aiRun", action });
+        else
+            sidePanel.Navigate(LitePages.Ai + (action != null ? "?action=" + action : ""));
+    }
+
+    void ShowQr()
+    {
+        var src = active?.Core?.Source ?? "";
+        if (!src.StartsWith("http")) return;
+        try { using var f = new QrForm(src); f.ShowDialog(this); }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "QR-код"); }
+    }
+
+    void TranslatePage()
+    {
+        var src = active?.Core?.Source ?? "";
+        if (!src.StartsWith("http") || src.Contains("translate.goog") || src.Contains("translate.yandex")) return;
+        Navigate(PageTools.TranslateUrl(Cfg.TranslateService, src));
+    }
+
+    async Task OfferTranslate(BrowserTab tab)
+    {
+        var core = tab.Core;
+        if (core == null || !Cfg.OfferTranslate || tab != active || infoBar.Key != null) return;
+        var src = core.Source;
+        if (!src.StartsWith("https://") || src.StartsWith(LitePages.Prefix) || src.Contains("translate")) return;
+        if (!translateOffered.Add(tab.PageHost)) return;
+        string lang;
+        try { lang = (await core.ExecuteScriptAsync(PageTools.PageLang)).Trim('"'); } catch { return; }
+        if (lang.Length != 2 || lang == "ru" || tab != active) return;
+        var name = PageTools.LangNames.TryGetValue(lang, out var n) ? n : "иностранном";
+        infoBar.ShowBar("translate", "", $"Страница на {name} языке. Перевести на русский?",
+            ("Перевести", () => { infoBar.HideBar(); TranslatePage(); }, true),
+            ("Не сейчас", () => infoBar.HideBar(), false),
+            ("Не предлагать", () => { CopyAndSave(x => x.OfferTranslate = false); infoBar.HideBar(); }, false));
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+
+    /// <summary>Голосовой ввод: ставим курсор в адресную строку и включаем диктовку Windows (Win+H).</summary>
+    async Task VoiceInput()
+    {
+        address.Box.Focus();
+        address.Box.SelectAll();
+        await Task.Delay(120);
+        const byte LWIN = 0x5B, H = 0x48;
+        keybd_event(LWIN, 0, 0, UIntPtr.Zero);
+        keybd_event(H, 0, 0, UIntPtr.Zero);
+        keybd_event(H, 0, 2, UIntPtr.Zero);
+        keybd_event(LWIN, 0, 2, UIntPtr.Zero);
+    }
+
+    async Task ReadAloud()
+    {
+        var core = active?.Core;
+        if (core == null) return;
+        var r = (await core.ExecuteScriptAsync(PageTools.ReadAloud)).Trim('"');
+        if (r == "started")
+            infoBar.ShowBar("tts", "", "Читаю страницу вслух…",
+                ("Остановить", () => { _ = core.ExecuteScriptAsync("speechSynthesis.cancel()"); infoBar.HideBar(); }, true));
+        else if (r == "stopped") infoBar.HideBar();
+        else if (r == "nothing") MessageBox.Show(this, "На странице нет текста для чтения.", "Чтение вслух");
+        else if (r == "unsupported") MessageBox.Show(this, "Чтение вслух недоступно: в Windows не установлены голоса.", "Чтение вслух");
+    }
+
     // ================= Поиск по странице =================
 
     void PlaceFindBar()
@@ -1579,6 +1772,167 @@ sealed class MainForm : Form
         });
     }
 
+    // ================= ИИ-помощник =================
+
+    CancellationTokenSource? aiCts;
+    readonly List<AiMessage> aiHistory = new();
+
+    async Task SendAiStatus(CoreWebView2 page)
+    {
+        var s = Cfg;
+        List<string> models = new();
+        string? error = null;
+        bool ok;
+        if (s.AiProvider == "local")
+        {
+            var m = LocalAi.Find(s.AiLocalModel);
+            ok = m != null && LocalAi.IsDownloaded(m);
+            if (!ok) error = "Скачайте модель, чтобы начать — это нужно один раз";
+        }
+        else
+        {
+            try { models = await AiService.Create(s).ModelsAsync(CancellationToken.None); ok = true; }
+            catch (Exception ex)
+            {
+                ok = false;
+                error = s.AiProvider == "ollama"
+                    ? "Ollama не отвечает. Запустите её (установка: ollama.com) и скачайте модель командой: ollama pull qwen2.5"
+                    : "Сервер не отвечает: " + ex.Message;
+            }
+            if (ok && s.AiModel.Length == 0 && models.Count > 0) { var first = models[0]; CopyAndSave(x => x.AiModel = first); }
+        }
+        Post(page, new
+        {
+            type = "aiStatus", enabled = s.AiEnabled, provider = s.AiProvider, model = Cfg.AiModel, ok, error, models,
+            ollamaUrl = s.AiOllamaUrl, baseUrl = s.AiBaseUrl, hasKey = SecureStorage.Has("ai-key"), consent = s.AiCloudConsent,
+            localModel = s.AiLocalModel, gpu = s.AiGpu, backend = LocalAi.LoadedBackend,
+            downloading = LocalAi.DownloadingId, progress = LocalAi.DownloadProgress, localStatus = LocalAi.Status,
+            local = LocalAi.Models.Select(m => new { id = m.Id, name = m.Name, desc = m.Description, size = m.SizeMb, downloaded = LocalAi.IsDownloaded(m) }),
+        });
+    }
+
+    async Task HandleAiMessage(CoreWebView2 page, string type, JsonElement root)
+    {
+        string Str(string name) => root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
+        bool Bool(string name) => root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.True;
+        switch (type)
+        {
+            case "ai:status":
+                await SendAiStatus(page);
+                break;
+            case "ai:config":
+                var key = Str("key");
+                if (key.Length > 0) SecureStorage.Set("ai-key", key.Trim());
+                CopyAndSave(x =>
+                {
+                    if (Str("provider").Length > 0) x.AiProvider = Str("provider");
+                    if (Str("localModel").Length > 0) x.AiLocalModel = Str("localModel");
+                    if (root.TryGetProperty("gpu", out _)) x.AiGpu = Bool("gpu");
+                    if (Str("ollamaUrl").Length > 0) x.AiOllamaUrl = Str("ollamaUrl");
+                    if (Str("baseUrl").Length > 0) x.AiBaseUrl = Str("baseUrl");
+                    if (root.TryGetProperty("model", out _)) x.AiModel = Str("model");
+                });
+                await SendAiStatus(page);
+                break;
+            case "ai:download":
+                if (LocalAi.Find(Str("id")) is { } dm)
+                {
+                    CopyAndSave(x => x.AiLocalModel = dm.Id);
+                    _ = LocalAi.DownloadAsync(dm, Cfg.AiGpu);
+                }
+                await SendAiStatus(page);
+                break;
+            case "ai:cancelDownload":
+                LocalAi.CancelDownload();
+                break;
+            case "ai:deleteModel":
+                if (LocalAi.Find(Str("id")) is { } del) LocalAi.Delete(del);
+                await SendAiStatus(page);
+                break;
+            case "ai:consent":
+                CopyAndSave(x => x.AiCloudConsent = true);
+                break;
+            case "ai:reset":
+                aiHistory.Clear();
+                break;
+            case "ai:stop":
+                aiCts?.Cancel();
+                break;
+            case "ai:ask":
+                await AskAi(page, Str("prompt").Trim(), Str("action"), Bool("usePage"));
+                break;
+        }
+    }
+
+    async Task AskAi(CoreWebView2 page, string prompt, string action, bool usePage)
+    {
+        var s = Cfg;
+        if (!s.AiEnabled) { Post(page, new { type = "aiError", text = "ИИ-помощник выключен в настройках" }); return; }
+        bool needsPage = usePage || action.Length > 0;
+        if (s.AiProvider == "openai" && needsPage && !s.AiCloudConsent) { Post(page, new { type = "aiNeedConsent" }); return; }
+        if (s.AiProvider != "local" && s.AiModel.Length == 0) { Post(page, new { type = "aiError", text = "Выберите модель в настройках помощника" }); return; }
+        if (s.AiProvider == "local" && !(LocalAi.Find(s.AiLocalModel) is { } lm && LocalAi.IsDownloaded(lm)))
+        { Post(page, new { type = "aiError", text = "Сначала скачайте модель (кнопка выше)" }); return; }
+
+        // Контекст страницы — из активной вкладки основного окна; это недоверенные данные
+        string context = "", title = "";
+        if (needsPage && active?.Core is { } tabCore && tabCore.Source.StartsWith("http"))
+        {
+            try
+            {
+                var json = JsonSerializer.Deserialize<string>(await tabCore.ExecuteScriptAsync(AiService.ContextScript)) ?? "{}";
+                using var d = JsonDocument.Parse(json);
+                title = d.RootElement.GetProperty("title").GetString() ?? "";
+                var url = d.RootElement.GetProperty("url").GetString() ?? "";
+                var sel = d.RootElement.GetProperty("selection").GetString() ?? "";
+                var text = d.RootElement.GetProperty("text").GetString() ?? "";
+                bool selAction = action is "explain" or "translate" or "rewrite";
+                if (selAction && sel.Length == 0) { Post(page, new { type = "aiError", text = "Сначала выделите текст на странице" }); return; }
+                var body = selAction ? sel : (sel.Length > 0 && action.Length == 0 ? $"Выделенный фрагмент:\n{sel}\n\nТекст страницы:\n{text}" : text);
+                if (s.AiProvider == "local") body = body.Length > 9000 ? body[..9000] : body; // помещаемся в контекст модели
+                context = $"<page>\nНазвание: {title}\nАдрес: {url}\n\n{body}\n</page>";
+            }
+            catch { }
+        }
+        else if (needsPage && action.Length > 0) { Post(page, new { type = "aiError", text = "Откройте сайт в активной вкладке" }); return; }
+
+        var instruction = AiService.ActionPrompt(action);
+        var userText = string.Join("\n\n", new[] { context, instruction, prompt }.Where(x => x.Length > 0));
+        if (userText.Length == 0) return;
+        var messages = new List<AiMessage> { new("system", AiService.SystemPrompt) };
+        messages.AddRange(aiHistory.TakeLast(8));
+        messages.Add(new AiMessage("user", userText));
+
+        aiCts?.Cancel();
+        var cts = aiCts = new CancellationTokenSource();
+        var shown = prompt.Length > 0 ? prompt : action switch
+        {
+            "summarize" => "Перескажи страницу", "keypoints" => "Ключевые мысли страницы", "explain" => "Объясни выделенное",
+            "translate" => "Переведи выделенное", "rewrite" => "Перепиши выделенное", "code" => "Объясни код", "search" => "Что поискать по теме", _ => prompt,
+        };
+        Post(page, new { type = "aiStart", question = shown, page = title });
+        var sb = new StringBuilder();
+        var last = DateTime.MinValue;
+        try
+        {
+            var provider = AiService.Create(s);
+            await Task.Run(() => provider.StreamAsync(messages, t =>
+            {
+                lock (sb) sb.Append(t);
+                if ((DateTime.Now - last).TotalMilliseconds < 80) return;
+                last = DateTime.Now;
+                string snapshot; lock (sb) snapshot = sb.ToString();
+                BeginInvoke(() => Post(page, new { type = "aiToken", text = snapshot }));
+            }, cts.Token), cts.Token);
+            Post(page, new { type = "aiDone", text = sb.ToString() });
+        }
+        catch (OperationCanceledException) { Post(page, new { type = "aiDone", text = sb + "\n\n_(остановлено)_" }); }
+        catch (Exception ex) { Post(page, new { type = "aiError", text = ex.Message }); return; }
+        // В истории храним вопрос без текста страницы — чтобы не раздувать контекст
+        aiHistory.Add(new AiMessage("user", (title.Length > 0 ? $"[Страница: {title}] " : "") + shown));
+        aiHistory.Add(new AiMessage("assistant", sb.ToString()));
+    }
+
     // ================= Обновления и браузер по умолчанию =================
 
     /// <summary>Через несколько секунд после запуска: проверить обновления и предложить стать основным браузером.</summary>
@@ -1596,6 +1950,26 @@ sealed class MainForm : Form
             catch { /* нет сети — проверим в другой раз */ }
         }
         if (!IsDisposed && !Cfg.DefaultPromptDismissed && !SystemIntegration.IsDefaultBrowser()) ShowDefaultPrompt();
+    }
+
+    /// <summary>После неожиданного закрытия — предложить вернуть вкладки.</summary>
+    public void OfferCrashRestore(Session s)
+    {
+        BeginInvoke(() => infoBar.ShowBar("crash", "", $"LiteBrowser был закрыт неожиданно. Вернуть вкладки ({s.Tabs.Count})?",
+            ("Восстановить", () =>
+            {
+                infoBar.HideBar();
+                var first = active;
+                foreach (var u in s.Tabs)
+                {
+                    string title = u.StartsWith(LitePages.Prefix) ? "Новая вкладка" : Uri.TryCreate(u, UriKind.Absolute, out var x) ? x.Host : u;
+                    CreateTab(u, select: false, title);
+                }
+                // Пустую стартовую вкладку убираем, если она одна и ничего не открыто
+                if (first is { IsHome: true } && tabs.Count > 1) CloseTab(first);
+                SelectTab(tabs[Math.Clamp(s.Active, 0, tabs.Count - 1)]);
+            }, true),
+            ("Не нужно", () => infoBar.HideBar(), false)));
     }
 
     /// <summary>Синхронизация при запуске (если включена).</summary>
@@ -1654,6 +2028,7 @@ sealed class MainForm : Form
     {
         void Status(string text, bool ok = true) { if (page != null) Post(page, new { type = "extStatus", text, ok }); }
         if (Incognito) { MessageBox.Show(this, "Расширения устанавливаются из обычного окна, не из инкогнито.", "Расширения"); return; }
+        if (Cfg.ParentalEnabled) { Status("Установка расширений отключена родительским контролем", false); if (page == null) MessageBox.Show(this, "Установка расширений отключена родительским контролем.", "Расширения"); return; }
         var r = Extensions.Parse(url);
         var profile = MainProfile;
         if (r == null || profile == null) { Status("Не похоже на ссылку на расширение из Chrome Web Store, Edge Add-ons или Firefox Add-ons", false); return; }
@@ -1817,6 +2192,12 @@ sealed class MainForm : Form
             if (core.Source.StartsWith(LitePages.Passwords, StringComparison.Ordinal)) await HandleVaultMessage(core, msgType, root);
             return;
         }
+        if (msgType.StartsWith("ai:"))
+        {
+            // ИИ-помощник — только со своей страницы помощника
+            if (core.Source.StartsWith(LitePages.Ai, StringComparison.Ordinal)) await HandleAiMessage(core, msgType, root);
+            return;
+        }
         if (msgType.StartsWith("ext:"))
         {
             // Управление расширениями — только со страницы расширений
@@ -1832,6 +2213,9 @@ sealed class MainForm : Form
             case "save":
                 var ns = root.GetProperty("settings").Deserialize<AppSettings>(AppSettings.Json);
                 if (ns == null) return;
+                // Родительский контроль меняется только отдельно и с PIN-кодом
+                ns.ParentalEnabled = Cfg.ParentalEnabled; ns.ParentalPinHash = Cfg.ParentalPinHash;
+                ns.ParentalAdult = Cfg.ParentalAdult; ns.ParentalBlocked = Cfg.ParentalBlocked.ToList();
                 bool wantBlocklist = ns.ExtendedBlocklist && ns.BlockAds && Blocklist.ExtendedCount == 0;
                 bool listsChanged = AdBlock.Lists.Any(l => AdBlock.Enabled(ns, l.Id) != AdBlock.Enabled(Cfg, l.Id));
                 AppEnv.UpdateSettings(ns);
@@ -1968,6 +2352,37 @@ sealed class MainForm : Form
                 CopyAndSave(x => x.ImportOffered = true);
                 break;
 
+            case "openAi":
+                OpenAi();
+                break;
+
+            // ---- Родительский контроль ----
+            case "parental:set":
+            {
+                var pin = Str("pin");
+                bool want = root.TryGetProperty("enabled", out var pe) && pe.ValueKind == JsonValueKind.True;
+                bool adultOn = !root.TryGetProperty("adult", out var pa) || pa.ValueKind != JsonValueKind.False;
+                var blocked = root.TryGetProperty("blocked", out var pb) && pb.ValueKind == JsonValueKind.Array
+                    ? pb.EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).ToList() : new List<string>();
+                if (Cfg.ParentalEnabled && !Parental.CheckPin(pin)) { Post(core, new { type = "error", text = "Неверный PIN-код" }); break; }
+                if (!Cfg.ParentalEnabled && want && (pin.Length < 4 || !pin.All(char.IsDigit))) { Post(core, new { type = "error", text = "Придумайте PIN-код из 4 и более цифр" }); break; }
+                var newPin = Str("newPin");
+                CopyAndSave(x =>
+                {
+                    x.ParentalEnabled = want;
+                    x.ParentalAdult = adultOn;
+                    x.ParentalBlocked = blocked;
+                    if (!Cfg.ParentalEnabled && want) x.ParentalPinHash = Parental.Hash(pin);
+                    if (newPin.Length >= 4 && newPin.All(char.IsDigit)) x.ParentalPinHash = Parental.Hash(newPin);
+                    if (!want) x.ParentalPinHash = "";
+                });
+                if (want && adultOn) _ = Parental.InitAsync();
+                foreach (var t in tabs) ApplyFilters(t);
+                Post(core, new { type = "done", text = want ? "Родительский контроль включён" : "Родительский контроль выключен" });
+                SendSettings(core);
+                break;
+            }
+
             // ---- Синхронизация ----
             case "sync:pick":
                 BeginInvoke(() =>
@@ -2062,6 +2477,15 @@ sealed class MainForm : Form
                 break;
             case "dl:clear":
                 Downloads.Clear();
+                break;
+
+            // ---- Заметки ----
+            case "notes:list":
+                Post(core, new { type = "notesList", items = Store.Highlights.AsEnumerable().Reverse().Select(h => new { id = h.Id, url = h.Url, title = h.Title, text = h.Text, note = h.Note, time = h.Time }) });
+                break;
+            case "notes:remove":
+                Store.RemoveHighlight(Str("id"));
+                Post(core, new { type = "notesList", items = Store.Highlights.AsEnumerable().Reverse().Select(h => new { id = h.Id, url = h.Url, title = h.Title, text = h.Text, note = h.Note, time = h.Time }) });
                 break;
 
             // ---- Закладки ----
@@ -2249,6 +2673,36 @@ sealed class MainForm : Form
         menu.Items.Add(Theme.Item("Новая вкладка", () => _ = AddTab(homeUrl), "Ctrl+T"));
         menu.Items.Add(Theme.Item("Новое окно", () => BrowserApp.Instance.OpenWindow(false), "Ctrl+N"));
         menu.Items.Add(Theme.Item("Окно инкогнито", () => BrowserApp.Instance.OpenWindow(true), "Ctrl+Shift+N"));
+        var prof = new ToolStripMenuItem("Профили" + (Profiles.Current.Length > 0 ? $" ({Profiles.Current})" : "")) { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
+        prof.DropDownItems.Add(Theme.Item((Profiles.Current.Length == 0 ? "●  " : "○  ") + "Основной", () => { if (Profiles.Current.Length > 0) Profiles.Open(null); }));
+        foreach (var p in Profiles.List())
+        {
+            var pp = p;
+            prof.DropDownItems.Add(Theme.Item((Profiles.Current == p.Name ? "●  " : "○  ") + p.Name, () => { if (Profiles.Current != pp.Name) Profiles.Open(pp); }));
+        }
+        prof.DropDownItems.Add(new ToolStripSeparator());
+        prof.DropDownItems.Add(Theme.Item("Новый профиль…", () =>
+        {
+            var name = InputDialog.Ask(this, "Название профиля (например, «Работа»)", "");
+            if (string.IsNullOrWhiteSpace(name)) return;
+            try { Profiles.Open(Profiles.Create(name)); } catch (Exception ex) { MessageBox.Show(this, ex.Message, "Профили"); }
+        }));
+        if (Profiles.List().Any(p => p.Name != Profiles.Current))
+        {
+            var del = new ToolStripMenuItem("Удалить профиль") { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
+            foreach (var p in Profiles.List().Where(p => p.Name != Profiles.Current))
+            {
+                var pp = p;
+                del.DropDownItems.Add(Theme.Item(p.Name, () =>
+                {
+                    if (MessageBox.Show(this, $"Удалить профиль «{pp.Name}» вместе с его закладками, паролями и историей? Это нельзя отменить.\n\nЕсли окно этого профиля открыто — сначала закройте его.",
+                        "Удалить профиль", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes)
+                        Profiles.Delete(pp.Id);
+                }));
+            }
+            prof.DropDownItems.Add(del);
+        }
+        menu.Items.Add(prof);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(Theme.Item("История", () => OpenLitePage(LitePages.History), "Ctrl+H"));
         menu.Items.Add(Theme.Item("Пароли", () => OpenLitePage(LitePages.Passwords), "Ctrl+Shift+P"));
@@ -2261,6 +2715,13 @@ sealed class MainForm : Form
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(Theme.Item("Найти на странице", ShowFind, "Ctrl+F"));
         menu.Items.Add(Theme.Item("Режим чтения", () => _ = ToggleReader(), "Ctrl+Alt+R"));
+        if (Cfg.AiEnabled) menu.Items.Add(Theme.Item("✦ ИИ-помощник Lite AI", () => OpenAi(), "Ctrl+Shift+A"));
+        menu.Items.Add(Theme.Item("Перевести страницу", TranslatePage));
+        menu.Items.Add(Theme.Item("Читать вслух", () => _ = ReadAloud(), "Ctrl+Shift+U"));
+        menu.Items.Add(Theme.Item("Голосовой ввод", () => _ = VoiceInput(), "Ctrl+Shift+M"));
+        menu.Items.Add(Theme.Item("QR-код страницы", ShowQr));
+        menu.Items.Add(Theme.Item("Заметки и выделения", () => OpenLitePage(LitePages.Notes)));
+        menu.Items.Add(Theme.Item((Cfg.DataSaver ? "✓  " : "") + "Экономия трафика (без картинок)", () => { bool v = !Cfg.DataSaver; CopyAndSave(x => x.DataSaver = v); active?.Core?.Reload(); }));
         var video = new ToolStripMenuItem("Видео и аудио") { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
         video.DropDownItems.Add(Theme.Item("Картинка в картинке", () => _ = PictureInPicture(), "Ctrl+Shift+V"));
         foreach (var r in new[] { 0.5, 1, 1.25, 1.5, 2, 3 })
@@ -2427,7 +2888,7 @@ sealed class MainForm : Form
     void UpdateTitle()
     {
         var title = active?.Title;
-        var suffix = Incognito ? " — Инкогнито — LiteBrowser" : " — LiteBrowser";
+        var suffix = Incognito ? " — Инкогнито — LiteBrowser" : Profiles.Current.Length > 0 ? $" — {Profiles.Current} — LiteBrowser" : " — LiteBrowser";
         Text = string.IsNullOrWhiteSpace(title) ? suffix[3..] : title + suffix;
     }
 
@@ -2460,13 +2921,15 @@ sealed class MainForm : Form
                 case "extensions": return LitePages.ExtensionsPage + rest;
                 case "downloads": return LitePages.DownloadsPage + rest;
                 case "bookmarks": return LitePages.BookmarksPage + rest;
+                case "notes": return LitePages.Notes + rest;
+                case "ai": return LitePages.Ai + rest;
                 case "home": return homeUrl;
             }
         }
         if (t.StartsWith("localhost", StringComparison.OrdinalIgnoreCase)) return "http://" + t;
         if (Uri.TryCreate(t, UriKind.Absolute, out var u) && u.Scheme is "http" or "https") return u.ToString();
         if (!t.Contains(' ') && t.Contains('.') && !t.EndsWith('.')) return "https://" + t;
-        return SearchEngines.Get(Cfg.Engine).Url + Uri.EscapeDataString(t);
+        return Parental.SafeSearch(SearchEngines.Get(Cfg.Engine).Url + Uri.EscapeDataString(t));
     }
 
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
@@ -2484,6 +2947,9 @@ sealed class MainForm : Form
             case Keys.Control | Keys.D: ToggleBookmark(); return true;
             case Keys.Control | Keys.F: case Keys.F3: ShowFind(); return true;
             case Keys.Control | Keys.B: ToggleSidePanel(!sidePanel.Visible); return true;
+            case Keys.Control | Keys.Shift | Keys.A: if (Cfg.AiEnabled) OpenAi(); return true;
+            case Keys.Control | Keys.Shift | Keys.U: _ = ReadAloud(); return true;
+            case Keys.Control | Keys.Shift | Keys.M: _ = VoiceInput(); return true;
             case Keys.Control | Keys.Alt | Keys.R: _ = ToggleReader(); return true;
             case Keys.Control | Keys.Shift | Keys.V: _ = PictureInPicture(); return true;
             case Keys.Control | Keys.Shift | Keys.S: _ = TakeScreenshot(false); return true;

@@ -1,4 +1,4 @@
-﻿using System.Net.Sockets;
+using System.Net.Sockets;
 using System.Text;
 using Microsoft.Web.WebView2.Core;
 
@@ -13,10 +13,10 @@ static class AppEnv
         : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LiteBrowser");
     public static string InstanceName => "LiteBrowser-" + Environment.UserName + (Environment.GetEnvironmentVariable("LITEBROWSER_DATA") is { Length: > 0 } d2 ? "-" + Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(Encoding.UTF8.GetBytes(d2)))[..8] : "");
 
-    /// <summary>Журнал для отладки — пишется только в тестовом режиме (LITEBROWSER_DATA).</summary>
+    /// <summary>Журнал для отладки — пишется только если задана переменная LITEBROWSER_DEBUG.</summary>
     public static void Log(string s)
     {
-        if (Environment.GetEnvironmentVariable("LITEBROWSER_DATA") is not { Length: > 0 }) return;
+        if (Environment.GetEnvironmentVariable("LITEBROWSER_DEBUG") is not { Length: > 0 }) return;
         try { File.AppendAllText(Path.Combine(DataDir, "debug.log"), $"{DateTime.Now:HH:mm:ss.fff} {s}\r\n"); } catch { }
     }
 

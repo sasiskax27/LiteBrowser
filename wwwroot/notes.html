@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<title>Заметки</title>
+<link rel="stylesheet" href="common.css">
+<link rel="stylesheet" href="lists.css">
+<style>
+  .page { margin-top: 18px; }
+  .page-title { display: flex; gap: 10px; align-items: baseline; margin: 0 4px 8px; }
+  .page-title a { color: var(--text); font-weight: 600; text-decoration: none; font-size: 14.5px; }
+  .page-title a:hover { color: var(--accent); }
+  .page-title span { color: var(--dim); font-size: 12px; }
+  .hl { background: rgba(255, 224, 102, .16); border-left: 3px solid #ffe066; padding: 10px 12px; font-size: 14px; line-height: 1.5; }
+  .note { border-left: 3px solid var(--accent); padding: 10px 12px; font-size: 14px; line-height: 1.5; }
+  .item { align-items: flex-start; }
+  .item .txt { white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<main>
+  <header>
+    <div class="logo icon">&#xE70B;</div>
+    <div class="grow"><h1>Заметки и выделения</h1><div class="sub">Выделите текст на странице → правый клик → «Выделить маркером». Или «Заметка к странице»</div></div>
+  </header>
+  <div class="bar"><input class="text" id="q" placeholder="Поиск по заметкам" spellcheck="false" autofocus></div>
+  <div id="out"></div>
+</main>
+<script src="notes.js"></script>
+</body>
+</html>

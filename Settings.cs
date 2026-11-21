@@ -99,6 +99,25 @@ sealed class AppSettings
     public bool SidePanelOpen { get; set; } = false;
     public string SidePanelUrl { get; set; } = "https://lite.home/bookmarks.html";
     public int SidePanelWidth { get; set; } = 380;
+    // ИИ-помощник
+    public bool AiEnabled { get; set; } = true;
+    public string AiProvider { get; set; } = "local";    // local (встроенный) | ollama | openai
+    public string AiLocalModel { get; set; } = "qwen2.5-1.5b";
+    public bool AiGpu { get; set; } = true;              // встроенный ИИ на видеокарте (Vulkan)
+    public string AiOllamaUrl { get; set; } = "http://localhost:11434";
+    public string AiBaseUrl { get; set; } = "https://api.openai.com/v1";
+    public string AiModel { get; set; } = "";
+    public bool AiCloudConsent { get; set; } = false;     // согласие отправлять страницы во внешний сервис
+    // Экономия трафика, жесты, перевод
+    public bool DataSaver { get; set; } = false;          // не грузить картинки и видео
+    public bool MouseGestures { get; set; } = true;
+    public bool OfferTranslate { get; set; } = true;
+    public string TranslateService { get; set; } = "google"; // google | yandex
+    // Родительский контроль
+    public bool ParentalEnabled { get; set; } = false;
+    public string ParentalPinHash { get; set; } = "";
+    public bool ParentalAdult { get; set; } = true;       // блокировать сайты для взрослых
+    public List<string> ParentalBlocked { get; set; } = new();
     // Синхронизация
     public bool SyncEnabled { get; set; } = false;
     public string SyncFolder { get; set; } = "";
@@ -135,6 +154,15 @@ sealed class AppSettings
         if (!UiScales.Contains(UiScale)) UiScale = 100;
         SidePanelWidth = Math.Clamp(SidePanelWidth, 260, 1000);
         if (UiTheme is not ("dark" or "light" or "auto")) UiTheme = "dark";
+        if (TranslateService is not ("google" or "yandex")) TranslateService = "google";
+        if (AiProvider is not ("local" or "ollama" or "openai")) AiProvider = "local";
+        if (LocalAi.Find(AiLocalModel ?? "") == null) AiLocalModel = LocalAi.Models[0].Id;
+        if (!Uri.TryCreate(AiOllamaUrl, UriKind.Absolute, out var ou) || ou.Scheme is not ("http" or "https")) AiOllamaUrl = "http://localhost:11434";
+        if (!Uri.TryCreate(AiBaseUrl, UriKind.Absolute, out var bu) || bu.Scheme is not ("http" or "https")) AiBaseUrl = "https://api.openai.com/v1";
+        AiModel = (AiModel ?? "").Trim();
+        if (AiModel.Length > 200) AiModel = "";
+        ParentalBlocked = (ParentalBlocked ?? new()).Select(CleanSite).Where(s => s.Length > 0 && HostRx.IsMatch(s)).Distinct().Take(2000).ToList();
+        ParentalPinHash ??= "";
         if (!Theme.Accents.ContainsKey(Accent ?? "")) Accent = "blue";
         if (!Path.IsPathRooted(SyncFolder ?? "")) SyncFolder = "";
         HomeTiles = (HomeTiles ?? HomeTile.Defaults())

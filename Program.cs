@@ -1,3 +1,4 @@
+using System.Text;
 using System.Diagnostics;
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
@@ -135,6 +136,40 @@ static class Program
             return;
         }
 
+        // Самотест встроенного ИИ: --ai-selftest <файл> <gpu|cpu>
+        if (args.Length == 3 && args[0] == "--ai-selftest")
+        {
+            var log = new List<string>();
+            try
+            {
+                AppEnv.Init();
+                bool gpu = args[2] == "gpu";
+                var m = LocalAi.Models[0];
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                LocalAi.DownloadAsync(m, gpu).GetAwaiter().GetResult();
+                log.Add($"загрузка: {sw.Elapsed.TotalSeconds:0} с, {LocalAi.Status}, модель скачана: {LocalAi.IsDownloaded(m)}");
+                sw.Restart();
+                LocalAi.EnsureLoadedAsync(m, gpu, CancellationToken.None).GetAwaiter().GetResult();
+                log.Add($"модель загружена за {sw.Elapsed.TotalSeconds:0.0} с, движок: {LocalAi.LoadedBackend}");
+                var answer = new StringBuilder();
+                int tokens = 0;
+                sw.Restart();
+                LocalAi.GenerateAsync(new[]
+                {
+                    new AiMessage("system", AiService.SystemPrompt),
+                    new AiMessage("user", "Привет! Ответь двумя предложениями: что такое веб-браузер?"),
+                }, t => { answer.Append(t); tokens++; }, CancellationToken.None).GetAwaiter().GetResult();
+                log.Add($"ответ ({tokens} токенов за {sw.Elapsed.TotalSeconds:0.0} с, {tokens / Math.Max(0.1, sw.Elapsed.TotalSeconds):0.0} ток/с):");
+                log.Add(answer.ToString().Trim());
+                int t2 = 0; sw.Restart();
+                LocalAi.GenerateAsync(new[] { new AiMessage("user", "Назови три столицы Европы списком.") }, _ => t2++, CancellationToken.None).GetAwaiter().GetResult();
+                log.Add($"второй ответ: {t2} токенов, {t2 / Math.Max(0.1, sw.Elapsed.TotalSeconds):0.0} ток/с");
+            }
+            catch (Exception ex) { log.Add("FAIL " + ex); }
+            File.WriteAllLines(args[1], log);
+            return;
+        }
+
         if (args.Length == 4 && args[0] == "--download-test")
         {
             ApplicationConfiguration.Initialize();
@@ -223,9 +258,14 @@ sealed class BrowserApp : ApplicationContext
     {
         Instance = this;
         _ = invoker.Handle;
+        bool crashed = Store.MarkRunning();
+        int ticks = 0;
         flush.Tick += (_, _) =>
         {
             Store.Flush();
+            // Каждые 15 секунд запоминаем вкладки — на случай, если браузер закроется неожиданно
+            if (++ticks % 5 == 0 && windows.FirstOrDefault(w => !w.Incognito) is { } mw)
+                try { Store.SaveCrashSession(mw.GetSession()); } catch { }
             // Автоблокировка менеджера паролей
             int min = AppEnv.Settings.AutoLockMinutes;
             if (min > 0 && Vault.Unlocked && (DateTime.Now - Vault.LastUsed).TotalMinutes >= min) Vault.Lock();
@@ -244,12 +284,14 @@ sealed class BrowserApp : ApplicationContext
             if (s is { Tabs.Count: > 0 }) { tabs = s.Tabs; active = s.Active; session = s; }
         }
         var first = OpenWindow(incognito, url, tabs, active, session);
-        _ = first.RunStartupChecks();
+        if (crashed && tabs == null && !incognito && Store.LoadCrashSession() is { Tabs.Count: > 0 } cs) first.OfferCrashRestore(cs);
+        else _ = first.RunStartupChecks();
         _ = first.RunStartupSync();
 
         if (AppEnv.Settings.BlockAds && AppEnv.Settings.ExtendedBlocklist)
             _ = Blocklist.UpdateAsync(AppEnv.DataDir, AppEnv.Settings, force: false);
         _ = AdBlock.InitAsync(AppEnv.Settings);
+        _ = Parental.InitAsync();
     }
 
     void OnRemote(string msg)
@@ -275,6 +317,7 @@ sealed class BrowserApp : ApplicationContext
             if (windows.Count > 0) return;
             Store.Flush();
             Sync.PushOnExit();
+            Store.MarkClosed();
             ExitThread();
         };
         f.Show();
@@ -287,6 +330,7 @@ sealed class BrowserApp : ApplicationContext
         var main = windows.FirstOrDefault(w => !w.Incognito);
         if (main != null) Store.SaveSession(main.GetSession());
         Store.Flush();
+        Store.MarkClosed();
         Process.Start(new ProcessStartInfo(Environment.ProcessPath!, "--restore") { UseShellExecute = false });
         foreach (var w in windows.ToList()) w.Close();
     }

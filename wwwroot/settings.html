@@ -64,7 +64,7 @@
   </header>
 
   <nav>
-    <a href="#search">Поиск</a><a href="#security">Безопасность</a><a href="#adblock">Реклама</a><a href="#proxy">Обход блокировок</a><a href="#passwords">Пароли</a><a href="#sites">Сайты</a><a href="extensions.html">Расширения</a>
+    <a href="#search">Поиск</a><a href="#ai">ИИ</a><a href="#tools">Инструменты</a><a href="#parental">Родит. контроль</a><a href="#security">Безопасность</a><a href="#adblock">Реклама</a><a href="#proxy">Обход блокировок</a><a href="#passwords">Пароли</a><a href="#sites">Сайты</a><a href="extensions.html">Расширения</a>
     <a href="#tabs">Вкладки</a><a href="#bookmarks">Закладки и история</a><a href="#look">Вид и масштаб</a><a href="#import">Перенос</a><a href="#sync">Синхронизация</a><a href="#updates">Обновления</a><a href="#system">Система</a><a href="#data">Данные</a>
   </nav>
 
@@ -97,6 +97,52 @@
       <div class="actions"><button class="btn" id="blUpdate">Обновить</button>
         <label class="switch"><input type="checkbox" data-key="extendedBlocklist"><span class="slider"></span></label></div>
     </div>
+  </section>
+
+  <section id="ai">
+    <h2><span class="icon">&#xE945;</span>Lite AI — ИИ-помощник</h2>
+    <p class="note">Свой встроенный ИИ работает прямо на компьютере: без интернета и аккаунтов, страницы никуда не отправляются.
+      Можно подключить Ollama или облачный API. Помощник открывается в боковой панели: <b>Ctrl+Shift+A</b>
+      или правый клик → «Пересказать страницу» / «Объяснить с помощью ИИ».</p>
+    <div class="row">
+      <div><div class="row-title">ИИ-помощник</div><div class="row-sub">Модели, провайдеры и видеокарта настраиваются в самом помощнике (⚙)</div></div>
+      <div class="actions"><button class="btn primary" id="openAi">Открыть помощника</button>
+        <label class="switch"><input type="checkbox" data-key="aiEnabled"><span class="slider"></span></label></div>
+    </div>
+  </section>
+
+  <section id="tools">
+    <h2><span class="icon">&#xE90F;</span>Инструменты</h2>
+    <div class="row">
+      <div><div class="row-title">Предлагать перевод</div><div class="row-sub">Если страница на иностранном языке, браузер предложит перевести её на русский</div></div>
+      <div class="actions"><div class="seg" data-seg="translateService"><button data-v="google">Google</button><button data-v="yandex">Яндекс</button></div>
+        <label class="switch"><input type="checkbox" data-key="offerTranslate"><span class="slider"></span></label></div>
+    </div>
+    <div class="row">
+      <div><div class="row-title">Жесты мышью</div><div class="row-sub">Зажмите правую кнопку и проведите: ← назад, → вперёд, ↑ новая вкладка, ↓ обновить, ↓→ закрыть вкладку, ↑↓ вернуть закрытую</div></div>
+      <label class="switch"><input type="checkbox" data-key="mouseGestures"><span class="slider"></span></label>
+    </div>
+    <div class="row">
+      <div><div class="row-title">Экономия трафика</div><div class="row-sub">Не загружать картинки и видео — для мобильного интернета</div></div>
+      <label class="switch"><input type="checkbox" data-key="dataSaver"><span class="slider"></span></label>
+    </div>
+  </section>
+
+  <section id="parental">
+    <h2><span class="icon">&#xE716;</span>Родительский контроль</h2>
+    <p class="note">Закрывает сайты для взрослых и сайты из вашего списка, включает безопасный поиск и запрещает установку расширений.
+      Изменить или выключить можно только с PIN-кодом.</p>
+    <div class="row">
+      <div><div class="row-title" id="parState">Выключен</div><div class="row-sub" id="parSub"></div></div>
+      <input class="text" type="password" id="parPin" placeholder="PIN-код" inputmode="numeric" style="width:120px">
+    </div>
+    <div class="row">
+      <div><div class="row-title">Сайты для взрослых</div><div class="row-sub">Список StevenBlack (десятки тысяч сайтов), обновляется раз в неделю</div></div>
+      <label class="switch"><input type="checkbox" id="parAdult" checked><span class="slider"></span></label>
+    </div>
+    <div class="row"><div style="width:100%"><div class="row-title">Мои запрещённые сайты</div><div class="row-sub">По одному в строке, например: tiktok.com</div>
+      <textarea class="text" id="parSites" style="width:100%;min-height:90px;margin-top:8px;font-family:Consolas,monospace;font-size:13px" spellcheck="false"></textarea></div></div>
+    <div class="actions"><button class="btn primary" id="parOn">Включить / сохранить</button><button class="btn" id="parOff">Выключить</button></div>
   </section>
 
   <section id="adblock">

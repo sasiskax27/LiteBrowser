@@ -19,6 +19,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="LLamaSharp" Version="0.30.0" />
     <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="8.0.11" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4370.26" />
     <PackageReference Include="SQLitePCLRaw.bundle_winsqlite3" Version="2.1.10" />

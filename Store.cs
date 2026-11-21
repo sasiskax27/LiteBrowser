@@ -16,6 +16,16 @@ sealed class HistoryEntry
     public DateTime Time { get; set; }
 }
 
+sealed class Highlight
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string Url { get; set; } = "";
+    public string Title { get; set; } = "";
+    public string Text { get; set; } = "";     // выделенный текст (пусто — заметка ко всей странице)
+    public string Note { get; set; } = "";
+    public DateTime Time { get; set; } = DateTime.Now;
+}
+
 sealed class SessionTab
 {
     public string Url { get; set; } = "";
@@ -166,6 +176,45 @@ static class Store
 
     public static void SaveSession(Session s) => Write("session.json", s);
     public static Session? LoadSession() => Read<Session>("session.json");
+
+    // ---- Выделения и заметки на страницах ----
+    static List<Highlight>? highlights;
+    public static List<Highlight> Highlights => highlights ??= Read<List<Highlight>>("highlights.json") ?? new();
+    public static event Action? HighlightsChanged;
+
+    public static string PageKey(string url)
+    {
+        int i = url.IndexOf('#');
+        return i >= 0 ? url[..i] : url;
+    }
+
+    public static void AddHighlight(Highlight h)
+    {
+        Highlights.Add(h);
+        if (Highlights.Count > 5000) Highlights.RemoveAt(0);
+        Write("highlights.json", Highlights);
+        HighlightsChanged?.Invoke();
+    }
+
+    public static void RemoveHighlight(string id)
+    {
+        if (Highlights.RemoveAll(h => h.Id == id) == 0) return;
+        Write("highlights.json", Highlights);
+        HighlightsChanged?.Invoke();
+    }
+
+    // ---- Восстановление после сбоя ----
+    static string Marker => F("running.lock");
+    /// <summary>Отмечаем запуск; если отметка осталась с прошлого раза — браузер закрылся неожиданно.</summary>
+    public static bool MarkRunning()
+    {
+        bool crashed = File.Exists(Marker);
+        try { Directory.CreateDirectory(dir); File.WriteAllText(Marker, Environment.ProcessId.ToString()); } catch { }
+        return crashed;
+    }
+    public static void MarkClosed() { try { File.Delete(Marker); } catch { } }
+    public static void SaveCrashSession(Session s) => Write("session-crash.json", s);
+    public static Session? LoadCrashSession() => Read<Session>("session-crash.json");
 
     // ---- Счётчик заблокированного за всё время ----
     static long blockedTotal = -1;

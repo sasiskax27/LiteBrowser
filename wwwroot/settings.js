@@ -145,8 +145,26 @@ function renderSites() {
   }
 }
 
+// Родительский контроль и ИИ
+function renderParental() {
+  $('parState').textContent = state.parentalEnabled ? '✓ Включён' : 'Выключен';
+  $('parSub').textContent = state.parentalEnabled ? 'Чтобы изменить или выключить — введите PIN-код' : 'Придумайте PIN-код из 4+ цифр и нажмите «Включить»';
+  $('parAdult').checked = state.parentalAdult;
+  if (document.activeElement !== $('parSites')) $('parSites').value = (state.parentalBlocked || []).join('\n');
+  $('parOff').style.display = state.parentalEnabled ? '' : 'none';
+}
+function parentalSend(enabled) {
+  wv.postMessage({ type: 'parental:set', enabled, pin: $('parPin').value, adult: $('parAdult').checked,
+    blocked: $('parSites').value.split('\n').map(s => s.trim()).filter(Boolean) });
+  $('parPin').value = '';
+}
+$('parOn').onclick = () => parentalSend(true);
+$('parOff').onclick = () => parentalSend(false);
+$('openAi').onclick = () => wv.postMessage({ type: 'openAi' });
+
 // Оформление, синхронизация, обновления
 function renderLookAndSync() {
+  renderParental();
   const acc = $('accents');
   acc.innerHTML = '';
   for (const a of info.accents) {

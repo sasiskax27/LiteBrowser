@@ -145,6 +145,76 @@ static class PageTools
 })()
 """;
 
+    /// <summary>Жесты мышью: зажать правую кнопку и провести. Сообщает браузеру направление, а контекстное меню после жеста не показывается.</summary>
+    public const string Gestures = """
+(() => {
+  if (window.top !== window || !window.chrome || !window.chrome.webview) return;
+  let down = false, pts = [], suppress = false;
+  addEventListener('mousedown', e => { if (e.button === 2) { down = true; pts = [[e.screenX, e.screenY]]; } }, true);
+  addEventListener('mousemove', e => { if (down && pts.length < 2000) pts.push([e.screenX, e.screenY]); }, true);
+  addEventListener('mouseup', e => {
+    if (e.button !== 2 || !down) return;
+    down = false;
+    const dirs = [];
+    let [px, py] = pts[0];
+    for (const [x, y] of pts) {
+      const dx = x - px, dy = y - py;
+      if (Math.abs(dx) < 40 && Math.abs(dy) < 40) continue;
+      const d = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'R' : 'L') : (dy > 0 ? 'D' : 'U');
+      if (dirs[dirs.length - 1] !== d) dirs.push(d);
+      px = x; py = y;
+    }
+    if (dirs.length) { suppress = true; try { window.chrome.webview.postMessage({ type: 'gesture', g: dirs.join('').slice(0, 3) }); } catch (x) {} }
+  }, true);
+  addEventListener('contextmenu', e => { if (suppress) { e.preventDefault(); e.stopImmediatePropagation(); suppress = false; } }, true);
+})();
+""";
+
+    /// <summary>Язык страницы (два символа) — чтобы предложить перевод.</summary>
+    public const string PageLang = "(document.documentElement.lang || (document.querySelector('meta[http-equiv=content-language]') || {}).content || '').slice(0, 2).toLowerCase()";
+
+    public static readonly Dictionary<string, string> LangNames = new()
+    {
+        ["en"] = "английском", ["de"] = "немецком", ["fr"] = "французском", ["es"] = "испанском", ["it"] = "итальянском",
+        ["pt"] = "португальском", ["zh"] = "китайском", ["ja"] = "японском", ["ko"] = "корейском", ["tr"] = "турецком",
+        ["pl"] = "польском", ["uk"] = "украинском", ["ar"] = "арабском", ["nl"] = "нидерландском", ["kk"] = "казахском",
+    };
+
+    public static string TranslateUrl(string service, string url) => service == "yandex"
+        ? "https://translate.yandex.ru/translate?url=" + Uri.EscapeDataString(url) + "&lang=auto-ru"
+        : "https://translate.google.com/translate?sl=auto&tl=ru&u=" + Uri.EscapeDataString(url);
+
+    /// <summary>Чтение вслух голосом Windows: выделенный текст или основной текст статьи. Повторный вызов — остановка.</summary>
+    public const string ReadAloud = """
+(() => {
+  const s = window.speechSynthesis;
+  if (!s) return 'unsupported';
+  if (s.speaking || s.pending) { s.cancel(); return 'stopped'; }
+  let text = (window.getSelection() || '').toString().trim();
+  if (!text) {
+    const score = el => [...el.querySelectorAll('p')].reduce((n, p) => n + (p.innerText || '').trim().length, 0);
+    let best = document.querySelector('article'), max = best ? score(best) : 0;
+    if (max < 500) document.querySelectorAll('main, [role=main], article, section, div').forEach(el => { const v = score(el); if (v > max) { max = v; best = el; } });
+    text = best && max > 200 ? [...best.querySelectorAll('h1, h2, h3, p, li')].map(e => e.innerText.trim()).filter(t => t.length > 1).join('\n') : (document.body.innerText || '');
+  }
+  text = text.slice(0, 60000);
+  if (!text) return 'nothing';
+  const lang = (document.documentElement.lang || (/[а-яё]/i.test(text) ? 'ru' : 'en')).slice(0, 2);
+  const voices = s.getVoices();
+  const voice = voices.find(v => v.lang.toLowerCase().startsWith(lang)) || null;
+  const parts = text.match(/[^.!?\n]{1,220}[.!?\n]*/g) || [text];
+  for (const p of parts) {
+    if (!p.trim()) continue;
+    const u = new SpeechSynthesisUtterance(p.trim());
+    if (voice) u.voice = voice;
+    u.lang = voice ? voice.lang : lang;
+    u.rate = 1.0;
+    s.speak(u);
+  }
+  return 'started';
+})()
+""";
+
     /// <summary>Скриншот: видимая часть или вся страница целиком (через протокол DevTools).</summary>
     public static async Task<string> Screenshot(CoreWebView2 core, bool fullPage)
     {
