@@ -25,10 +25,27 @@ static class LitePages
     {
         var path = new Uri(uri).AbsolutePath.TrimStart('/');
         if (path.Length == 0) path = "home.html";
+        if (path == "wallpaper")
+        {
+            // Обои стартовой страницы из папки данных браузера
+            var wp = Path.Combine(AppEnv.DataDir, "wallpaper.img");
+            if (!File.Exists(wp)) return env.CreateWebResourceResponse(null, 404, "Not Found", "");
+            var bytes = File.ReadAllBytes(wp);
+            string mime = bytes.Length > 3 && bytes[0] == 0x89 && bytes[1] == 'P' ? "image/png"
+                : bytes.Length > 3 && bytes[0] == 'R' && bytes[1] == 'I' ? "image/webp"
+                : bytes.Length > 3 && bytes[0] == 'G' && bytes[1] == 'I' ? "image/gif" : "image/jpeg";
+            return env.CreateWebResourceResponse(new MemoryStream(bytes), 200, "OK", $"Content-Type: {mime}\r\nCache-Control: no-store");
+        }
         using var s = typeof(LitePages).Assembly.GetManifestResourceStream("wwwroot/" + path);
         if (s == null) return env.CreateWebResourceResponse(null, 404, "Not Found", "");
         var ms = new MemoryStream();
         s.CopyTo(ms);
+        if (path == "common.css")
+        {
+            // Цвет акцента и светлая тема — дописываем переменные к общему CSS
+            var extra = System.Text.Encoding.UTF8.GetBytes(Theme.PageCss());
+            ms.Write(extra, 0, extra.Length);
+        }
         ms.Position = 0;
         string type = Path.GetExtension(path) switch
         {
@@ -136,7 +153,7 @@ sealed class MainForm : Form
     readonly HashSet<string> upgraded = new(StringComparer.OrdinalIgnoreCase);
     readonly Stack<string> closedTabs = new();
     readonly DownloadsPopup downloadsPopup = new();
-    readonly Color frame;
+    Color frame;
     readonly string homeUrl;
     readonly string? startUrl;
     readonly List<string>? startTabs;
@@ -173,6 +190,7 @@ sealed class MainForm : Form
         Theme.UiScale = Cfg.UiScale / 100f;
         appliedUiScale = Cfg.UiScale;
         appliedPageZoom = Cfg.PageZoom;
+        appliedTheme = Cfg.UiTheme + "|" + Cfg.Accent;
         frame = incognito ? Theme.IncognitoFrame : Theme.Frame;
         homeUrl = incognito ? LitePages.Home + "?private=1" : LitePages.Home;
 
@@ -1580,6 +1598,20 @@ sealed class MainForm : Form
         if (!IsDisposed && !Cfg.DefaultPromptDismissed && !SystemIntegration.IsDefaultBrowser()) ShowDefaultPrompt();
     }
 
+    /// <summary>Синхронизация при запуске (если включена).</summary>
+    public async Task RunStartupSync()
+    {
+        await Task.Delay(6000);
+        if (IsDisposed || Incognito || !Cfg.SyncEnabled || !Sync.HasPassword || string.IsNullOrWhiteSpace(Cfg.SyncFolder)) return;
+        try { await Sync.RunAsync(); }
+        catch (Exception ex)
+        {
+            if (!IsDisposed && infoBar.Key == null)
+                infoBar.ShowBar("sync", "", "Синхронизация не удалась: " + ex.Message,
+                    ("Настройки", () => { OpenLitePage(LitePages.Settings, "#sync"); infoBar.HideBar(); }, true));
+        }
+    }
+
     void ShowDefaultPrompt()
     {
         infoBar.ShowBar("default", "", "Сделать LiteBrowser основным браузером? Ссылки из Telegram, Discord и других программ будут открываться здесь.",
@@ -1745,6 +1777,12 @@ sealed class MainForm : Form
         browserVersion = AppEnv.GetEnvironment().IsCompletedSuccessfully ? AppEnv.GetEnvironment().Result.BrowserVersionString : "",
         incognito = Incognito,
         isDefault = SystemIntegration.IsDefaultBrowser(),
+        sync = new
+        {
+            hasPassword = Sync.HasPassword, status = Sync.Status, running = Sync.Running,
+            clouds = Sync.CloudFolders().Select(c => new { c.name, c.path }),
+        },
+        accents = Theme.Accents.Select(a => new { id = a.Key, name = a.Value.name, color = ColorTranslator.ToHtml(a.Value.a) }),
         importSuggest = !Incognito && !Cfg.ImportOffered && Store.Bookmarks.Count == 0,
         restartNeeded = AppEnv.RestartNeeded,
         proxyRunning = AppEnv.RunningSignature != "off",
@@ -1930,6 +1968,72 @@ sealed class MainForm : Form
                 CopyAndSave(x => x.ImportOffered = true);
                 break;
 
+            // ---- Синхронизация ----
+            case "sync:pick":
+                BeginInvoke(() =>
+                {
+                    using var dlg = new FolderBrowserDialog { Description = "Папка на облачном диске (Google Диск, Яндекс Диск, OneDrive, Dropbox)", UseDescriptionForTitle = true };
+                    if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                    var folder = dlg.SelectedPath;
+                    CopyAndSave(x => x.SyncFolder = folder);
+                    SendSettings(core);
+                });
+                break;
+            case "sync:folder":
+                var sf = Str("path");
+                if (Path.IsPathRooted(sf)) { CopyAndSave(x => x.SyncFolder = sf); SendSettings(core); }
+                break;
+            case "sync:password":
+                Sync.SetPassword(Str("password"));
+                Post(core, new { type = "done", text = "Пароль синхронизации сохранён. Задайте такой же на других компьютерах" });
+                SendSettings(core);
+                break;
+            case "sync:forget":
+                Sync.Forget();
+                CopyAndSave(x => x.SyncEnabled = false);
+                SendSettings(core);
+                break;
+            case "sync:now":
+                try
+                {
+                    Post(core, new { type = "done", text = "Синхронизирую…" });
+                    var st = await Sync.RunAsync();
+                    Post(core, new { type = "done", text = st });
+                }
+                catch (Exception ex) { Post(core, new { type = "error", text = ex.Message }); }
+                SendSettings(core);
+                break;
+
+            // ---- Оформление стартовой страницы ----
+            case "pickWallpaper":
+                BeginInvoke(() =>
+                {
+                    using var dlg = new OpenFileDialog { Title = "Картинка для стартовой страницы", Filter = "Изображения|*.jpg;*.jpeg;*.png;*.webp;*.gif" };
+                    if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                    if (new FileInfo(dlg.FileName).Length > 25_000_000) { Post(core, new { type = "error", text = "Картинка больше 25 МБ" }); return; }
+                    File.Copy(dlg.FileName, Path.Combine(AppEnv.DataDir, "wallpaper.img"), true);
+                    CopyAndSave(x => { x.Wallpaper = true; x.WallpaperVersion++; });
+                    Post(core, new { type = "done", text = "Обои установлены — откройте новую вкладку" });
+                    SendSettings(core);
+                });
+                break;
+            case "removeWallpaper":
+                try { File.Delete(Path.Combine(AppEnv.DataDir, "wallpaper.img")); } catch { }
+                CopyAndSave(x => x.Wallpaper = false);
+                SendSettings(core);
+                break;
+            case "tiles:save":
+                if (!root.TryGetProperty("tiles", out var tl) || tl.ValueKind != JsonValueKind.Array) break;
+                var newTiles = tl.EnumerateArray().Select(x => new HomeTile
+                {
+                    Name = x.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "",
+                    Url = x.TryGetProperty("url", out var u) ? u.GetString() ?? "" : "",
+                }).ToList();
+                foreach (var nt in newTiles) if (!nt.Url.Contains("://")) nt.Url = "https://" + nt.Url;
+                CopyAndSave(x => x.HomeTiles = newTiles);
+                SendSettings(core);
+                break;
+
             // ---- Загрузки ----
             case "dl:list":
                 Post(core, new
@@ -1996,6 +2100,7 @@ sealed class MainForm : Form
     {
         bool zoomChanged = Cfg.PageZoom != appliedPageZoom;
         appliedPageZoom = Cfg.PageZoom;
+        appliedTheme = Cfg.UiTheme + "|" + Cfg.Accent;
         foreach (var t in tabs)
         {
             if (t.Core == null) continue;
@@ -2005,7 +2110,42 @@ sealed class MainForm : Form
             if (zoomChanged) t.View.ZoomFactor = Cfg.PageZoom / 100.0;
         }
         if (Cfg.UiScale != appliedUiScale) ApplyScale();
+        var themeSig = Cfg.UiTheme + "|" + Cfg.Accent;
+        if (themeSig != appliedTheme)
+        {
+            appliedTheme = themeSig;
+            Theme.ApplyPalette(Cfg.UiTheme, Cfg.Accent);
+            ApplyTheme();
+            // Свои страницы перечитают цвета
+            foreach (var t in tabs) if (t.Core?.Source?.StartsWith(LitePages.Prefix) == true) t.Core.Reload();
+        }
         ApplyChrome();
+    }
+
+    string appliedTheme = "";
+
+    /// <summary>Перекрасить окно после смены темы или цвета акцента.</summary>
+    void ApplyTheme()
+    {
+        if (!Incognito) frame = Theme.Frame;
+        BackColor = frame;
+        strip.FrameColor = frame;
+        toolbar.BackColor = Theme.Toolbar;
+        content.BackColor = frame;
+        bookmarksBar.BackColor = Theme.Toolbar;
+        address.BackColor = Theme.Toolbar;
+        address.Box.BackColor = Theme.Field;
+        address.Box.ForeColor = Theme.Text;
+        foreach (Control c in toolbar.Controls) { if (c is IconButton) c.BackColor = Theme.Toolbar; c.Invalidate(); }
+        foreach (var t in tabs) t.View.DefaultBackgroundColor = frame;
+        sidePanel.ApplyTheme();
+        splitter.BackColor = Theme.Line;
+        installBtn.GlyphColor = Theme.Accent;
+        try { Theme.StyleTitleBar(Handle, frame); } catch { }
+        strip.Invalidate();
+        toolbar.Invalidate();
+        bookmarksBar.Invalidate();
+        address.Invalidate();
     }
 
     // ================= Масштаб =================

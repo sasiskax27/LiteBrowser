@@ -53,6 +53,7 @@ function render() {
 
   renderAdblock();
   renderSites();
+  renderLookAndSync();
   const bl = info.blocklist;
   $('blStatus').textContent = bl.updating ? 'Загружается список…'
     : bl.count > 0 ? `Загружено ${bl.count.toLocaleString('ru-RU')} доменов, обновлено ${bl.updated}` : 'Список ещё не загружен';
@@ -143,6 +144,50 @@ function renderSites() {
     }
   }
 }
+
+// Оформление, синхронизация, обновления
+function renderLookAndSync() {
+  const acc = $('accents');
+  acc.innerHTML = '';
+  for (const a of info.accents) {
+    const b = document.createElement('button');
+    b.style.background = a.color;
+    b.title = a.name;
+    b.className = state.accent === a.id ? 'on' : '';
+    b.onclick = () => { state.accent = a.id; save(); render(); };
+    acc.appendChild(b);
+  }
+  $('wallState').textContent = state.wallpaper ? 'Установлена своя картинка' : 'Своя картинка вместо фона. Плитки сайтов меняются кнопкой «Изменить» на самой стартовой странице';
+  $('removeWall').style.display = state.wallpaper ? '' : 'none';
+
+  const sy = info.sync;
+  $('syncFolder').textContent = state.syncFolder || 'Не выбрана';
+  const clouds = $('syncClouds');
+  clouds.innerHTML = '';
+  for (const c of sy.clouds) {
+    if (c.path === state.syncFolder) continue;
+    const b = document.createElement('button');
+    b.className = 'chip';
+    b.textContent = '☁ ' + c.name;
+    b.title = c.path;
+    b.onclick = () => wv.postMessage({ type: 'sync:folder', path: c.path });
+    clouds.appendChild(b);
+  }
+  $('syncPwState').textContent = sy.hasPassword ? '✓ Пароль задан и защищён Windows' : 'Задайте одинаковый пароль на всех компьютерах (от 8 символов)';
+  $('syncStatus').textContent = sy.running ? 'Синхронизирую…' : sy.status || (state.syncLast ? 'Последняя синхронизация: ' + state.syncLast : 'При запуске и при закрытии браузера');
+  $('updState').textContent = `Версия ${info.version}. При запуске браузер проверит GitHub и предложит обновиться в один клик`;
+}
+$('pickWall').onclick = () => wv.postMessage({ type: 'pickWallpaper' });
+$('removeWall').onclick = () => wv.postMessage({ type: 'removeWallpaper' });
+$('syncPick').onclick = () => wv.postMessage({ type: 'sync:pick' });
+$('syncPwSave').onclick = () => {
+  const p = $('syncPw').value;
+  if (p.length < 8) { toast('Пароль синхронизации — не короче 8 символов'); return; }
+  wv.postMessage({ type: 'sync:password', password: p });
+  $('syncPw').value = '';
+};
+$('syncNow').onclick = () => wv.postMessage({ type: 'sync:now' });
+$('checkUpd').onclick = () => { toast('Проверяю…'); wv.postMessage({ type: 'checkUpdate' }); };
 
 // Переключатели
 document.querySelectorAll('input[data-key]').forEach(i => i.onchange = () => { state[i.dataset.key] = i.checked; save(); });

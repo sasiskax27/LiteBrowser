@@ -18,6 +18,53 @@ if (new URLSearchParams(location.search).has('private')) $('private').classList.
 const item = (name, on) => `<span class="${on ? '' : 'off'}">${name}: <b>${on ? 'вкл' : 'выкл'}</b></span>`;
 
 const wv = window.chrome && window.chrome.webview;
+let tiles = [], editing = false;
+const colors = ['#ff5a52', '#7d8597', '#4ba3ff', '#4fc3f7', '#4a4f5c', '#ff7a6b', '#5fd38d', '#b07cff', '#f5c84c', '#ff6fb5'];
+const colorOf = s => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0; return colors[h % colors.length]; };
+
+function renderTiles() {
+  const box = $('tiles');
+  box.innerHTML = '';
+  box.parentElement.classList.toggle('editing', editing);
+  document.body.classList.toggle('editing', editing);
+  tiles.forEach((t, i) => {
+    const a = document.createElement('a');
+    a.className = 'tile';
+    a.href = t.url;
+    a.innerHTML = '<span class="badge"></span><span class="nm"></span><button class="rm icon" title="Удалить">&#xE711;</button>';
+    const b = a.querySelector('.badge');
+    b.textContent = (t.name.match(/[\p{L}\p{N}]/u) || ['?'])[0].toUpperCase();
+    const c = colorOf(t.name);
+    b.style.background = `linear-gradient(135deg, ${c}, ${c}cc)`;
+    a.querySelector('.nm').textContent = t.name;
+    a.onclick = e => {
+      if (!editing) return;
+      e.preventDefault();
+      const name = prompt('Название', t.name); if (name === null) return;
+      const url = prompt('Адрес сайта', t.url); if (url === null) return;
+      if (name.trim() && url.trim()) { tiles[i] = { name: name.trim(), url: url.trim() }; save(); }
+    };
+    a.querySelector('.rm').onclick = e => { e.preventDefault(); e.stopPropagation(); tiles.splice(i, 1); save(); };
+    box.appendChild(a);
+  });
+  if (editing && tiles.length < 24) {
+    const add = document.createElement('a');
+    add.className = 'tile add';
+    add.href = '#';
+    add.innerHTML = '<span class="badge">+</span>Добавить';
+    add.onclick = e => {
+      e.preventDefault();
+      const url = prompt('Адрес сайта (например, ozon.ru)'); if (!url || !url.trim()) return;
+      let host = url.trim(); try { host = new URL(url.includes('://') ? url : 'https://' + url).hostname.replace(/^www\./, ''); } catch (x) {}
+      const name = prompt('Название', host.split('.')[0].replace(/^./, c => c.toUpperCase())); if (!name || !name.trim()) return;
+      tiles.push({ name: name.trim(), url: url.trim() }); save();
+    };
+    box.appendChild(add);
+  }
+  $('editTiles').innerHTML = editing ? '<span class="icon">&#xE73E;</span> Готово' : '<span class="icon">&#xE70F;</span> Изменить';
+}
+function save() { renderTiles(); wv && wv.postMessage({ type: 'tiles:save', tiles }); }
+$('editTiles').onclick = () => { editing = !editing; renderTiles(); };
 if (wv) {
   wv.addEventListener('message', e => {
     const m = e.data;
@@ -27,6 +74,9 @@ if (wv) {
     $('engineName').textContent = en ? en.name : '';
     $('q').placeholder = 'Поиск в ' + name + ' или адрес сайта';
     $('import').classList.toggle('show', !!m.importSuggest);
+    if (!editing) { tiles = (m.settings.homeTiles || []).map(t => ({ name: t.name, url: t.url })); renderTiles(); }
+    if (m.settings.wallpaper) { document.body.classList.add('wall'); document.body.style.backgroundImage = `url(wallpaper?v=${m.settings.wallpaperVersion})`; }
+    else { document.body.classList.remove('wall'); document.body.style.backgroundImage = ''; }
     $('foot').innerHTML = item('Только HTTPS', m.settings.httpsOnly) +
       item('Блокировка рекламы и трекеров', m.settings.blockAds) + item('SmartScreen', true) +
       (m.proxyRunning ? item('Обход блокировок', true) : '') +

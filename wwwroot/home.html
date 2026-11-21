@@ -23,7 +23,7 @@
             background: rgba(255,255,255,.07); padding: 7px 14px; border-radius: 16px; text-decoration: none; transition: .2s;
             display: flex; gap: 7px; align-items: center; }
   .engine:hover { color: var(--text); background: rgba(255,255,255,.14); }
-  .tiles { display: grid; grid-template-columns: repeat(6, 100px); gap: 12px; margin-top: 44px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, 100px); justify-content: center; width: min(700px, 92vw); gap: 12px; margin-top: 44px; }
   .tile { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px 6px 12px; border-radius: 18px;
           text-decoration: none; color: var(--text); font-size: 13px; transition: .2s; }
   .tile:hover { background: rgba(255,255,255,.06); transform: translateY(-3px); }
@@ -42,6 +42,20 @@
               padding: 6px 14px; border-radius: 10px; font-size: 13px; }
   .x { border: 0; background: none; color: var(--dim); cursor: pointer; width: 28px; height: 28px; border-radius: 50%; font-size: 10px; }
   .x:hover { background: rgba(255,255,255,.1); color: var(--text); }
+  .tile { position: relative; }
+  .tile .rm { position: absolute; top: 4px; right: 10px; width: 22px; height: 22px; border-radius: 50%; border: 0; display: none;
+              background: var(--bad); color: #fff; font-size: 9px; cursor: pointer; }
+  .editing .tile .rm { display: grid; place-items: center; }
+  .editing .tile { animation: wiggle .3s ease-in-out infinite alternate; }
+  @keyframes wiggle { from { transform: rotate(-1.5deg); } to { transform: rotate(1.5deg); } }
+  .tile.add .badge { background: var(--card2) !important; color: var(--dim); font-size: 26px; box-shadow: none; }
+  .edit-tiles { margin-top: 14px; border: 0; background: none; color: var(--dim); font: inherit; font-size: 12.5px; cursor: pointer; padding: 6px 12px; border-radius: 10px; }
+  .edit-tiles:hover { background: var(--card2); color: var(--text); }
+  .edit-tiles .icon { font-size: 11px; margin-right: 4px; }
+  body.wall { background-size: cover !important; background-position: center !important; background-attachment: fixed !important; }
+  body.wall::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: -1; }
+  body.wall .glow { display: none; }
+  body.wall .time, body.wall .date, body.wall .hello, body.wall .tile, body.wall .foot { text-shadow: 0 2px 12px rgba(0,0,0,.6); }
   @media (max-width: 760px) { .tiles { grid-template-columns: repeat(3, 100px); } }
 </style>
 </head>
@@ -63,14 +77,8 @@
   <a class="engine" id="engine" href="settings.html" title="Сменить поисковую систему"><span class="icon">&#xE713;</span><span id="engineName">…</span></a>
 </form>
 
-<div class="tiles">
-  <a class="tile" href="https://www.youtube.com/"><span class="badge" style="background:linear-gradient(135deg,#ff5a52,#d11f1f)">&#9654;</span>YouTube</a>
-  <a class="tile" href="https://ru.wikipedia.org/"><span class="badge" style="background:linear-gradient(135deg,#7d8597,#4a5060)">W</span>Википедия</a>
-  <a class="tile" href="https://vk.com/"><span class="badge" style="background:linear-gradient(135deg,#4ba3ff,#1f6fe0)">VK</span>ВКонтакте</a>
-  <a class="tile" href="https://web.telegram.org/"><span class="badge" style="background:linear-gradient(135deg,#4fc3f7,#1e96d6)">T</span>Telegram</a>
-  <a class="tile" href="https://github.com/"><span class="badge" style="background:linear-gradient(135deg,#4a4f5c,#22252c)">GH</span>GitHub</a>
-  <a class="tile" href="https://mail.google.com/"><span class="badge" style="background:linear-gradient(135deg,#ff7a6b,#e0443a)">M</span>Почта</a>
-</div>
+<div class="tiles" id="tiles"></div>
+<button class="edit-tiles" id="editTiles" title="Изменить плитки"><span class="icon">&#xE70F;</span> Изменить</button>
 
 <div class="foot" id="foot"></div>
 <script src="home.js"></script>

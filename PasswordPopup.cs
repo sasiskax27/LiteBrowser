@@ -84,6 +84,11 @@ sealed class PasswordPopup : Form
     public void ShowFor(Control anchor, string origin, string username, string password)
     {
         this.origin = origin;
+        BackColor = Theme.Menu; ForeColor = Theme.Text;
+        foreach (var tb in new[] { user, pass, master }) { tb.BackColor = Theme.Field; tb.ForeColor = Theme.Text; }
+        foreach (var b in new[] { never, later, eye }) { b.BackColor = Theme.Hover; b.ForeColor = Theme.Text; }
+        save.BackColor = Theme.Accent;
+        title.ForeColor = Theme.Text;
         bool exists = Vault.Exists, unlocked = Vault.Unlocked;
         if (!exists) mode = Mode.Create;
         else if (!unlocked) mode = Mode.Unlock;

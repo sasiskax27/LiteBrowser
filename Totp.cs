@@ -48,12 +48,13 @@ static class Totp
         return bytes.ToArray();
     }
 
-    public static string? Code(string? value, out int remaining)
+    public static string? Code(string? value, out int remaining) => CodeAt(value, DateTimeOffset.UtcNow.ToUnixTimeSeconds(), out remaining);
+
+    public static string? CodeAt(string? value, long unix, out int remaining)
     {
         remaining = 0;
         var spec = Parse(value);
         if (spec == null) return null;
-        long unix = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
         long counter = unix / spec.Period;
         remaining = (int)(spec.Period - unix % spec.Period);
         var msg = BitConverter.GetBytes(counter);

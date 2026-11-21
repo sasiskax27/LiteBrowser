@@ -46,6 +46,9 @@
   details b { color: var(--text); }
   .about { color: var(--dim); font-size: 13px; line-height: 1.8; }
   .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .accents { display: flex; gap: 8px; flex: none; }
+  .accents button { width: 30px; height: 30px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; transition: .15s; }
+  .accents button.on { border-color: var(--text); transform: scale(1.12); }
   .chk { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: var(--dim); cursor: pointer; }
   .chk input { accent-color: var(--accent); width: 16px; height: 16px; }
   .imp-result { font-size: 13px; margin: 6px 2px 4px; }
@@ -62,12 +65,17 @@
 
   <nav>
     <a href="#search">Поиск</a><a href="#security">Безопасность</a><a href="#adblock">Реклама</a><a href="#proxy">Обход блокировок</a><a href="#passwords">Пароли</a><a href="#sites">Сайты</a><a href="extensions.html">Расширения</a>
-    <a href="#tabs">Вкладки</a><a href="#bookmarks">Закладки и история</a><a href="#look">Вид и масштаб</a><a href="#import">Перенос</a><a href="#system">Система</a><a href="#data">Данные</a>
+    <a href="#tabs">Вкладки</a><a href="#bookmarks">Закладки и история</a><a href="#look">Вид и масштаб</a><a href="#import">Перенос</a><a href="#sync">Синхронизация</a><a href="#updates">Обновления</a><a href="#system">Система</a><a href="#data">Данные</a>
   </nav>
 
   <section id="search">
     <h2><span class="icon">&#xE721;</span>Поисковая система</h2>
     <div class="engines" id="engines"></div>
+    <div class="row" style="margin-top:8px">
+      <div><div class="row-title">Подсказки поисковика в адресной строке</div>
+        <div class="row-sub">Подсказки из закладок и истории работают всегда. Если включить, то, что вы печатаете, будет уходить поисковику по мере ввода</div></div>
+      <label class="switch"><input type="checkbox" data-key="searchSuggestions"><span class="slider"></span></label>
+    </div>
   </section>
 
   <section id="security">
@@ -226,6 +234,18 @@
   <section id="look">
     <h2><span class="icon">&#xE790;</span>Внешний вид</h2>
     <div class="row">
+      <div><div class="row-title">Тема браузера</div><div class="row-sub">Вкладки, панели и свои страницы браузера</div></div>
+      <div class="seg" data-seg="uiTheme"><button data-v="auto">Как в Windows</button><button data-v="dark">Тёмная</button><button data-v="light">Светлая</button></div>
+    </div>
+    <div class="row">
+      <div><div class="row-title">Цвет акцента</div><div class="row-sub">Кнопки, ссылки и выделение</div></div>
+      <div class="accents" id="accents"></div>
+    </div>
+    <div class="row">
+      <div><div class="row-title">Обои стартовой страницы</div><div class="row-sub" id="wallState">Своя картинка вместо фона. Плитки сайтов меняются кнопкой «Изменить» на самой стартовой странице</div></div>
+      <div class="actions"><button class="btn" id="pickWall">Выбрать картинку</button><button class="btn" id="removeWall">Убрать</button></div>
+    </div>
+    <div class="row">
       <div><div class="row-title">Тема сайтов</div><div class="row-sub">Сайты, которые поддерживают тёмную тему, будут показываться в выбранной</div></div>
       <div class="seg" data-seg="siteTheme"><button data-v="auto">Как в Windows</button><button data-v="dark">Тёмная</button><button data-v="light">Светлая</button></div>
     </div>
@@ -242,12 +262,46 @@
   <section id="import">
     <h2><span class="icon">&#xE8DE;</span>Перенос из другого браузера</h2>
     <p class="note">Перенесите закладки и историю из Chrome, Edge, Яндекс Браузера, Opera, Brave, Vivaldi или Firefox.
-      Тот браузер ничего не заметит: данные только читаются. <b>Пароли и входы в аккаунты не переносятся</b>:
-      браузеры шифруют их, а LiteBrowser пароли не хранит.</p>
+      Тот браузер ничего не заметит: данные только читаются. <b>Пароли</b> переносятся отдельно, через CSV-экспорт:
+      <a href="passwords.html" style="color:var(--accent)">Пароли</a> → ⋯ → «Загрузить CSV-файл».</p>
     <div id="importList"><div class="row-sub">Ищу установленные браузеры…</div></div>
     <div class="row">
       <div><div class="row-title">HTML-файл закладок</div><div class="row-sub">Этот формат понимают все браузеры: можно перенести закладки откуда угодно или куда угодно</div></div>
       <div class="actions"><button class="btn" id="importHtml">Загрузить из файла</button><button class="btn" id="exportHtml">Сохранить в файл</button></div>
+    </div>
+  </section>
+
+  <section id="sync">
+    <h2><span class="icon">&#xE895;</span>Синхронизация</h2>
+    <p class="note">Закладки, история, настройки и пароли — между вашими компьютерами через папку облачного диска
+      (Google Диск, Яндекс Диск, OneDrive, Dropbox). Всё хранится там <b>одним зашифрованным файлом</b>: без пароля синхронизации его не прочитать,
+      даже имея доступ к диску. Пароли из менеджера дополнительно зашифрованы мастер-паролем.</p>
+    <div class="row">
+      <div><div class="row-title">Папка</div><div class="row-sub" id="syncFolder">Не выбрана</div>
+        <div class="chips" id="syncClouds" style="margin-top:8px"></div></div>
+      <button class="btn" id="syncPick">Выбрать папку</button>
+    </div>
+    <div class="row">
+      <div><div class="row-title">Пароль синхронизации</div><div class="row-sub" id="syncPwState">Задайте одинаковый пароль на всех компьютерах (от 8 символов)</div></div>
+      <div class="actions"><input class="text" type="password" id="syncPw" placeholder="Пароль" style="width:170px"><button class="btn" id="syncPwSave">Сохранить</button></div>
+    </div>
+    <div class="row">
+      <div><div class="row-title">Синхронизировать историю</div><div class="row-sub">Закладки, настройки и пароли синхронизируются всегда</div></div>
+      <label class="switch"><input type="checkbox" data-key="syncHistory"><span class="slider"></span></label>
+    </div>
+    <div class="row">
+      <div><div class="row-title">Автоматическая синхронизация</div><div class="row-sub" id="syncStatus">При запуске и при закрытии браузера</div></div>
+      <div class="actions"><button class="btn primary" id="syncNow">Синхронизировать сейчас</button>
+        <label class="switch"><input type="checkbox" data-key="syncEnabled"><span class="slider"></span></label></div>
+    </div>
+  </section>
+
+  <section id="updates">
+    <h2><span class="icon">&#xE896;</span>Обновления</h2>
+    <div class="row">
+      <div><div class="row-title">Проверять обновления</div><div class="row-sub" id="updState">При запуске браузер проверит GitHub и предложит обновиться в один клик</div></div>
+      <div class="actions"><button class="btn" id="checkUpd">Проверить сейчас</button>
+        <label class="switch"><input type="checkbox" data-key="autoUpdate"><span class="slider"></span></label></div>
     </div>
   </section>
 

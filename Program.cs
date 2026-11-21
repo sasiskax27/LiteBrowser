@@ -63,6 +63,15 @@ static class Program
                 Check("экспорт в формат Bitwarden читается обратно", back.Count == 1 && back[0].password == "S3cret-Пароль!" && bwExport.StartsWith("folder,favorite,type,name"));
                 var bw = PasswordTools.ParseCsv("folder,favorite,type,name,notes,fields,reprompt,login_uri,login_username,login_password,login_totp\nSocial,,login,VK,,,0,https://vk.com,ivan,pw123,\n");
                 Check("CSV из Bitwarden разобран", bw.Count == 1 && bw[0].origin == "https://vk.com" && bw[0].username == "ivan" && bw[0].password == "pw123");
+                Check("TOTP по тестовому вектору RFC 6238", Totp.CodeAt("otpauth://totp/x?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&digits=8", 59, out _) == "94287082"
+                                                       && Totp.CodeAt("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", 1111111109, out _) == "081804");
+                var sf = Path.Combine(dir, "sync.lbsync");
+                Sync.WriteRemote(sf, "sync-pass-123", new SyncBundle { Bookmarks = { new Bookmark { Title = "VK", Url = "https://vk.com/" } }, Vault = "{}" });
+                var sraw = File.ReadAllText(sf);
+                var sb = Sync.ReadRemote(sf, "sync-pass-123");
+                Check("синхронизация: файл зашифрован и читается обратно", !sraw.Contains("vk.com") && sb?.Bookmarks.Count == 1 && sb.Bookmarks[0].Url == "https://vk.com/");
+                bool syncWrong = false; try { Sync.ReadRemote(sf, "wrong-password"); } catch (UnauthorizedAccessException) { syncWrong = true; }
+                Check("синхронизация: неверный пароль не подходит", syncWrong);
                 var g = PasswordTools.Generate(20);
                 Check("генератор: 20 символов, все группы", g.Length == 20 && g.Any(char.IsUpper) && g.Any(char.IsLower) && g.Any(char.IsDigit) && g.Any(c => !char.IsLetterOrDigit(c)));
             }
@@ -147,6 +156,7 @@ static class Program
 
         ApplicationConfiguration.Initialize();
         AppEnv.Init();
+        Theme.ApplyPalette(AppEnv.Settings.UiTheme, AppEnv.Settings.Accent);
         Application.Run(new BrowserApp(url, incognito, restore));
     }
 }
@@ -228,6 +238,7 @@ sealed class BrowserApp : ApplicationContext
         }
         var first = OpenWindow(incognito, url, tabs, active, session);
         _ = first.RunStartupChecks();
+        _ = first.RunStartupSync();
 
         if (AppEnv.Settings.BlockAds && AppEnv.Settings.ExtendedBlocklist)
             _ = Blocklist.UpdateAsync(AppEnv.DataDir, AppEnv.Settings, force: false);
@@ -256,6 +267,7 @@ sealed class BrowserApp : ApplicationContext
             if (lastActive == f) lastActive = windows.LastOrDefault();
             if (windows.Count > 0) return;
             Store.Flush();
+            Sync.PushOnExit();
             ExitThread();
         };
         f.Show();

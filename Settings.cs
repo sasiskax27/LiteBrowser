@@ -20,6 +20,23 @@ static class SearchEngines
     public static SearchEngine Get(string? id) => All.FirstOrDefault(e => e.Id == id) ?? All[0];
 }
 
+/// <summary>Плитка на стартовой странице.</summary>
+sealed class HomeTile
+{
+    public string Name { get; set; } = "";
+    public string Url { get; set; } = "";
+
+    public static List<HomeTile> Defaults() => new()
+    {
+        new() { Name = "YouTube", Url = "https://www.youtube.com/" },
+        new() { Name = "Википедия", Url = "https://ru.wikipedia.org/" },
+        new() { Name = "ВКонтакте", Url = "https://vk.com/" },
+        new() { Name = "Telegram", Url = "https://web.telegram.org/" },
+        new() { Name = "GitHub", Url = "https://github.com/" },
+        new() { Name = "Почта", Url = "https://mail.google.com/" },
+    };
+}
+
 /// <summary>Настройки браузера, хранятся в settings.json. Любую функцию можно выключить.</summary>
 sealed class AppSettings
 {
@@ -82,6 +99,17 @@ sealed class AppSettings
     public bool SidePanelOpen { get; set; } = false;
     public string SidePanelUrl { get; set; } = "https://lite.home/bookmarks.html";
     public int SidePanelWidth { get; set; } = 380;
+    // Синхронизация
+    public bool SyncEnabled { get; set; } = false;
+    public string SyncFolder { get; set; } = "";
+    public bool SyncHistory { get; set; } = true;
+    public string SyncLast { get; set; } = "";
+    // Оформление
+    public string UiTheme { get; set; } = "dark";    // dark | light | auto
+    public string Accent { get; set; } = "blue";     // blue | purple | green | orange | pink | red
+    public bool Wallpaper { get; set; } = false;
+    public int WallpaperVersion { get; set; }
+    public List<HomeTile> HomeTiles { get; set; } = HomeTile.Defaults();
     // Обновления и браузер по умолчанию
     public bool AutoUpdate { get; set; } = true;
     public string SkippedUpdate { get; set; } = "";
@@ -106,6 +134,12 @@ sealed class AppSettings
         if (FreezeMinutes is not (0 or 5 or 15 or 30 or 60)) FreezeMinutes = 15;
         if (!UiScales.Contains(UiScale)) UiScale = 100;
         SidePanelWidth = Math.Clamp(SidePanelWidth, 260, 1000);
+        if (UiTheme is not ("dark" or "light" or "auto")) UiTheme = "dark";
+        if (!Theme.Accents.ContainsKey(Accent ?? "")) Accent = "blue";
+        if (!Path.IsPathRooted(SyncFolder ?? "")) SyncFolder = "";
+        HomeTiles = (HomeTiles ?? HomeTile.Defaults())
+            .Where(t => t != null && (t.Name ?? "").Trim().Length is > 0 and <= 40 && Uri.TryCreate(t.Url, UriKind.Absolute, out var tu) && tu.Scheme is "http" or "https")
+            .Take(24).ToList();
         if (!(SidePanelUrl ?? "").StartsWith("https://") && !(SidePanelUrl ?? "").StartsWith("http://")) SidePanelUrl = "https://lite.home/bookmarks.html";
         if (AutoLockMinutes is not (0 or 5 or 15 or 30 or 60)) AutoLockMinutes = 15;
         NeverSave = (NeverSave ?? new()).Where(s => s.Length is > 0 and < 300).Distinct().Take(1000).ToList();

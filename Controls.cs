@@ -681,6 +681,10 @@ sealed class InfoBar : Panel
             b.Click += (_, _) => act();
             buttons.Controls.Add(b);
         }
+        BackColor = Theme.IsLight ? Color.FromArgb(226, 232, 252) : Color.FromArgb(40, 46, 70);
+        icon.ForeColor = Theme.Accent;
+        text.ForeColor = Theme.Text;
+        close.ForeColor = Theme.TextDim;
         Visible = true;
         DoLayout();
     }

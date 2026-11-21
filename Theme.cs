@@ -6,20 +6,86 @@ namespace LiteBrowser;
 
 static class Theme
 {
-    public static readonly Color Frame = Color.FromArgb(22, 23, 28);      // полоса вкладок и заголовок окна
-    public static readonly Color Toolbar = Color.FromArgb(36, 38, 46);    // активная вкладка и панель
-    public static readonly Color Field = Color.FromArgb(24, 25, 31);      // адресная строка
-    public static readonly Color TabHover = Color.FromArgb(32, 34, 41);
-    public static readonly Color Hover = Color.FromArgb(56, 59, 70);
-    public static readonly Color Pressed = Color.FromArgb(70, 74, 88);
-    public static readonly Color Line = Color.FromArgb(48, 50, 60);
-    public static readonly Color Text = Color.FromArgb(232, 234, 242);
-    public static readonly Color TextDim = Color.FromArgb(148, 153, 170);
-    public static readonly Color Accent = Color.FromArgb(124, 156, 255);
-    public static readonly Color Accent2 = Color.FromArgb(176, 124, 255);
-    public static readonly Color Secure = Color.FromArgb(110, 207, 150);
-    public static readonly Color Danger = Color.FromArgb(255, 120, 120);
+    // Цвета меняются при смене темы (ApplyPalette), поэтому они не readonly
+    public static Color Frame = Color.FromArgb(22, 23, 28);      // полоса вкладок и заголовок окна
+    public static Color Toolbar = Color.FromArgb(36, 38, 46);    // активная вкладка и панель
+    public static Color Field = Color.FromArgb(24, 25, 31);      // адресная строка
+    public static Color TabHover = Color.FromArgb(32, 34, 41);
+    public static Color Hover = Color.FromArgb(56, 59, 70);
+    public static Color Pressed = Color.FromArgb(70, 74, 88);
+    public static Color Line = Color.FromArgb(48, 50, 60);
+    public static Color Text = Color.FromArgb(232, 234, 242);
+    public static Color TextDim = Color.FromArgb(148, 153, 170);
+    public static Color Accent = Color.FromArgb(124, 156, 255);
+    public static Color Accent2 = Color.FromArgb(176, 124, 255);
+    public static Color Menu = Color.FromArgb(32, 34, 41);
+    public static Color Secure = Color.FromArgb(110, 207, 150);
+    public static Color Danger = Color.FromArgb(255, 120, 120);
+    public static bool IsLight { get; private set; }
     public const string IconFont = "Segoe Fluent Icons";
+
+    /// <summary>Цвета акцента: основной и второй (для градиентов).</summary>
+    public static readonly Dictionary<string, (Color a, Color b, string name)> Accents = new()
+    {
+        ["blue"] = (Color.FromArgb(124, 156, 255), Color.FromArgb(176, 124, 255), "Синий"),
+        ["purple"] = (Color.FromArgb(176, 124, 255), Color.FromArgb(255, 111, 181), "Фиолетовый"),
+        ["green"] = (Color.FromArgb(79, 209, 139), Color.FromArgb(63, 193, 201), "Зелёный"),
+        ["orange"] = (Color.FromArgb(255, 159, 74), Color.FromArgb(255, 107, 107), "Оранжевый"),
+        ["pink"] = (Color.FromArgb(255, 111, 181), Color.FromArgb(176, 124, 255), "Розовый"),
+        ["red"] = (Color.FromArgb(255, 107, 107), Color.FromArgb(255, 159, 74), "Красный"),
+    };
+
+    static Color Darken(Color c, float k) => Color.FromArgb((int)(c.R * (1 - k)), (int)(c.G * (1 - k)), (int)(c.B * (1 - k)));
+
+    public static bool WindowsUsesLight()
+    {
+        try
+        {
+            using var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+            return k?.GetValue("AppsUseLightTheme") is int v && v == 1;
+        }
+        catch { return false; }
+    }
+
+    /// <summary>Переключить палитру: тёмная/светлая/как в Windows + цвет акцента.</summary>
+    public static void ApplyPalette(string ui, string accent)
+    {
+        IsLight = ui == "light" || (ui == "auto" && WindowsUsesLight());
+        var (a, b, _) = Accents.TryGetValue(accent, out var x) ? x : Accents["blue"];
+        if (IsLight)
+        {
+            Frame = Color.FromArgb(222, 225, 233); Toolbar = Color.FromArgb(248, 249, 252); Field = Color.FromArgb(236, 238, 244);
+            TabHover = Color.FromArgb(212, 215, 225); Hover = Color.FromArgb(222, 225, 234); Pressed = Color.FromArgb(205, 209, 220);
+            Line = Color.FromArgb(205, 208, 218); Text = Color.FromArgb(28, 30, 36); TextDim = Color.FromArgb(96, 101, 116);
+            Menu = Color.FromArgb(250, 250, 253);
+            Accent = Darken(a, 0.22f); Accent2 = Darken(b, 0.22f);
+            Secure = Color.FromArgb(30, 150, 80); Danger = Color.FromArgb(210, 50, 50);
+        }
+        else
+        {
+            Frame = Color.FromArgb(22, 23, 28); Toolbar = Color.FromArgb(36, 38, 46); Field = Color.FromArgb(24, 25, 31);
+            TabHover = Color.FromArgb(32, 34, 41); Hover = Color.FromArgb(56, 59, 70); Pressed = Color.FromArgb(70, 74, 88);
+            Line = Color.FromArgb(48, 50, 60); Text = Color.FromArgb(232, 234, 242); TextDim = Color.FromArgb(148, 153, 170);
+            Menu = Color.FromArgb(32, 34, 41);
+            Accent = a; Accent2 = b;
+            Secure = Color.FromArgb(110, 207, 150); Danger = Color.FromArgb(255, 120, 120);
+        }
+    }
+
+    /// <summary>CSS-переменные для своих страниц: цвет акцента и светлая тема.</summary>
+    public static string PageCss()
+    {
+        static string H(Color c) => $"#{c.R:x2}{c.G:x2}{c.B:x2}";
+        static string Rgb(Color c) => $"{c.R},{c.G},{c.B}";
+        var css = $"\n:root{{--accent:{H(Accent)};--accent2:{H(Accent2)};--accent-rgb:{Rgb(Accent)}}}\n";
+        if (IsLight)
+            css += ":root{--bg:#f3f4f8;--card:rgba(255,255,255,.78);--card2:rgba(0,0,0,.05);--line:rgba(0,0,0,.1);--text:#1c1e24;--dim:#5f6476;--ok:#1e9650;--bad:#d23232;--warn:#c27012}\n" +
+                   ".glow{opacity:.45}.dialog{background:#fff!important}.toast{background:#fff!important;color:#1c1e24}" +
+                   "input.text,textarea.text{background:rgba(0,0,0,.035)!important}.slider{background:#c9ccd6}" +
+                   ".time{background:linear-gradient(180deg,#1c1e24,#4a5070)!important;-webkit-background-clip:text!important}" +
+                   ".search{background:rgba(255,255,255,.8)!important}.engine,.chip,.store,.seg,.filters{background:rgba(0,0,0,.04)}\n";
+        return css;
+    }
 
     /// <summary>Масштаб экрана Windows.</summary>
     public static float SystemDpi = 1f;
@@ -68,22 +134,25 @@ static class Theme
     static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
 
     public static readonly Color IncognitoFrame = Color.FromArgb(34, 24, 50);
-    public static readonly Color Menu = Color.FromArgb(32, 34, 41);
 
-    /// <summary>Тёмный заголовок окна в цвет полосы вкладок (Windows 11).</summary>
+    /// <summary>Заголовок окна в цвет полосы вкладок (Windows 11).</summary>
     public static void StyleTitleBar(IntPtr hwnd, Color frame)
     {
-        int on = 1, caption = ColorTranslator.ToWin32(frame), text = ColorTranslator.ToWin32(Text);
+        bool darkFrame = frame.GetBrightness() < 0.5f;
+        int on = darkFrame ? 1 : 0, caption = ColorTranslator.ToWin32(frame), text = ColorTranslator.ToWin32(TitleText(frame));
         DwmSetWindowAttribute(hwnd, 20, ref on, 4);       // тёмный режим
         DwmSetWindowAttribute(hwnd, 34, ref caption, 4);  // цвет рамки
         DwmSetWindowAttribute(hwnd, 35, ref caption, 4);  // цвет заголовка
         DwmSetWindowAttribute(hwnd, 36, ref text, 4);     // цвет текста заголовка
     }
 
+    /// <summary>Цвет текста заголовка окна: тёмный на светлой рамке.</summary>
+    static Color TitleText(Color frame) => frame.GetBrightness() < 0.5f ? Color.FromArgb(232, 234, 242) : Color.FromArgb(28, 30, 36);
+
     /// <summary>Скруглённые углы и тёмная рамка для всплывающих окон.</summary>
     public static void StylePopup(IntPtr hwnd)
     {
-        int round = 2, on = 1, border = ColorTranslator.ToWin32(Line);
+        int round = 2, on = IsLight ? 0 : 1, border = ColorTranslator.ToWin32(Line);
         DwmSetWindowAttribute(hwnd, 20, ref on, 4);
         DwmSetWindowAttribute(hwnd, 33, ref round, 4);
         DwmSetWindowAttribute(hwnd, 34, ref border, 4);
