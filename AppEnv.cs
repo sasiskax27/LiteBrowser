@@ -1,4 +1,4 @@
-using System.Net.Sockets;
+﻿using System.Net.Sockets;
 using System.Text;
 using Microsoft.Web.WebView2.Core;
 
@@ -7,7 +7,7 @@ namespace LiteBrowser;
 /// <summary>Общие для всех окон: папка данных, настройки и движок WebView2.</summary>
 static class AppEnv
 {
-    public const string Version = "2.0";
+    public const string Version = "3.0";
     public static readonly string DataDir =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LiteBrowser");
 
