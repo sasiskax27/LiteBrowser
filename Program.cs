@@ -95,12 +95,41 @@ static class Program
                 Check("github.com не блокируется", !AdBlock.ShouldBlock("github.githubassets.com", "github.com"));
                 Check("yandex.ru не блокируется", !AdBlock.ShouldBlock("yandex.ru", "yandex.ru"));
                 Check("есть правила скрытия для youtube.com", AdBlock.PageScript("www.youtube.com").Contains("lite-ab-s"));
+                log.Add($"     правил по адресам: {AdBlock.PatternRules}");
+                bool B(string url, string page, ResType t = ResType.Script) => AdBlock.ShouldBlock(url, new Uri(url).Host, page, t);
+                Check("yandex.ru/ads/system/context.js блокируется", B("https://yandex.ru/ads/system/context.js", "lenta.ru"));
+                Check("an.yandex.ru/system/context.js блокируется", B("https://an.yandex.ru/system/context.js", "lenta.ru"));
+                Check("ads.adfox.ru блокируется", B("https://ads.adfox.ru/12345/getCode?p1=a", "lenta.ru"));
+                Check("googletagservices gpt.js блокируется", B("https://securepubads.g.doubleclick.net/tag/js/gpt.js", "rbc.ru"));
+                Check("баннер по пути /banners/ блокируется", B("https://cdn.example-news.ru/banners/top_728x90.gif", "example-news.ru", ResType.Image) ||
+                                                            B("https://example.com/ads/banner.gif", "example.com", ResType.Image));
+                Check("картинки lenta.ru не блокируются", !B("https://icdn.lenta.ru/images/2026/11/21/photo.jpg", "lenta.ru", ResType.Image));
+                Check("скрипт lenta.ru не блокируется", !B("https://lenta.ru/static/js/app.min.js", "lenta.ru"));
+                Check("yastatic.net (jQuery Яндекса) не блокируется", !B("https://yastatic.net/jquery/3.3.1/jquery.min.js", "lenta.ru"));
+                Check("видео youtube не блокируется", !B("https://rr1---sn-abc.googlevideo.com/videoplayback?id=1", "www.youtube.com", ResType.Media));
+                Check("vk.com api не блокируется", !B("https://api.vk.com/method/users.get", "vk.com", ResType.Xhr));
+                Check("mail.ru почта не блокируется", !B("https://e.mail.ru/inbox/", "e.mail.ru", ResType.Xhr));
+                sw.Restart();
+                var urls = new[] { "https://lenta.ru/static/js/app.min.js", "https://icdn.lenta.ru/images/2026/a/b/c.jpg", "https://yandex.ru/ads/system/context.js",
+                                   "https://www.youtube.com/s/player/abc/base.js", "https://api.vk.com/method/wall.get?owner_id=1&v=5.131" };
+                for (int i = 0; i < 20_000; i++) { var u = urls[i % urls.Length]; AdBlock.ShouldBlock(u + "?r=" + i, new Uri(u).Host, "lenta.ru", ResType.Script); }
+                log.Add($"скорость по адресам (с первой компиляцией правил): 20 000 проверок за {sw.ElapsedMilliseconds} мс");
+                sw.Restart();
+                for (int i = 0; i < 20_000; i++) { var u = urls[i % urls.Length]; AdBlock.ShouldBlock(u + "?r=" + i, new Uri(u).Host, "lenta.ru", ResType.Script); }
+                log.Add($"скорость по адресам (повторно): 20 000 проверок за {sw.ElapsedMilliseconds} мс");
                 sw.Restart();
                 for (int i = 0; i < 100_000; i++) AdBlock.ShouldBlock("cdn" + (i % 50) + ".static.example-site.com", "example-site.com");
                 log.Add($"скорость: 100 000 проверок за {sw.ElapsedMilliseconds} мс");
             }
             catch (Exception ex) { log.Add("FAIL исключение: " + ex); }
             File.WriteAllLines(args[1], log);
+            return;
+        }
+
+        if (args.Length == 2 && args[0] == "--ext-selftest")
+        {
+            ApplicationConfiguration.Initialize();
+            ExtensionSelfTest.Run(args[1]);
             return;
         }
 

@@ -17,6 +17,7 @@ static class LitePages
     public const string History = Prefix + "history.html";
     public const string Blocked = Prefix + "blocked.html";
     public const string Passwords = Prefix + "passwords.html";
+    public const string ExtensionsPage = Prefix + "extensions.html";
 
     public static CoreWebView2WebResourceResponse Response(CoreWebView2Environment env, string uri)
     {
@@ -46,6 +47,7 @@ static class LitePages
         if (src.StartsWith(Settings, StringComparison.Ordinal)) return "lite://settings";
         if (src.StartsWith(History, StringComparison.Ordinal)) return "lite://history";
         if (src.StartsWith(Passwords, StringComparison.Ordinal)) return "lite://passwords";
+        if (src.StartsWith(ExtensionsPage, StringComparison.Ordinal)) return "lite://extensions";
         if (src.StartsWith(Blocked, StringComparison.Ordinal))
             return HttpUtility.ParseQueryString(new Uri(src).Query)["url"] ?? "lite://blocked";
         return null;
@@ -143,7 +145,8 @@ sealed class MainForm : Form
     bool showDownloads, showProxy;
     readonly PasswordPopup passwordPopup = new();
     (string origin, string user, string pass, DateTime time)? pendingCapture;
-    readonly IconButton zoomBtn;
+    readonly IconButton zoomBtn, installBtn;
+    bool showInstall;
 
     public bool Incognito { get; }
 
@@ -192,6 +195,8 @@ sealed class MainForm : Form
         menuBtn = new IconButton("", "Меню", tips);
         zoomBtn = new IconButton("100%", "Масштаб страницы и размер интерфейса", tips) { TextMode = true };
         zoomBtn.Click += (_, _) => ShowZoomMenu();
+        installBtn = new IconButton("＋ Установить расширение", "Установить это расширение в LiteBrowser", tips) { TextMode = true, GlyphColor = Theme.Accent };
+        installBtn.Click += async (_, _) => { if (active?.Core?.Source is { } u) await InstallExtension(u, null); };
 
         back.Click += (_, _) => active?.Core?.GoBack();
         forward.Click += (_, _) => active?.Core?.GoForward();
@@ -204,6 +209,7 @@ sealed class MainForm : Form
         address.StarClicked += ToggleBookmark;
         address.KeyClicked += async () => await ShowKeyMenu();
         address.ShieldClicked += ShowShieldMenu;
+        address.LockClicked += ShowSiteMenu;
         passwordPopup.OpenManager = () => OpenLitePage(LitePages.Passwords);
         passwordPopup.NeverForSite = origin => { var h = PasswordTools.HostKey(origin); CopyAndSave(x => x.NeverSave.Add(h)); pendingCapture = null; UpdateKey(); };
         passwordPopup.Saved += () => { pendingCapture = null; UpdateKey(); };
@@ -217,7 +223,7 @@ sealed class MainForm : Form
         };
         address.Box.Enter += (_, _) => BeginInvoke(address.Box.SelectAll);
 
-        toolbar.Controls.AddRange(new Control[] { back, forward, reload, home, address, zoomBtn, proxyBtn, downloadsBtn, menuBtn });
+        toolbar.Controls.AddRange(new Control[] { back, forward, reload, home, address, installBtn, zoomBtn, proxyBtn, downloadsBtn, menuBtn });
         toolbar.Resize += (_, _) => LayoutToolbar();
         toolbar.Paint += PaintProgress;
 
@@ -268,13 +274,13 @@ sealed class MainForm : Form
         int s = Theme.S(36), y = (toolbar.Height - s) / 2, x = Theme.S(10);
         foreach (var b in new[] { back, forward, reload, home }) { b.SetBounds(x, y, s, s); x += s + Theme.S(2); }
         int right = toolbar.Width - Theme.S(10);
-        foreach (var b in new[] { menuBtn, downloadsBtn, proxyBtn, zoomBtn })
+        foreach (var b in new[] { menuBtn, downloadsBtn, proxyBtn, zoomBtn, installBtn })
         {
             // Visible до показа окна всегда false, поэтому храним желаемое состояние отдельно
-            bool want = b == downloadsBtn ? showDownloads : b == proxyBtn ? showProxy : true;
+            bool want = b == downloadsBtn ? showDownloads : b == proxyBtn ? showProxy : b == installBtn ? showInstall : true;
             b.Visible = want;
             if (!want) continue;
-            int w = b == zoomBtn ? Theme.S(58) : s;
+            int w = b == zoomBtn ? Theme.S(58) : b == installBtn ? Theme.S(200) : s;
             right -= w;
             b.SetBounds(right, y, w, s);
             right -= Theme.S(2);
@@ -489,8 +495,11 @@ sealed class MainForm : Form
             if (e.ResourceContext == CoreWebView2WebResourceContext.Document && u.Host == tab.PageHost) return; // саму страницу не трогаем
             if (SiteAllowed(tab.PageHost)) return;
             var host = u.Host;
-            bool block = AdBlock.IsException(host) ? false
-                : Blocklist.IsBlocked(host, Cfg.ExtendedBlocklist) || (AdBlock.AnyEnabled(Cfg) && AdBlock.ShouldBlock(host, tab.PageHost));
+            bool lists = AdBlock.AnyEnabled(Cfg);
+            bool block = lists && AdBlock.PageAllowed(tab.PageHost) ? false
+                : AdBlock.IsException(host) ? false
+                : Blocklist.IsBlocked(host, Cfg.ExtendedBlocklist) ||
+                  (lists && AdBlock.ShouldBlock(uri, host, tab.PageHost, PatternIndex.FromContext(e.ResourceContext)));
             if (!block) return;
             e.Response = env.CreateWebResourceResponse(null, 403, "Blocked", "");
             tab.Blocked++;
@@ -554,6 +563,9 @@ sealed class MainForm : Form
             tab.PopupsBlocked = 0;
             tab.HasLoginForm = false;
             if (Uri.TryCreate(e.Uri, UriKind.Absolute, out var nu)) tab.PageHost = nu.Host;
+            // Ненадёжный сайт — без JavaScript
+            bool scripts = !Untrusted(tab.PageHost);
+            if (core.Settings.IsScriptEnabled != scripts) core.Settings.IsScriptEnabled = scripts;
             StartAnim();
             if (tab == active) UpdateUi();
             strip.Invalidate();
@@ -581,6 +593,16 @@ sealed class MainForm : Form
 
         core.PermissionRequested += (_, e) =>
         {
+            var permHost = Uri.TryCreate(e.Uri, UriKind.Absolute, out var pu) ? pu.Host : "";
+            var permSite = PasswordTools.HostKey(permHost);
+            var permKind = e.PermissionKind.ToString();
+            // Ненадёжным сайтам — ничего; сохранённое решение — без вопроса
+            if (Untrusted(permHost)) { e.State = CoreWebView2PermissionState.Deny; return; }
+            if (Cfg.SitePermissions.TryGetValue(permSite, out var saved) && saved.TryGetValue(permKind, out var decision))
+            {
+                e.State = decision == "allow" ? CoreWebView2PermissionState.Allow : CoreWebView2PermissionState.Deny;
+                return;
+            }
             if (e.PermissionKind == CoreWebView2PermissionKind.Notifications)
             {
                 e.State = CoreWebView2PermissionState.Deny;
@@ -599,17 +621,19 @@ sealed class MainForm : Form
             var deferral = e.GetDeferral();
             BeginInvoke(() =>
             {
-                var r = MessageBox.Show(this, $"Сайт {host} просит доступ к {what}.\nРазрешить?", "Разрешение",
+                var r = MessageBox.Show(this, $"Сайт {host} просит доступ к {what}.\nРазрешить?\n\nРешение запомнится. Изменить его можно, нажав на замок в адресной строке.", "Разрешение",
                     MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
-                e.State = r == DialogResult.Yes ? CoreWebView2PermissionState.Allow : CoreWebView2PermissionState.Deny;
+                bool allow = r == DialogResult.Yes;
+                e.State = allow ? CoreWebView2PermissionState.Allow : CoreWebView2PermissionState.Deny;
                 deferral.Complete();
+                if (permSite.Length > 0 && !Incognito) CopyAndSave(x => SetPerm(x, permSite, permKind, allow ? "allow" : "deny"));
             });
         };
 
         core.NewWindowRequested += async (_, e) =>
         {
             // Всплывающие окна, которые сайт открывает сам, без клика пользователя
-            if (Cfg.BlockAds && Cfg.BlockPopups && !e.IsUserInitiated && !SiteAllowed(tab.PageHost))
+            if (Untrusted(tab.PageHost) || (Cfg.BlockAds && Cfg.BlockPopups && !e.IsUserInitiated && !SiteAllowed(tab.PageHost)))
             {
                 e.Handled = true;
                 tab.PopupsBlocked++;
@@ -698,7 +722,93 @@ sealed class MainForm : Form
     // ================= Блокировщик рекламы =================
 
     static bool SiteAllowed(string host) =>
-        host.Length > 0 && Cfg.AdblockAllow.Count > 0 && Cfg.AdblockAllow.Contains(PasswordTools.HostKey(host));
+        host.Length > 0 && (Cfg.AdblockAllow.Contains(PasswordTools.HostKey(host)) || Trusted(host));
+
+    static bool Trusted(string host) => host.Length > 0 && Cfg.TrustedSites.Contains(PasswordTools.HostKey(host));
+    static bool Untrusted(string host) => host.Length > 0 && Cfg.UntrustedSites.Contains(PasswordTools.HostKey(host));
+
+    static readonly (CoreWebView2PermissionKind kind, string name)[] PermissionNames =
+    {
+        (CoreWebView2PermissionKind.Camera, "Камера"),
+        (CoreWebView2PermissionKind.Microphone, "Микрофон"),
+        (CoreWebView2PermissionKind.Geolocation, "Местоположение"),
+        (CoreWebView2PermissionKind.ClipboardRead, "Буфер обмена"),
+        (CoreWebView2PermissionKind.MultipleAutomaticDownloads, "Несколько загрузок"),
+        (CoreWebView2PermissionKind.Notifications, "Уведомления"),
+    };
+
+    /// <summary>Панель сайта по клику на замок: соединение, уровень доверия, разрешения, cookies.</summary>
+    void ShowSiteMenu()
+    {
+        var tab = active;
+        var src = tab?.Core?.Source ?? "";
+        if (tab?.Core == null || !src.StartsWith("http")) return;
+        var core = tab.Core;
+        var host = new Uri(src).Host;
+        var key = PasswordTools.HostKey(host);
+        bool https = src.StartsWith("https://");
+        var menu = Theme.NewMenu();
+        menu.Items.Add(new ToolStripMenuItem(https ? "🔒  Соединение защищено (HTTPS)" : "⚠  Соединение НЕ защищено")
+        { Enabled = false, Font = Theme.GetFont("Segoe UI", 10f, FontStyle.Bold), Padding = new Padding(6, 6, 6, 1) });
+        menu.Items.Add(new ToolStripMenuItem(https ? $"   {host}: данные шифруются" : $"   {host}: пароли и данные могут перехватить")
+        { Enabled = false, Padding = new Padding(6, 0, 6, 4) });
+        menu.Items.Add(new ToolStripSeparator());
+
+        menu.Items.Add(new ToolStripMenuItem("Уровень доверия") { Enabled = false, Padding = new Padding(6, 4, 6, 2) });
+        int level = Trusted(host) ? 1 : Untrusted(host) ? -1 : 0;
+        void SetLevel(int l)
+        {
+            CopyAndSave(x =>
+            {
+                x.TrustedSites.Remove(key);
+                x.UntrustedSites.Remove(key);
+                if (l == 1) x.TrustedSites.Add(key);
+                if (l == -1) x.UntrustedSites.Add(key);
+            });
+            core.Reload();
+        }
+        menu.Items.Add(Theme.Item((level == 0 ? "●  " : "○  ") + "Обычный — стандартная защита", () => SetLevel(0)));
+        menu.Items.Add(Theme.Item((level == 1 ? "●  " : "○  ") + "Доверенный — без блокировки рекламы и окон", () => SetLevel(1)));
+        menu.Items.Add(Theme.Item((level == -1 ? "●  " : "○  ") + "Ненадёжный — без JavaScript, окон и разрешений", () => SetLevel(-1)));
+        menu.Items.Add(new ToolStripSeparator());
+
+        menu.Items.Add(new ToolStripMenuItem("Разрешения") { Enabled = false, Padding = new Padding(6, 4, 6, 2) });
+        Cfg.SitePermissions.TryGetValue(key, out var perms);
+        if (perms == null || perms.Count == 0)
+            menu.Items.Add(new ToolStripMenuItem("   Сайт ничего не запрашивал") { Enabled = false });
+        else
+            foreach (var (kind, name) in PermissionNames)
+            {
+                if (!perms.TryGetValue(kind.ToString(), out var v)) continue;
+                var k = kind.ToString();
+                var item = new ToolStripMenuItem($"   {name}: {(v == "allow" ? "разрешено" : "запрещено")}") { ForeColor = Theme.Text, Padding = new Padding(6, 4, 6, 4) };
+                item.DropDown = Theme.NewMenu();
+                item.DropDownItems.Add(Theme.Item("Разрешить", () => CopyAndSave(x => SetPerm(x, key, k, "allow"))));
+                item.DropDownItems.Add(Theme.Item("Запретить", () => CopyAndSave(x => SetPerm(x, key, k, "deny"))));
+                item.DropDownItems.Add(Theme.Item("Спрашивать снова", () => CopyAndSave(x => SetPerm(x, key, k, null))));
+                menu.Items.Add(item);
+            }
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(Theme.Item("Удалить cookies этого сайта", async () =>
+        {
+            int n = 0;
+            foreach (var u in new[] { "https://" + key, "https://www." + key, "https://" + host })
+            {
+                foreach (var c in await core.CookieManager.GetCookiesAsync(u)) { core.CookieManager.DeleteCookie(c); n++; }
+            }
+            MessageBox.Show(this, n > 0 ? $"Удалено cookies: {n}. Возможно, сайт попросит войти заново." : "У этого сайта нет cookies.", host);
+        }));
+        menu.Items.Add(Theme.Item("Все сайты и разрешения…", () => OpenLitePage(LitePages.Settings, "#sites")));
+        var r = RectangleToClient(address.LockScreenRect);
+        menu.Show(this, new Point(r.Left, r.Bottom + Theme.S(6)));
+    }
+
+    static void SetPerm(AppSettings s, string site, string kind, string? value)
+    {
+        if (!s.SitePermissions.TryGetValue(site, out var d)) s.SitePermissions[site] = d = new Dictionary<string, string>();
+        if (value == null) d.Remove(kind); else d[kind] = value;
+        if (d.Count == 0) s.SitePermissions.Remove(site);
+    }
 
     void UpdateShield()
     {
@@ -828,7 +938,7 @@ sealed class MainForm : Form
             return;
         }
 
-        if (!Cfg.PasswordManager) return;
+        if (!Cfg.PasswordManager || Untrusted(new Uri(origin).Host)) return; // ненадёжным сайтам пароли не даём
         bool secure = origin.StartsWith("https://") || Uri.TryCreate(origin, UriKind.Absolute, out var lu) && lu.IsLoopback;
         if (!secure) return; // по незащищённому соединению пароли не сохраняем
 
@@ -1073,6 +1183,125 @@ sealed class MainForm : Form
         }
     }
 
+    // ================= Расширения =================
+
+    CoreWebView2Profile? MainProfile => tabs.FirstOrDefault(t => t.Core != null)?.Core?.Profile;
+
+    async Task InstallExtension(string url, CoreWebView2? page)
+    {
+        void Status(string text, bool ok = true) { if (page != null) Post(page, new { type = "extStatus", text, ok }); }
+        if (Incognito) { MessageBox.Show(this, "Расширения устанавливаются из обычного окна, не из инкогнито.", "Расширения"); return; }
+        var r = Extensions.Parse(url);
+        var profile = MainProfile;
+        if (r == null || profile == null) { Status("Не похоже на ссылку на расширение из Chrome Web Store, Edge Add-ons или Firefox Add-ons", false); return; }
+        ExtensionInfo info;
+        try
+        {
+            Status("Скачиваю из " + Extensions.StoreName(r.Store) + "…");
+            installBtn.Enabled = false;
+            var env = await AppEnv.GetEnvironment();
+            info = await Extensions.Download(r, env.BrowserVersionString);
+        }
+        catch (Exception ex)
+        {
+            Status(ex.Message, false);
+            if (page == null) MessageBox.Show(this, ex.Message, "Не удалось установить расширение", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        finally { installBtn.Enabled = true; }
+
+        var rights = string.Join("\n", Extensions.DescribePermissions(info).Select(x => "  • " + x));
+        var answer = MessageBox.Show(this,
+            $"Установить «{info.Name}» {info.Version}?\n\nИсточник: {Extensions.StoreName(info.Store)}\n\nРасширение сможет:\n{rights}\n\n" +
+            "Устанавливайте только расширения, которым доверяете: они работают внутри браузера.",
+            "Установка расширения", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
+        if (answer != DialogResult.Yes) { Extensions.Discard(info); Status("Установка отменена", false); return; }
+        try
+        {
+            await Extensions.Install(profile, info);
+            Status($"«{info.Name}» установлено");
+            if (page == null)
+                MessageBox.Show(this, $"«{info.Name}» установлено.\n\nОткрыть окно и настройки расширения можно в меню ⋯ → «Расширения».", "Расширения");
+            if (page != null) await SendExtensions(page);
+        }
+        catch (Exception ex)
+        {
+            Status(ex.Message, false);
+            if (page == null) MessageBox.Show(this, ex.Message, "Не удалось установить расширение", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+    }
+
+    async Task SendExtensions(CoreWebView2 page)
+    {
+        var profile = MainProfile;
+        if (profile == null) return;
+        var meta = Extensions.LoadMeta();
+        var list = new List<object>();
+        foreach (var ext in await profile.GetBrowserExtensionsAsync())
+        {
+            meta.TryGetValue(ext.Id, out var info);
+            list.Add(new
+            {
+                id = ext.Id, name = info?.Name ?? ext.Name, enabled = ext.IsEnabled,
+                version = info?.Version ?? "", desc = info?.Description ?? "",
+                store = info != null ? Extensions.StoreName(info.Store) : "",
+                popup = info?.Popup, options = info?.Options,
+                icon = info != null ? Extensions.IconData(info) : null,
+                rights = info != null ? Extensions.DescribePermissions(info) : new List<string>(),
+            });
+        }
+        Post(page, new
+        {
+            type = "extList", items = list,
+            recommended = Extensions.Recommended.Select(x => new { x.name, x.desc, x.url }),
+        });
+    }
+
+    async Task HandleExtensionMessage(CoreWebView2 core, string type, JsonElement root)
+    {
+        string Str(string name) => root.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() ?? "" : "";
+        var profile = MainProfile;
+        switch (type)
+        {
+            case "ext:list":
+                await SendExtensions(core);
+                break;
+            case "ext:install":
+                await InstallExtension(Str("url"), core);
+                break;
+            case "ext:toggle":
+                if (profile == null) break;
+                bool on = root.TryGetProperty("enabled", out var en) && en.ValueKind == JsonValueKind.True;
+                foreach (var ext in await profile.GetBrowserExtensionsAsync())
+                    if (ext.Id == Str("id")) await ext.EnableAsync(on);
+                await SendExtensions(core);
+                break;
+            case "ext:remove":
+                if (profile == null) break;
+                await Extensions.Remove(profile, Str("id"));
+                await SendExtensions(core);
+                Post(core, new { type = "extStatus", text = "Расширение удалено", ok = true });
+                break;
+            case "ext:open":
+                var id = Str("id");
+                if (!System.Text.RegularExpressions.Regex.IsMatch(id, "^[a-p]{32}$")) break;
+                var info = Extensions.LoadMeta().GetValueOrDefault(id);
+                var path = Str("page") == "options" ? info?.Options : info?.Popup;
+                if (string.IsNullOrEmpty(path)) break;
+                _ = AddTab($"chrome-extension://{id}/{path.TrimStart('/')}");
+                break;
+            case "ext:store":
+                var storeUrl = Str("store") switch
+                {
+                    "edge" => "https://microsoftedge.microsoft.com/addons/category/Edge-Extensions",
+                    "firefox" => "https://addons.mozilla.org/ru/firefox/extensions/",
+                    _ => "https://chromewebstore.google.com/category/extensions",
+                };
+                _ = AddTab(storeUrl);
+                break;
+        }
+    }
+
     // ================= Сообщения от своих страниц =================
 
     static void Post(CoreWebView2 core, object msg) => core.PostWebMessageAsJson(JsonSerializer.Serialize(msg, AppSettings.Json));
@@ -1116,6 +1345,12 @@ sealed class MainForm : Form
         {
             // Менеджер паролей доступен только со своей страницы паролей
             if (core.Source.StartsWith(LitePages.Passwords, StringComparison.Ordinal)) await HandleVaultMessage(core, msgType, root);
+            return;
+        }
+        if (msgType.StartsWith("ext:"))
+        {
+            // Управление расширениями — только со страницы расширений
+            if (core.Source.StartsWith(LitePages.ExtensionsPage, StringComparison.Ordinal)) await HandleExtensionMessage(core, msgType, root);
             return;
         }
         switch (msgType)
@@ -1384,6 +1619,7 @@ sealed class MainForm : Form
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(Theme.Item("История", () => OpenLitePage(LitePages.History), "Ctrl+H"));
         menu.Items.Add(Theme.Item("Пароли", () => OpenLitePage(LitePages.Passwords), "Ctrl+Shift+P"));
+        menu.Items.Add(Theme.Item("Расширения", () => OpenLitePage(LitePages.ExtensionsPage), "Ctrl+Shift+E"));
         menu.Items.Add(Theme.Item("Загрузки", ToggleDownloads, "Ctrl+J"));
         menu.Items.Add(Theme.Item(Cfg.ShowBookmarksBar ? "Скрыть панель закладок" : "Показать панель закладок", ToggleBookmarksBar, "Ctrl+Shift+B"));
         menu.Items.Add(Theme.Item("Открыть закрытую вкладку", ReopenClosedTab, "Ctrl+Shift+T"));
@@ -1516,7 +1752,10 @@ sealed class MainForm : Form
         else if (src.StartsWith(LitePages.Settings)) address.SetLock("", Theme.Accent);
         else if (src.StartsWith(LitePages.History)) address.SetLock("", Theme.Accent);
         else if (src.StartsWith(LitePages.Passwords)) address.SetLock("", Theme.Accent);
+        else if (src.StartsWith(LitePages.ExtensionsPage) || src.StartsWith("chrome-extension://")) address.SetLock("", Theme.Accent);
         else if (src.StartsWith(LitePages.Prefix)) address.SetLock("", Theme.TextDim);
+        else if (src.StartsWith("http") && Untrusted(active?.PageHost ?? "")) address.SetLock("", Color.FromArgb(255, 184, 107));
+        else if (src.StartsWith("http") && Trusted(active?.PageHost ?? "")) address.SetLock("", Theme.Secure);
         else if (src.StartsWith("https://", StringComparison.OrdinalIgnoreCase)) address.SetLock("", Theme.Secure);
         else if (src.StartsWith("http://", StringComparison.OrdinalIgnoreCase)) address.SetLock("", Theme.Danger);
         else address.SetLock("", Theme.TextDim);
@@ -1525,6 +1764,8 @@ sealed class MainForm : Form
         UpdateStar();
         UpdateZoomLabel();
         UpdateKey();
+        bool store = !Incognito && Extensions.Parse(src) != null;
+        if (store != showInstall) { showInstall = store; LayoutToolbar(); }
         UpdateTitle();
         toolbar.Invalidate();
     }
@@ -1562,6 +1803,7 @@ sealed class MainForm : Form
                 case "settings": return LitePages.Settings + rest;
                 case "history": return LitePages.History + rest;
                 case "passwords": return LitePages.Passwords + rest;
+                case "extensions": return LitePages.ExtensionsPage + rest;
                 case "home": return homeUrl;
             }
         }
@@ -1586,6 +1828,7 @@ sealed class MainForm : Form
             case Keys.Control | Keys.D: ToggleBookmark(); return true;
             case Keys.Control | Keys.H: OpenLitePage(LitePages.History); return true;
             case Keys.Control | Keys.Shift | Keys.P: OpenLitePage(LitePages.Passwords); return true;
+            case Keys.Control | Keys.Shift | Keys.E: OpenLitePage(LitePages.ExtensionsPage); return true;
             case Keys.Control | Keys.J: ToggleDownloads(); return true;
             case Keys.Control | Keys.Shift | Keys.B: ToggleBookmarksBar(); return true;
             case Keys.Control | Keys.Oemcomma: OpenLitePage(LitePages.Settings); return true;

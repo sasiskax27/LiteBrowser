@@ -54,6 +54,10 @@ sealed class AppSettings
     public bool YouTubeAds { get; set; } = true;
     public bool BlockPopups { get; set; } = true;
     public List<string> AdblockAllow { get; set; } = new();
+    // Уровни доверия сайтов и сохранённые разрешения
+    public List<string> TrustedSites { get; set; } = new();     // без блокировки рекламы и всплывающих окон
+    public List<string> UntrustedSites { get; set; } = new();   // без JavaScript, окон, разрешений и паролей
+    public Dictionary<string, Dictionary<string, string>> SitePermissions { get; set; } = new(); // сайт → (разрешение → allow/deny)
     // Обход блокировок
     public string ProxyMode { get; set; } = "off";      // off | all | list
     public string ProxyType { get; set; } = "socks5";   // socks5 | http
@@ -95,6 +99,12 @@ sealed class AppSettings
         if (AutoLockMinutes is not (0 or 5 or 15 or 30 or 60)) AutoLockMinutes = 15;
         NeverSave = (NeverSave ?? new()).Where(s => s.Length is > 0 and < 300).Distinct().Take(1000).ToList();
         AdblockAllow = (AdblockAllow ?? new()).Select(CleanSite).Where(s => s.Length > 0 && HostRx.IsMatch(s)).Distinct().Take(1000).ToList();
+        TrustedSites = (TrustedSites ?? new()).Select(CleanSite).Where(s => s.Length > 0 && HostRx.IsMatch(s)).Distinct().Take(1000).ToList();
+        UntrustedSites = (UntrustedSites ?? new()).Select(CleanSite).Where(s => s.Length > 0 && HostRx.IsMatch(s) && !TrustedSites.Contains(s)).Distinct().Take(1000).ToList();
+        SitePermissions = (SitePermissions ?? new())
+            .Where(kv => HostRx.IsMatch(kv.Key) && kv.Value != null)
+            .Take(1000)
+            .ToDictionary(kv => kv.Key, kv => kv.Value.Where(p => p.Value is "allow" or "deny" && p.Key.Length < 50).ToDictionary(p => p.Key, p => p.Value));
         if (!ZoomSteps.Contains(PageZoom)) PageZoom = 100;
         ProxySites = (ProxySites ?? new()).Select(CleanSite).Where(s => s.Length > 0 && HostRx.IsMatch(s))
             .Distinct().Take(2000).ToList();

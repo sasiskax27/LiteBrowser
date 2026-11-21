@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<title>Расширения</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  body { overflow-y: auto; }
+  header .logo { font-size: 24px; font-weight: 400; }
+  .install { display: flex; gap: 8px; }
+  .install input { flex: 1; height: 44px; }
+  .stores { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .store { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 14px; border: 1px solid var(--line);
+           background: rgba(255,255,255,.04); color: var(--text); cursor: pointer; font: inherit; font-size: 13.5px; transition: .15s; }
+  .store:hover { background: rgba(255,255,255,.09); }
+  .store .dot { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; font-weight: 700; font-size: 13px; color: #fff; }
+  .store small { color: var(--dim); display: block; font-size: 11.5px; }
+  .status { margin-top: 10px; font-size: 13.5px; min-height: 20px; }
+  .status.ok { color: var(--ok); } .status.bad { color: var(--bad); }
+  .ext { display: flex; gap: 14px; align-items: flex-start; padding: 16px 2px; }
+  .ext + .ext { border-top: 1px solid var(--line); }
+  .ext img, .ext .noicon { width: 44px; height: 44px; border-radius: 12px; flex: none; background: rgba(255,255,255,.06); object-fit: contain; }
+  .ext .noicon { display: grid; place-items: center; color: var(--accent); font-size: 20px; }
+  .ext .body { flex: 1; min-width: 0; }
+  .ext .title { font-weight: 600; font-size: 15px; }
+  .ext .title small { color: var(--dim); font-weight: 400; font-size: 12px; margin-left: 6px; }
+  .ext .desc { color: var(--dim); font-size: 13px; margin: 3px 0 8px; line-height: 1.4; }
+  .ext .rights { color: var(--dim); font-size: 12px; margin-bottom: 10px; }
+  .ext .rights b { color: var(--warn); font-weight: 600; }
+  .ext .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+  .ext .acts .btn { padding: 6px 12px; font-size: 12.5px; }
+  .ext.off { opacity: .55; }
+  .rec { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+  .rec button { text-align: left; font: inherit; color: var(--text); background: rgba(255,255,255,.035); border: 1px solid var(--line);
+                border-radius: 14px; padding: 12px 14px; cursor: pointer; transition: .15s; }
+  .rec button:hover { border-color: var(--accent); background: rgba(124,156,255,.08); }
+  .rec b { display: block; font-size: 14px; margin-bottom: 3px; }
+  .rec span { color: var(--dim); font-size: 12.5px; }
+  .empty { color: var(--dim); font-size: 13.5px; padding: 8px 2px; }
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<main>
+  <header>
+    <div class="logo icon">&#xEA86;</div>
+    <div><h1>Расширения</h1><div class="sub">Из Chrome Web Store, Microsoft Edge Add-ons и Firefox Add-ons</div></div>
+  </header>
+
+  <section>
+    <h2><span class="icon">&#xE710;</span>Установить расширение</h2>
+    <p class="note">Откройте страницу расширения в магазине: справа сверху появится кнопка <b>«＋ Установить расширение»</b>.
+      Или вставьте ссылку на расширение сюда.</p>
+    <div class="install">
+      <input class="text" id="url" placeholder="https://chromewebstore.google.com/detail/…" spellcheck="false">
+      <button class="btn primary" id="go">Установить</button>
+    </div>
+    <div class="status" id="status"></div>
+    <div class="stores">
+      <button class="store" data-store="chrome"><span class="dot" style="background:linear-gradient(135deg,#4285f4,#34a853)">C</span><span>Chrome Web Store<small>больше всего расширений</small></span></button>
+      <button class="store" data-store="edge"><span class="dot" style="background:linear-gradient(135deg,#0c59a4,#36c4e8)">E</span><span>Edge Add-ons<small>расширения Microsoft</small></span></button>
+      <button class="store" data-store="firefox"><span class="dot" style="background:linear-gradient(135deg,#ff7139,#e31587)">F</span><span>Firefox Add-ons<small>работают только некоторые</small></span></button>
+    </div>
+    <p class="note" style="margin:14px 0 0">Как это работает: расширения работают на страницах как обычно, но <b>значков на панели нет</b>,
+      потому что движок WebView2 их не показывает. Окно расширения и его настройки открываются во вкладке кнопками ниже.
+      Расширения для Firefox сделаны под другой движок, поэтому большинство из них не установится.</p>
+  </section>
+
+  <section>
+    <h2><span class="icon">&#xEA86;</span>Установленные</h2>
+    <div id="list"><div class="empty">Загрузка…</div></div>
+  </section>
+
+  <section>
+    <h2><span class="icon">&#xE734;</span>Популярные</h2>
+    <div class="rec" id="rec"></div>
+  </section>
+</main>
+<div class="toast" id="toast"><span class="icon">&#xE73E;</span><span id="toastText"></span></div>
+<script src="extensions.js"></script>
+</body>
+</html>

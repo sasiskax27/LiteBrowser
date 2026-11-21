@@ -52,6 +52,7 @@ function render() {
   renderProxy();
 
   renderAdblock();
+  renderSites();
   const bl = info.blocklist;
   $('blStatus').textContent = bl.updating ? 'Загружается список…'
     : bl.count > 0 ? `Загружено ${bl.count.toLocaleString('ru-RU')} доменов, обновлено ${bl.updated}` : 'Список ещё не загружен';
@@ -106,6 +107,42 @@ function renderAdblock() {
   }
 }
 $('abUpdate').onclick = () => { toast('Обновляю списки…'); wv.postMessage({ type: 'updateBlocklist' }); };
+
+// Сайты: доверие и разрешения
+const permNames = { Camera: 'Камера', Microphone: 'Микрофон', Geolocation: 'Местоположение', ClipboardRead: 'Буфер обмена',
+                    MultipleAutomaticDownloads: 'Несколько загрузок', Notifications: 'Уведомления' };
+function chipList(boxId, key) {
+  const box = $(boxId);
+  box.innerHTML = '';
+  if (!state[key].length) { box.innerHTML = '<span class="row-sub">Нет</span>'; return; }
+  for (const h of state[key]) {
+    const c = document.createElement('button');
+    c.className = 'chip';
+    c.textContent = h + '  ✕';
+    c.title = 'Сделать обычным';
+    c.onclick = () => { state[key] = state[key].filter(x => x !== h); save(); render(); };
+    box.appendChild(c);
+  }
+}
+function renderSites() {
+  chipList('trustedList', 'trustedSites');
+  chipList('untrustedList', 'untrustedSites');
+  const box = $('permList');
+  box.innerHTML = '';
+  const sites = Object.keys(state.sitePermissions || {});
+  if (!sites.length) { box.textContent = 'Сайты ещё ничего не запрашивали'; return; }
+  for (const s of sites) {
+    for (const [k, v] of Object.entries(state.sitePermissions[s])) {
+      const c = document.createElement('button');
+      c.className = 'chip';
+      c.style.margin = '0 6px 6px 0';
+      c.textContent = `${s} · ${permNames[k] || k}: ${v === 'allow' ? 'разрешено' : 'запрещено'}  ✕`;
+      c.title = 'Забыть решение — сайт спросит снова';
+      c.onclick = () => { delete state.sitePermissions[s][k]; if (!Object.keys(state.sitePermissions[s]).length) delete state.sitePermissions[s]; save(); render(); };
+      box.appendChild(c);
+    }
+  }
+}
 
 // Переключатели
 document.querySelectorAll('input[data-key]').forEach(i => i.onchange = () => { state[i.dataset.key] = i.checked; save(); });

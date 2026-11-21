@@ -24,6 +24,10 @@ sealed class FilterEngine
     public readonly HashSet<string> Generic = new();
     public readonly Dictionary<string, List<string>> Specific = new(StringComparer.OrdinalIgnoreCase);
     public readonly Dictionary<string, HashSet<string>> SpecificExceptions = new(StringComparer.OrdinalIgnoreCase);
+    public readonly PatternIndex Block = new();
+    public readonly PatternIndex Allow = new();
+    public readonly HashSet<string> DocumentAllowed = new(StringComparer.OrdinalIgnoreCase); // @@||site^$document
+    public readonly HashSet<string> GenericHide = new(StringComparer.OrdinalIgnoreCase);     // @@||site^$generichide
     public string GenericCss = "";
     public int NetworkRules, CosmeticRules;
 }
@@ -190,28 +194,82 @@ static class AdBlock
             return;
         }
 
-        // Сетевые правила: только надёжный и быстрый вид ||домен^
+        // ---- Сетевые правила ----
         bool exception = line.StartsWith("@@");
         if (exception) line = line[2..];
-        if (!line.StartsWith("||")) return;
         string opts = "";
-        int di = line.IndexOf('$');
-        if (di >= 0) { opts = line[(di + 1)..]; line = line[..di]; }
-        var body = line[2..].TrimEnd('|');
-        if (body.EndsWith('^')) body = body[..^1];
-        else if (body.IndexOfAny(new[] { '/', '*', '^' }) >= 0) return;
-        if (!HostRx.IsMatch(body) || !body.Contains('.')) return;
+        int di = line.LastIndexOf('$');
+        if (di > 0 && !line[di..].Contains('/')) { opts = line[(di + 1)..]; line = line[..di]; }
+        var body = line.ToLowerInvariant();
+        if (body.Length < 4 || body.Trim('*').Length < 3) return;
+        if (body.Length > 2 && body.StartsWith('/') && body.EndsWith('/')) return; // регулярные выражения не поддерживаем
 
-        var o = opts.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (o.Any(x => x.StartsWith("domain=") || x.StartsWith("denyallow=") || x.StartsWith("from=") || x is "popup" or "~third-party" or "1p" or "first-party" ||
-                       x.StartsWith("redirect") || x.StartsWith("removeparam") || x.StartsWith("csp") || x.StartsWith("header") || x.StartsWith("permissions") ||
-                       x.StartsWith("rewrite") || x.StartsWith("replace") || x is "generichide" or "elemhide" or "specifichide" or "genericblock"))
+        var rule = new PatternRule();
+        bool siteDocument = false, siteGenericHide = false;
+        foreach (var raw2 in opts.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var o = raw2.ToLowerInvariant();
+            bool neg = o.StartsWith('~');
+            var name = neg ? o[1..] : o;
+            if (name is "third-party" or "3p") rule.Party = neg ? -1 : 1;
+            else if (name is "first-party" or "1p") rule.Party = neg ? 1 : -1;
+            else if (o.StartsWith("domain="))
+            {
+                var ds = o[7..].Split('|', StringSplitOptions.RemoveEmptyEntries);
+                var inc = ds.Where(d => !d.StartsWith('~')).ToArray();
+                var exc = ds.Where(d => d.StartsWith('~')).Select(d => d[1..]).ToArray();
+                if (inc.Any(d => d.Contains('*')) || exc.Any(d => d.Contains('*'))) return;
+                rule.Include = inc.Length > 0 ? inc : null;
+                rule.Exclude = exc.Length > 0 ? exc : null;
+            }
+            else if (name is "important") rule.Important = true;
+            else if (name is "match-case") { }
+            else if (name is "document" or "doc") { if (!exception || neg) return; siteDocument = true; }
+            else if (name is "generichide" or "ghide" or "elemhide" or "ehide") { if (!exception) return; siteGenericHide = true; }
+            else if (PatternIndex.ParseType(name) is ResType t)
+            {
+                if (neg) rule.Types = (rule.Types == ResType.All ? ResType.All : rule.Types) & ~t;
+                else rule.Types = (rule.Types == ResType.All ? ResType.None : rule.Types) | t;
+            }
+            else return; // незнакомая опция — пропускаем правило, чтобы ничего не сломать
+        }
+
+        // Исключения для целого сайта
+        if (siteDocument || siteGenericHide)
+        {
+            var h = SimpleHost(body);
+            if (h == null) return;
+            if (siteDocument) e.DocumentAllowed.Add(h);
+            if (siteGenericHide) e.GenericHide.Add(h);
+            e.NetworkRules++;
             return;
+        }
+        if (rule.Types == ResType.None) return;
 
-        if (exception) e.Exceptions.Add(body);
-        else if (o.Any(x => x is "third-party" or "3p")) e.ThirdParty.Add(body);
-        else e.Any.Add(body);
+        // Быстрый путь: ||домен^ без условий — в хеш-таблицу
+        var simple = SimpleHost(body);
+        bool plain = rule.Include == null && rule.Exclude == null && rule.Types == ResType.All && rule.Party >= 0 && !rule.Important;
+        if (simple != null && plain)
+        {
+            if (exception) e.Exceptions.Add(simple);
+            else if (rule.Party == 1) e.ThirdParty.Add(simple);
+            else e.Any.Add(simple);
+            e.NetworkRules++;
+            return;
+        }
+
+        rule.Pattern = body;
+        (exception ? e.Allow : e.Block).Add(rule);
         e.NetworkRules++;
+    }
+
+    /// <summary>Если правило — просто ||домен^, вернуть домен.</summary>
+    static string? SimpleHost(string body)
+    {
+        if (!body.StartsWith("||")) return null;
+        var h = body[2..].TrimEnd('|');
+        if (h.EndsWith('^')) h = h[..^1];
+        return HostRx.IsMatch(h) && h.Contains('.') ? h : null;
     }
 
     /// <summary>Каждый селектор — отдельным правилом: ошибка в одном не ломает остальные.</summary>
@@ -254,13 +312,28 @@ static class AdBlock
 
     public static bool IsException(string host) => Match(engine.Exceptions, host);
 
-    public static bool ShouldBlock(string host, string pageHost)
+    /// <summary>Сайт целиком в исключениях списков (@@||site^$document).</summary>
+    public static bool PageAllowed(string pageHost) => pageHost.Length > 0 && Match(engine.DocumentAllowed, pageHost);
+
+    /// <summary>Совместимость: проверка только по домену.</summary>
+    public static bool ShouldBlock(string host, string pageHost) => ShouldBlock("https://" + host + "/", host, pageHost, ResType.Other);
+
+    public static bool ShouldBlock(string url, string host, string pageHost, ResType type)
     {
         var e = engine;
+        if (PageAllowed(pageHost)) return false;
+        url = url.ToLowerInvariant();
+        host = host.ToLowerInvariant();
+        bool third = pageHost.Length > 0 && BaseDomain(host) != BaseDomain(pageHost.ToLowerInvariant());
+        bool hostHit = Match(e.Any, host) || (third && Match(e.ThirdParty, host));
+        var rule = hostHit ? null : e.Block.Find(url, pageHost, third, type);
+        if (!hostHit && rule == null) return false;
+        if (rule?.Important == true) return true;
         if (Match(e.Exceptions, host)) return false;
-        if (Match(e.Any, host)) return true;
-        return pageHost.Length > 0 && BaseDomain(host) != BaseDomain(pageHost) && Match(e.ThirdParty, host);
+        return e.Allow.Find(url, pageHost, third, type) == null;
     }
+
+    public static int PatternRules => engine.Block.Count + engine.Allow.Count;
 
     /// <summary>JS, который добавляет на страницу CSS для этого сайта (и убирает общие правила-исключения).</summary>
     public static string PageScript(string host)
@@ -275,7 +348,9 @@ static class AdBlock
         }
         var css = ToCss(specific.Where(s => !exceptions.Contains(s)).Distinct());
         var sb = new StringBuilder("(()=>{const add=(id,c)=>{let s=document.getElementById(id);if(!s){s=document.createElement('style');s.id=id;(document.head||document.documentElement).appendChild(s);}s.textContent=c;};");
-        if (exceptions.Overlaps(e.Generic))
+        if (Match(e.GenericHide, host) || PageAllowed(host))
+            sb.Append("{const g=document.getElementById('lite-ab-g');if(g)g.remove();}");
+        else if (exceptions.Overlaps(e.Generic))
             sb.Append("add('lite-ab-g',").Append(JsonSerializer.Serialize(ToCss(e.Generic.Where(s => !exceptions.Contains(s))))).Append(");");
         if (css.Length > 0) sb.Append("add('lite-ab-s',").Append(JsonSerializer.Serialize(css)).Append(");");
         sb.Append("})()");

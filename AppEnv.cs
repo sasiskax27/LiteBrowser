@@ -41,6 +41,7 @@ static class AppEnv
         var options = new CoreWebView2EnvironmentOptions
         {
             EnableTrackingPrevention = true,
+            AreBrowserExtensionsEnabled = true,
             AdditionalBrowserArguments = BrowserArguments(s),
         };
         // После перезапуска старый процесс движка может ещё закрываться — пробуем несколько раз.

@@ -61,7 +61,7 @@
   </header>
 
   <nav>
-    <a href="#search">Поиск</a><a href="#security">Безопасность</a><a href="#adblock">Реклама</a><a href="#proxy">Обход блокировок</a><a href="#passwords">Пароли</a>
+    <a href="#search">Поиск</a><a href="#security">Безопасность</a><a href="#adblock">Реклама</a><a href="#proxy">Обход блокировок</a><a href="#passwords">Пароли</a><a href="#sites">Сайты</a><a href="extensions.html">Расширения</a>
     <a href="#tabs">Вкладки</a><a href="#bookmarks">Закладки и история</a><a href="#look">Вид и масштаб</a><a href="#import">Перенос</a><a href="#system">Система</a><a href="#data">Данные</a>
   </nav>
 
@@ -182,6 +182,15 @@
         <div class="row-sub">Закрыть хранилище после бездействия. При блокировке Windows (Win+L) оно закрывается всегда</div></div>
       <div class="seg" data-seg="autoLockMinutes" data-num="1"><button data-v="5">5 мин</button><button data-v="15">15 мин</button><button data-v="30">30 мин</button><button data-v="60">1 час</button><button data-v="0">При закрытии</button></div>
     </div>
+  </section>
+
+  <section id="sites">
+    <h2><span class="icon">&#xE774;</span>Сайты и разрешения</h2>
+    <p class="note">Уровень доверия и разрешения сайта меняются по клику на <b>замок</b> в адресной строке.
+      <b>Доверенный</b> сайт: без блокировки рекламы и всплывающих окон. <b>Ненадёжный</b>: без JavaScript, всплывающих окон, разрешений и автозаполнения паролей.</p>
+    <div class="row"><div><div class="row-title">Доверенные</div><div class="chips" id="trustedList" style="margin-top:8px"></div></div></div>
+    <div class="row"><div><div class="row-title">Ненадёжные</div><div class="chips" id="untrustedList" style="margin-top:8px"></div></div></div>
+    <div class="row"><div style="width:100%"><div class="row-title">Сохранённые разрешения</div><div id="permList" class="row-sub" style="margin-top:8px"></div></div></div>
   </section>
 
   <section id="tabs">

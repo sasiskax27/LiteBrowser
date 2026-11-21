@@ -112,6 +112,11 @@ sealed class AddressBox : Control
     public event Action? StarClicked;
     public event Action? KeyClicked;
     public event Action? ShieldClicked;
+    public event Action? LockClicked;
+    bool lockHover;
+    Rectangle LockRect => new(Theme.S(7), (Height - Theme.S(28)) / 2, Theme.S(32), Theme.S(28));
+    /// <summary>Положение значка замка на экране (для панели сайта).</summary>
+    public Rectangle LockScreenRect => RectangleToScreen(LockRect);
     bool shieldOff, pillHover;
 
     public AddressBox()
@@ -178,19 +183,21 @@ sealed class AddressBox : Control
         bool h = starVisible && StarRect.Contains(e.Location);
         bool k = keyVisible && KeyRect.Contains(e.Location);
         bool p = PillVisible && PillRect.Contains(e.Location);
-        Cursor = h || k || p ? Cursors.Hand : Cursors.IBeam;
-        if (h != starHover || k != keyHover || p != pillHover) { starHover = h; keyHover = k; pillHover = p; Invalidate(); }
+        bool l = lockGlyph.Length > 0 && LockRect.Contains(e.Location);
+        Cursor = h || k || p || l ? Cursors.Hand : Cursors.IBeam;
+        if (h != starHover || k != keyHover || p != pillHover || l != lockHover) { starHover = h; keyHover = k; pillHover = p; lockHover = l; Invalidate(); }
         base.OnMouseMove(e);
     }
 
-    protected override void OnMouseLeave(EventArgs e) { starHover = keyHover = pillHover = false; Invalidate(); base.OnMouseLeave(e); }
+    protected override void OnMouseLeave(EventArgs e) { starHover = keyHover = pillHover = lockHover = false; Invalidate(); base.OnMouseLeave(e); }
 
     /// <summary>Положение значка щита на экране (для меню).</summary>
     public Rectangle PillScreenRect => RectangleToScreen(PillVisible ? PillRect : new Rectangle(Width - Theme.S(30), 0, Theme.S(24), Height));
 
     protected override void OnMouseDown(MouseEventArgs e)
     {
-        if (PillVisible && PillRect.Contains(e.Location)) ShieldClicked?.Invoke();
+        if (lockGlyph.Length > 0 && LockRect.Contains(e.Location)) LockClicked?.Invoke();
+        else if (PillVisible && PillRect.Contains(e.Location)) ShieldClicked?.Invoke();
         else if (starVisible && StarRect.Contains(e.Location)) StarClicked?.Invoke();
         else if (keyVisible && KeyRect.Contains(e.Location)) KeyClicked?.Invoke();
         else { Box.Focus(); Box.SelectAll(); }
@@ -254,7 +261,15 @@ sealed class AddressBox : Control
         }
 
         if (lockGlyph.Length > 0)
+        {
+            if (lockHover)
+            {
+                using var lb = new SolidBrush(Theme.Hover);
+                using var lp = Theme.Round(LockRect, LockRect.Height / 2f);
+                g.FillPath(lb, lp);
+            }
             TextRenderer.DrawText(g, lockGlyph, iconFont, new Rectangle(Theme.S(12), 0, Theme.S(22), Height), lockColor, Theme.Center);
+        }
 
         if (starVisible)
         {
