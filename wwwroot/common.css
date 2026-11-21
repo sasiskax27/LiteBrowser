@@ -1,0 +1,16 @@
+:root {
+  --bg: #111217; --card: rgba(255,255,255,.045); --card2: rgba(255,255,255,.08); --line: rgba(255,255,255,.09);
+  --text: #e8eaf2; --dim: #959bb0; --accent: #7c9cff; --accent2: #b07cff; --ok: #6ecf96; --warn: #ffb86b; --bad: #ff7878;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; height: 100%; }
+body { background: var(--bg); color: var(--text); font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif; }
+.icon { font-family: "Segoe Fluent Icons", "Segoe MDL2 Assets"; font-style: normal; }
+.glow { position: fixed; inset: -20%; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(38% 34% at 24% 22%, rgba(124,156,255,.22), transparent 70%),
+    radial-gradient(34% 30% at 80% 76%, rgba(176,124,255,.18), transparent 70%),
+    radial-gradient(28% 28% at 62% 12%, rgba(80,200,180,.10), transparent 70%);
+  filter: blur(24px); animation: drift 26s ease-in-out infinite alternate; }
+@keyframes drift { to { transform: translate(3%, -2%) scale(1.06); } }
+@media (prefers-reduced-motion: reduce) { .glow { animation: none; } }
