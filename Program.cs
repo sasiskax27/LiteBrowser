@@ -135,6 +135,13 @@ static class Program
             return;
         }
 
+        if (args.Length == 4 && args[0] == "--download-test")
+        {
+            ApplicationConfiguration.Initialize();
+            DownloadSelfTest.Run(args[1], args[2], args[3] == "handled");
+            return;
+        }
+
         if (args.Length == 2 && args[0] == "--ext-selftest")
         {
             ApplicationConfiguration.Initialize();
@@ -147,7 +154,7 @@ static class Program
         string? url = args.FirstOrDefault(a => !a.StartsWith("--"));
 
         // Если браузер уже открыт — передаём ему ссылку и выходим
-        using var mutex = new Mutex(true, "LiteBrowser-" + Environment.UserName, out bool first);
+        using var mutex = new Mutex(true, AppEnv.InstanceName, out bool first);
         if (!first && !restore && SingleInstance.Send((incognito ? "incognito" : "normal") + "\n" + (url ?? "")))
             return;
 
@@ -163,7 +170,7 @@ static class Program
 
 static class SingleInstance
 {
-    static string PipeName => "LiteBrowser-" + Environment.UserName;
+    static string PipeName => AppEnv.InstanceName;
 
     [DllImport("user32.dll")] static extern bool AllowSetForegroundWindow(int pid);
 

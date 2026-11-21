@@ -100,14 +100,51 @@ static class Downloads
         Changed?.Invoke();
     }
 
+    static System.Windows.Forms.Timer? watchdog;
+
     public static void Track(CoreWebView2DownloadOperation op)
     {
         var it = new DownloadItem { Op = op, Url = op.Uri };
         it.UpdateFromOp();
         Items.Insert(0, it);
-        op.BytesReceivedChanged += (_, _) => { it.UpdateFromOp(); Raise(); };
-        op.StateChanged += (_, _) => { it.UpdateFromOp(); Raise(save: it.State != DlState.InProgress); };
+        AppEnv.Log($"Track: state={op.State} total={op.TotalBytesToReceive}");
+        op.BytesReceivedChanged += (_, _) => { try { it.UpdateFromOp(); Raise(); } catch (Exception ex) { AppEnv.Log("Bytes ERR " + ex); } };
+        op.StateChanged += (_, _) => { AppEnv.Log($"State: {op.State} {op.InterruptReason}"); Check(it); };
         Raise();
+        // Сигнал о завершении от движка приходит не всегда — проверяем загрузки сами раз в секунду
+        if (watchdog == null)
+        {
+            watchdog = new System.Windows.Forms.Timer { Interval = 1000 };
+            watchdog.Tick += (_, _) =>
+            {
+                var active = Items.Where(i => i.Op != null && i.State == DlState.InProgress).ToList();
+                foreach (var a in active) Check(a);
+                if (!Items.Any(i => i.Op != null && i.State == DlState.InProgress)) watchdog.Stop();
+            };
+        }
+        watchdog.Start();
+    }
+
+    /// <summary>Обновить состояние загрузки; если все байты получены и файл уже лежит на месте — она завершена.</summary>
+    static void Check(DownloadItem it)
+    {
+        var before = it.State;
+        try { it.UpdateFromOp(); } catch (Exception ex) { AppEnv.Log("Check ERR " + ex.Message); }
+        if (it.State == DlState.InProgress && it.Total > 0 && it.Received >= it.Total && it.Path.Length > 0)
+        {
+            try
+            {
+                // Пока файл качается, Chromium пишет во временный .crdownload; итоговый файл появляется только после завершения
+                var fi = new FileInfo(it.Path);
+                if (fi.Exists && fi.Length == it.Total)
+                {
+                    it.State = DlState.Completed;
+                    AppEnv.Log("Check: завершена по файлу на диске");
+                }
+            }
+            catch { }
+        }
+        if (it.State != before) Raise(save: true);
     }
 
     /// <summary>Скачивание файла напрямую (видео и аудио со страницы). Cookies и Referer — от страницы, чтобы сайт отдал файл.</summary>

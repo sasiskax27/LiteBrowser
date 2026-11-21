@@ -3,6 +3,57 @@ using Microsoft.Web.WebView2.WinForms;
 
 namespace LiteBrowser;
 
+/// <summary>Диагностика загрузки: качает файл в отдельном профиле и пишет, что происходит.</summary>
+static class DownloadSelfTest
+{
+    public static void Run(string url, string outFile, bool handled)
+    {
+        var log = new List<string>();
+        var root = Path.Combine(Path.GetTempPath(), "LiteDlTest-" + Guid.NewGuid().ToString("N"));
+        var form = new Form { Width = 900, Height = 700, ShowInTaskbar = false, StartPosition = FormStartPosition.Manual, Location = new Point(-2000, -2000) };
+        var view = new WebView2 { Dock = DockStyle.Fill };
+        form.Controls.Add(view);
+        form.Shown += async (_, _) =>
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(root, "data"));
+                await view.EnsureCoreWebView2Async(env);
+                view.CoreWebView2.Settings.IsReputationCheckingRequired = true;
+                if (outFile.EndsWith("-filter.txt"))
+                {
+                    // Как в браузере с блокировщиком: перехватываем все запросы
+                    view.CoreWebView2.AddWebResourceRequestedFilter("*", CoreWebView2WebResourceContext.All, CoreWebView2WebResourceRequestSourceKinds.All);
+                    view.CoreWebView2.WebResourceRequested += (_, e) => { var u = e.Request.Uri; _ = u.Length; };
+                    log.Add("перехват всех запросов включён");
+                }
+                var done = new TaskCompletionSource<bool>();
+                view.CoreWebView2.DownloadStarting += (_, e) =>
+                {
+                    e.Handled = handled;
+                    e.ResultFilePath = Path.Combine(root, "file.bin");
+                    var op = e.DownloadOperation;
+                    log.Add($"{sw.ElapsedMilliseconds} мс: загрузка началась, размер {op.TotalBytesToReceive}");
+                    long last = -1;
+                    op.BytesReceivedChanged += (_, _) => { if (op.BytesReceived - last > 10_000_000 || op.BytesReceived == (long)(op.TotalBytesToReceive ?? 0)) { last = op.BytesReceived; log.Add($"{sw.ElapsedMilliseconds} мс: получено {op.BytesReceived / 1048576} МБ"); } };
+                    op.StateChanged += (_, _) =>
+                    {
+                        log.Add($"{sw.ElapsedMilliseconds} мс: состояние {op.State}, причина {op.InterruptReason}, получено {op.BytesReceived}");
+                        if (op.State != CoreWebView2DownloadState.InProgress) done.TrySetResult(true);
+                    };
+                };
+                view.CoreWebView2.Navigate(url);
+                if (await Task.WhenAny(done.Task, Task.Delay(120_000)) != done.Task) log.Add($"{sw.ElapsedMilliseconds} мс: ЗАВИСЛА — за 2 минуты не завершилась");
+            }
+            catch (Exception ex) { log.Add("исключение: " + ex.Message); }
+            finally { File.WriteAllLines(outFile, log); form.Close(); }
+        };
+        Application.Run(form);
+        try { Directory.Delete(root, true); } catch { }
+    }
+}
+
 /// <summary>Самотест расширений в отдельной временной папке (не трогает данные пользователя).</summary>
 static class ExtensionSelfTest
 {

@@ -7,9 +7,18 @@ namespace LiteBrowser;
 /// <summary>Общие для всех окон: папка данных, настройки и движок WebView2.</summary>
 static class AppEnv
 {
-    public const string Version = "3.1";
-    public static readonly string DataDir =
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LiteBrowser");
+    public const string Version = "3.1.1";
+    /// <summary>Папка данных. LITEBROWSER_DATA — отдельная папка для тестов (тогда и отдельный экземпляр браузера).</summary>
+    public static readonly string DataDir = Environment.GetEnvironmentVariable("LITEBROWSER_DATA") is { Length: > 0 } d ? d
+        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LiteBrowser");
+    public static string InstanceName => "LiteBrowser-" + Environment.UserName + (Environment.GetEnvironmentVariable("LITEBROWSER_DATA") is { Length: > 0 } d2 ? "-" + Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(Encoding.UTF8.GetBytes(d2)))[..8] : "");
+
+    /// <summary>Журнал для отладки — пишется только в тестовом режиме (LITEBROWSER_DATA).</summary>
+    public static void Log(string s)
+    {
+        if (Environment.GetEnvironmentVariable("LITEBROWSER_DATA") is not { Length: > 0 }) return;
+        try { File.AppendAllText(Path.Combine(DataDir, "debug.log"), $"{DateTime.Now:HH:mm:ss.fff} {s}\r\n"); } catch { }
+    }
 
     public static AppSettings Settings { get; private set; } = new();
     /// <summary>С какими настройками прокси реально запущен движок.</summary>
