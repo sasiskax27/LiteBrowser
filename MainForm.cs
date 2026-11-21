@@ -23,6 +23,8 @@ static class LitePages
     public const string BookmarksPage = Prefix + "bookmarks.html";
     public const string Ai = Prefix + "ai.html";
     public const string Notes = Prefix + "notes.html";
+    public const string Security = Prefix + "security.html";
+    public const string DevTools = Prefix + "devtools.html";
 
     public static CoreWebView2WebResourceResponse Response(CoreWebView2Environment env, string uri)
     {
@@ -74,6 +76,8 @@ static class LitePages
         if (src.StartsWith(BookmarksPage, StringComparison.Ordinal)) return "lite://bookmarks";
         if (src.StartsWith(Notes, StringComparison.Ordinal)) return "lite://notes";
         if (src.StartsWith(Ai, StringComparison.Ordinal)) return "lite://ai";
+        if (src.StartsWith(Security, StringComparison.Ordinal)) return "lite://security";
+        if (src.StartsWith(DevTools, StringComparison.Ordinal)) return "lite://devtools";
         if (src.StartsWith(Blocked, StringComparison.Ordinal))
             return HttpUtility.ParseQueryString(new Uri(src).Query)["url"] ?? "lite://blocked";
         return null;
@@ -142,7 +146,7 @@ sealed class ZoomRow : Control
     }
 }
 
-sealed class MainForm : Form
+sealed partial class MainForm : Form
 {
     readonly List<BrowserTab> tabs = new();
     readonly TabStrip strip;
@@ -664,7 +668,7 @@ sealed class MainForm : Form
             }
             if (!Uri.TryCreate(uri, UriKind.Absolute, out var u)) return;
             // Родительский контроль: запрещённые сайты не загружаются даже внутри других страниц
-            if (Parental.IsBlocked(u.Host)) { e.Response = env.CreateWebResourceResponse(null, 403, "Blocked", ""); return; }
+            if (Parental.IsBlocked(u.Host)) { Interlocked.Increment(ref SecurityStats.ParentalBlocked); e.Response = env.CreateWebResourceResponse(null, 403, "Blocked", ""); return; }
             // Экономия трафика: без картинок и видео
             if (Cfg.DataSaver && e.ResourceContext is CoreWebView2WebResourceContext.Image or CoreWebView2WebResourceContext.Media)
             {
@@ -684,6 +688,7 @@ sealed class MainForm : Form
             e.Response = env.CreateWebResourceResponse(null, 403, "Blocked", "");
             tab.Blocked++;
             tab.BlockedHosts[host] = tab.BlockedHosts.GetValueOrDefault(host) + 1;
+            SecurityStats.Blocked(host);
             Store.CountBlocked();
             if (tab == active) UpdateShield();
         };
@@ -729,6 +734,7 @@ sealed class MainForm : Form
                     if (Cfg.BlockAds && Blocklist.IsBlocked(u.Host, Cfg.ExtendedBlocklist))
                     {
                         e.Cancel = true;
+                        Interlocked.Increment(ref SecurityStats.DangerousBlocked);
                         var blocked = LitePages.Blocked + "?url=" + Uri.EscapeDataString(e.Uri);
                         BeginInvoke(() => core.Navigate(blocked));
                         return;
@@ -738,6 +744,7 @@ sealed class MainForm : Form
                     {
                         e.Cancel = true;
                         upgraded.Add(u.Host);
+                        Interlocked.Increment(ref SecurityStats.HttpsUpgrades);
                         var b = new UriBuilder(u) { Scheme = "https", Port = u.IsDefaultPort ? -1 : u.Port };
                         BeginInvoke(() => core.Navigate(b.Uri.ToString()));
                         return;
@@ -745,6 +752,7 @@ sealed class MainForm : Form
                 }
             }
             tab.Loading = true;
+            tab.Dev?.OnNavigation(e.Uri);
             tab.Blocked = 0;
             tab.BlockedHosts.Clear();
             tab.PopupsBlocked = 0;
@@ -786,7 +794,7 @@ sealed class MainForm : Form
             var permSite = PasswordTools.HostKey(permHost);
             var permKind = e.PermissionKind.ToString();
             // Ненадёжным сайтам — ничего; сохранённое решение — без вопроса
-            if (Untrusted(permHost)) { e.State = CoreWebView2PermissionState.Deny; return; }
+            if (Untrusted(permHost)) { e.State = CoreWebView2PermissionState.Deny; Interlocked.Increment(ref SecurityStats.PermissionsDenied); return; }
             if (Cfg.SitePermissions.TryGetValue(permSite, out var saved) && saved.TryGetValue(permKind, out var decision))
             {
                 e.State = decision == "allow" ? CoreWebView2PermissionState.Allow : CoreWebView2PermissionState.Deny;
@@ -795,6 +803,7 @@ sealed class MainForm : Form
             if (e.PermissionKind == CoreWebView2PermissionKind.Notifications)
             {
                 e.State = CoreWebView2PermissionState.Deny;
+                Interlocked.Increment(ref SecurityStats.PermissionsDenied);
                 return;
             }
             var what = e.PermissionKind switch
@@ -827,6 +836,7 @@ sealed class MainForm : Form
                 e.Handled = true;
                 tab.PopupsBlocked++;
                 tab.Blocked++;
+                Interlocked.Increment(ref SecurityStats.PopupsBlocked);
                 Store.CountBlocked();
                 if (tab == active) UpdateShield();
                 return;
@@ -1066,6 +1076,7 @@ sealed class MainForm : Form
             }));
         }
         menu.Items.Add(Theme.Item("Настройки блокировки", () => OpenLitePage(LitePages.Settings, "#adblock")));
+        menu.Items.Add(Theme.Item("Центр безопасности", () => OpenLitePage(LitePages.Security)));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(new ToolStripMenuItem($"Всего заблокировано: {Store.BlockedTotal:N0}") { Enabled = false, Padding = new Padding(6, 3, 6, 6) });
         var r = RectangleToClient(address.PillScreenRect);
@@ -2198,6 +2209,18 @@ sealed class MainForm : Form
             if (core.Source.StartsWith(LitePages.Ai, StringComparison.Ordinal)) await HandleAiMessage(core, msgType, root);
             return;
         }
+        if (msgType.StartsWith("dev:"))
+        {
+            // Инструменты разработчика — только со своей страницы
+            if (core.Source.StartsWith(LitePages.DevTools, StringComparison.Ordinal)) await HandleDevMessage(core, msgType, root);
+            return;
+        }
+        if (msgType.StartsWith("sec:"))
+        {
+            // Центр безопасности — только со своей страницы
+            if (core.Source.StartsWith(LitePages.Security, StringComparison.Ordinal)) await HandleSecurityMessage(core, msgType, root);
+            return;
+        }
         if (msgType.StartsWith("ext:"))
         {
             // Управление расширениями — только со страницы расширений
@@ -2460,6 +2483,7 @@ sealed class MainForm : Form
                         id = i.Id, name = i.Name, url = i.Url, path = i.Path, received = i.Received, total = i.Total,
                         state = i.State.ToString(), canceled = i.Canceled, time = i.Time, speed = (long)i.Speed,
                         exists = i.State == DlState.Completed && File.Exists(i.Path),
+                        risk = DownloadGuard.Risk(i.Path), riskText = DownloadGuard.RiskText(DownloadGuard.Risk(i.Path)),
                     }),
                 });
                 break;
@@ -2477,6 +2501,14 @@ sealed class MainForm : Form
                 break;
             case "dl:clear":
                 Downloads.Clear();
+                break;
+            case "dl:hash":
+                if (Downloads.Get(Str("id")) is { } dh && File.Exists(dh.Path))
+                {
+                    var hid = dh.Id;
+                    try { Post(core, new { type = "dlHash", id = hid, sha256 = await DownloadGuard.Sha256Async(dh.Path) }); }
+                    catch (Exception ex) { Post(core, new { type = "dlHash", id = hid, error = ex.Message }); }
+                }
                 break;
 
             // ---- Заметки ----
@@ -2713,6 +2745,7 @@ sealed class MainForm : Form
         menu.Items.Add(Theme.Item(Cfg.ShowBookmarksBar ? "Скрыть панель закладок" : "Показать панель закладок", ToggleBookmarksBar, "Ctrl+Shift+B"));
         menu.Items.Add(Theme.Item("Открыть закрытую вкладку", ReopenClosedTab, "Ctrl+Shift+T"));
         menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(Theme.Item("Команды и быстрый поиск", ShowPalette, "Ctrl+K"));
         menu.Items.Add(Theme.Item("Найти на странице", ShowFind, "Ctrl+F"));
         menu.Items.Add(Theme.Item("Режим чтения", () => _ = ToggleReader(), "Ctrl+Alt+R"));
         if (Cfg.AiEnabled) menu.Items.Add(Theme.Item("✦ ИИ-помощник Lite AI", () => OpenAi(), "Ctrl+Shift+A"));
@@ -2721,6 +2754,8 @@ sealed class MainForm : Form
         menu.Items.Add(Theme.Item("Голосовой ввод", () => _ = VoiceInput(), "Ctrl+Shift+M"));
         menu.Items.Add(Theme.Item("QR-код страницы", ShowQr));
         menu.Items.Add(Theme.Item("Заметки и выделения", () => OpenLitePage(LitePages.Notes)));
+        menu.Items.Add(Theme.Item("Центр безопасности", () => OpenLitePage(LitePages.Security)));
+        menu.Items.Add(Theme.Item("Инструменты разработчика", OpenDevTools, "Ctrl+Shift+I"));
         menu.Items.Add(Theme.Item((Cfg.DataSaver ? "✓  " : "") + "Экономия трафика (без картинок)", () => { bool v = !Cfg.DataSaver; CopyAndSave(x => x.DataSaver = v); active?.Core?.Reload(); }));
         var video = new ToolStripMenuItem("Видео и аудио") { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
         video.DropDownItems.Add(Theme.Item("Картинка в картинке", () => _ = PictureInPicture(), "Ctrl+Shift+V"));
@@ -2923,6 +2958,8 @@ sealed class MainForm : Form
                 case "bookmarks": return LitePages.BookmarksPage + rest;
                 case "notes": return LitePages.Notes + rest;
                 case "ai": return LitePages.Ai + rest;
+                case "security": return LitePages.Security + rest;
+                case "devtools": return LitePages.DevTools + rest;
                 case "home": return homeUrl;
             }
         }
@@ -2958,12 +2995,15 @@ sealed class MainForm : Form
             case Keys.Control | Keys.Shift | Keys.E: OpenLitePage(LitePages.ExtensionsPage); return true;
             case Keys.Control | Keys.Shift | Keys.O: OpenLitePage(LitePages.BookmarksPage); return true;
             case Keys.Control | Keys.J: OpenLitePage(LitePages.DownloadsPage); return true;
+            case Keys.Control | Keys.Shift | Keys.I: OpenDevTools(); return true;
+            case Keys.Control | Keys.K: ShowPalette(); return true;
             case Keys.Control | Keys.Shift | Keys.B: ToggleBookmarksBar(); return true;
             case Keys.Control | Keys.Oemcomma: OpenLitePage(LitePages.Settings); return true;
             case Keys.Control | Keys.Oemplus: case Keys.Control | Keys.Add: case Keys.Control | Keys.Shift | Keys.Oemplus: ZoomStep(1); return true;
             case Keys.Control | Keys.OemMinus: case Keys.Control | Keys.Subtract: ZoomStep(-1); return true;
             case Keys.Control | Keys.D0: case Keys.Control | Keys.NumPad0: SetZoom(Cfg.PageZoom); return true;
             case Keys.F5: active?.Core?.Reload(); return true;
+            case Keys.F11: SetFullscreen(FormBorderStyle != FormBorderStyle.None); return true;
             case Keys.Alt | Keys.Left: active?.Core?.GoBack(); return true;
             case Keys.Alt | Keys.Right: active?.Core?.GoForward(); return true;
         }

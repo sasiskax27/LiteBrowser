@@ -4,6 +4,7 @@ const $ = id => document.getElementById(id);
 const wv = window.chrome && window.chrome.webview;
 const send = m => wv && wv.postMessage(m);
 let items = [], timer = 0;
+const hashes = {};
 
 const size = b => b < 1024 ? b + ' Б' : b < 1048576 ? (b / 1024).toFixed(0) + ' КБ' : b < 1073741824 ? (b / 1048576).toFixed(1) + ' МБ' : (b / 1073741824).toFixed(2) + ' ГБ';
 function dayName(d) {
@@ -53,11 +54,19 @@ function render() {
       : done ? `${size(Math.max(it.total, it.received))} · ${host} · ${d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}${it.exists ? '' : ' · файл удалён'}`
       : it.canceled ? `Отменено · ${host}` : `Ошибка загрузки · ${host}`;
     if (!active && !done && !it.canceled) meta.classList.add('bad');
+    if (done && it.exists && it.risk) {
+      const w = document.createElement('div'); w.className = 'meta risk'; w.textContent = '⚠ ' + it.riskText; meta.after(w);
+    }
+    if (hashes[it.id]) {
+      const h = document.createElement('div'); h.className = 'meta hash'; h.textContent = hashes[it.id]; h.title = 'Нажмите, чтобы скопировать';
+      h.onclick = e => { e.stopPropagation(); navigator.clipboard.writeText(hashes[it.id].replace(/^SHA-256: /, '')); };
+      (row.querySelector('.risk') || meta).after(h);
+    }
     if (active) row.querySelector('.prog div').style.width = (it.total ? it.received / it.total * 100 : 30) + '%';
     const btn = (g, title, fn) => { const b = document.createElement('button'); b.className = 'act icon'; b.innerHTML = g; b.title = title; b.onclick = e => { e.stopPropagation(); fn(); }; acts.appendChild(b); };
     if (active) btn('&#xE711;', 'Отменить', () => send({ type: 'dl:cancel', id: it.id }));
     else {
-      if (done && it.exists) { btn('&#xE8E5;', 'Открыть', () => send({ type: 'dl:open', id: it.id })); btn('&#xE838;', 'Показать в папке', () => send({ type: 'dl:folder', id: it.id })); }
+      if (done && it.exists) { btn('&#xE8E5;', 'Открыть', () => send({ type: 'dl:open', id: it.id })); btn('&#xE838;', 'Показать в папке', () => send({ type: 'dl:folder', id: it.id })); btn('&#xE72E;', 'Контрольная сумма SHA-256 (сравните с указанной на сайте)', () => { hashes[it.id] = 'Считаю SHA-256…'; render(); send({ type: 'dl:hash', id: it.id }); }); }
       btn('&#xE74D;', 'Убрать из списка', () => send({ type: 'dl:remove', id: it.id }));
     }
     if (done && it.exists) { row.style.cursor = 'pointer'; row.onclick = () => send({ type: 'dl:open', id: it.id }); }
@@ -72,6 +81,7 @@ $('clear').onclick = () => { if (confirm('Очистить список загр
 if (wv) {
   wv.addEventListener('message', e => {
     const m = e.data;
+    if (m.type === 'dlHash') { hashes[m.id] = m.error ? 'Ошибка: ' + m.error : 'SHA-256: ' + m.sha256; render(); return; }
     if (m.type !== 'dlList') return;
     items = m.items;
     $('folder').textContent = 'Папка: ' + m.folder;

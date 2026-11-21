@@ -183,6 +183,7 @@ static class Downloads
                     if ((DateTime.Now - lastUi).TotalMilliseconds > 250) { lastUi = DateTime.Now; it.Tick(); Ui(() => Raise()); }
                 }
                 it.State = DlState.Completed;
+                DownloadGuard.MarkOfTheWeb(path, url);
             }
             catch (Exception)
             {

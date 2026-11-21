@@ -177,6 +177,13 @@ static class Program
             return;
         }
 
+        if (args.Length == 2 && args[0] == "--devtools-selftest")
+        {
+            ApplicationConfiguration.Initialize();
+            DevToolsSelfTest.Run(args[1]);
+            return;
+        }
+
         if (args.Length == 2 && args[0] == "--ext-selftest")
         {
             ApplicationConfiguration.Initialize();

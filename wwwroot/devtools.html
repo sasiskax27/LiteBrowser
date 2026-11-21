@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<title>Инструменты разработчика</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  html, body { height: 100%; overflow: hidden; }
+  body { display: flex; flex-direction: column; font-size: 13px; }
+  .top { display: flex; align-items: center; gap: 6px; padding: 8px 10px 0; border-bottom: 1px solid var(--line); flex: none; }
+  .tab { font: inherit; background: none; border: 0; color: var(--dim); padding: 8px 10px 9px; cursor: pointer; border-bottom: 2px solid transparent; }
+  .tab.on { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+  .tab:hover { color: var(--text); }
+  .target { margin-left: auto; color: var(--dim); font-size: 12px; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ib { font-family: "Segoe Fluent Icons", "Segoe MDL2 Assets"; background: none; border: 0; color: var(--dim); width: 28px; height: 28px; border-radius: 8px; cursor: pointer; font-size: 13px; flex: none; }
+  .ib:hover { background: rgba(255,255,255,.08); color: var(--text); }
+  .ib.on { color: var(--accent); }
+  .pane { flex: 1; min-height: 0; display: none; flex-direction: column; }
+  .pane.on { display: flex; }
+  .tools { display: flex; gap: 6px; align-items: center; padding: 8px 10px; flex-wrap: wrap; flex: none; }
+  .tools input.text { flex: 1; min-width: 120px; padding: 6px 10px; font-size: 12.5px; }
+  .chips { display: flex; gap: 4px; flex-wrap: wrap; padding: 0 10px 8px; flex: none; }
+  .chip { font: inherit; font-size: 11.5px; padding: 3px 9px; border-radius: 10px; border: 1px solid var(--line); background: none; color: var(--dim); cursor: pointer; }
+  .chip.on { background: var(--accent); color: #0d1020; border-color: transparent; font-weight: 600; }
+  .list { flex: 1; overflow: auto; border-top: 1px solid var(--line); }
+  .req { display: grid; grid-template-columns: 40px 1fr 54px 60px; gap: 8px; padding: 5px 10px; border-bottom: 1px solid rgba(255,255,255,.04); cursor: pointer; align-items: center; }
+  .req:hover { background: rgba(255,255,255,.04); }
+  .req.sel { background: rgba(124,156,255,.14); }
+  .req .st { font-variant-numeric: tabular-nums; font-size: 12px; color: var(--ok); }
+  .req .st.e { color: var(--bad); } .req .st.w { color: var(--warn); } .req .st.p { color: var(--dim); }
+  .req .nm { min-width: 0; }
+  .req .nm div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .req .nm .h { color: var(--dim); font-size: 11.5px; }
+  .req .sz, .req .ms { text-align: right; color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .req.blocked .nm div:first-child { text-decoration: line-through; color: var(--dim); }
+  .badge { font-size: 10px; padding: 0 5px; border-radius: 6px; background: rgba(255,255,255,.08); color: var(--dim); margin-left: 4px; }
+  .badge.b { background: rgba(255,120,120,.16); color: var(--bad); }
+  .badge.t { background: rgba(255,184,107,.14); color: var(--warn); }
+  .foot { flex: none; padding: 6px 10px; color: var(--dim); font-size: 12px; border-top: 1px solid var(--line); display: flex; gap: 14px; flex-wrap: wrap; }
+  .detail { flex: none; max-height: 42%; overflow: auto; border-top: 1px solid var(--line); padding: 10px; display: none; background: rgba(0,0,0,.18); }
+  .detail.on { display: block; }
+  .detail .u { word-break: break-all; font-family: Consolas, monospace; font-size: 12px; margin-bottom: 8px; }
+  .kv { display: grid; grid-template-columns: 110px 1fr; gap: 3px 10px; font-size: 12px; }
+  .kv span:nth-child(odd) { color: var(--dim); }
+  .detail .btns { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .detail .btn { padding: 5px 10px; font-size: 12px; }
+  .log { flex: 1; overflow: auto; border-top: 1px solid var(--line); font-family: Consolas, "Cascadia Mono", monospace; font-size: 12px; }
+  .ln { display: flex; gap: 8px; padding: 4px 10px; border-bottom: 1px solid rgba(255,255,255,.04); }
+  .ln .tx { flex: 1; white-space: pre-wrap; word-break: break-word; }
+  .ln .src { color: var(--dim); flex: none; font-size: 11px; max-width: 34%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ln.error { background: rgba(255,120,120,.08); color: #ffb4b4; }
+  .ln.warn { background: rgba(255,184,107,.07); color: #ffd7a8; }
+  .ln.info .tx, .ln.debug .tx { color: var(--dim); }
+  .ln.in .tx { color: var(--accent); }
+  .ln.in .tx::before { content: "› "; }
+  .ln.result .tx::before { content: "‹ "; color: var(--dim); }
+  .ln.result.err .tx { color: var(--bad); }
+  .prompt { flex: none; display: flex; align-items: flex-start; gap: 6px; border-top: 1px solid var(--line); padding: 6px 10px; }
+  .prompt span { color: var(--accent); font-family: Consolas, monospace; padding-top: 5px; }
+  .prompt textarea { flex: 1; resize: none; background: none; border: 0; outline: none; color: var(--text); font-family: Consolas, "Cascadia Mono", monospace; font-size: 12.5px; padding: 5px 0; height: 26px; max-height: 140px; }
+  .cards { padding: 10px; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; align-content: start; }
+  .card { background: rgba(255,255,255,.045); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+  .card b { display: block; font-size: 19px; font-weight: 650; }
+  .card span { color: var(--dim); font-size: 11.5px; }
+  .card.good b { color: var(--ok); } .card.mid b { color: var(--warn); } .card.slow b { color: var(--bad); }
+  .empty { color: var(--dim); text-align: center; padding: 40px 10px; }
+  .hint { color: var(--dim); font-size: 12px; padding: 0 10px 10px; }
+</style>
+</head>
+<body>
+  <div class="top">
+    <button class="tab on" data-p="net">Сеть</button>
+    <button class="tab" data-p="con">Консоль <span id="errCount" class="badge b" style="display:none"></span></button>
+    <button class="tab" data-p="perf">Скорость</button>
+    <div class="target" id="target">—</div>
+    <button class="ib" id="native" title="Полные инструменты Chromium (F12)">&#xEC7A;</button>
+  </div>
+
+  <div class="pane on" id="net">
+    <div class="tools">
+      <input class="text" id="nq" placeholder="Фильтр по адресу" spellcheck="false">
+      <button class="ib" id="preserve" title="Не очищать при переходе на другую страницу">&#xE718;</button>
+      <button class="ib" id="nclear" title="Очистить">&#xE894;</button>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div class="list" id="reqs"></div>
+    <div class="detail" id="detail"></div>
+    <div class="foot" id="nfoot"></div>
+  </div>
+
+  <div class="pane" id="con">
+    <div class="chips" id="lchips" style="padding-top:8px"></div>
+    <div class="log" id="log"></div>
+    <div class="prompt"><span>›</span><textarea id="expr" placeholder="JavaScript на странице — Enter выполнить, Shift+Enter новая строка" spellcheck="false"></textarea></div>
+  </div>
+
+  <div class="pane" id="perf">
+    <div class="tools"><button class="btn" id="perfRun">Измерить</button><span class="hint" style="padding:0" id="perfUrl"></span></div>
+    <div class="cards" id="cards"></div>
+    <div class="hint">Время — с начала загрузки страницы. Хорошо: первый ответ сервера &lt; 200 мс, первая отрисовка &lt; 1.8 с.</div>
+  </div>
+<script src="devtools.js"></script>
+</body>
+</html>

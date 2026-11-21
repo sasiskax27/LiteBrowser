@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<title>Центр безопасности</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  body { overflow-y: auto; }
+  main { max-width: 900px; }
+  .hero { display: flex; gap: 26px; align-items: center; }
+  .ring { width: 132px; height: 132px; flex: none; position: relative; }
+  .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring circle { fill: none; stroke-width: 11; }
+  .ring .bg { stroke: rgba(255,255,255,.08); }
+  .ring .fg { stroke: var(--ok); stroke-linecap: round; transition: stroke-dashoffset .8s ease, stroke .3s; }
+  .ring .val { position: absolute; inset: 0; display: grid; place-items: center; font-size: 34px; font-weight: 700; }
+  .ring .val small { display: block; font-size: 11.5px; font-weight: 500; color: var(--dim); text-align: center; margin-top: -4px; }
+  .hero h2 { font-size: 20px; margin-bottom: 4px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 4px; }
+  .stat { background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; }
+  .stat b { display: block; font-size: 24px; font-weight: 650; }
+  .stat span { color: var(--dim); font-size: 12.5px; }
+  .audit { display: flex; flex-direction: column; }
+  .ai { display: flex; gap: 14px; align-items: center; padding: 12px 2px; }
+  .ai + .ai { border-top: 1px solid var(--line); }
+  .ai .dot { width: 30px; height: 30px; border-radius: 50%; flex: none; display: grid; place-items: center; font-size: 13px; }
+  .ai.ok .dot { background: rgba(110,207,150,.14); color: var(--ok); }
+  .ai.warn .dot { background: rgba(255,184,107,.14); color: var(--warn); }
+  .ai.bad .dot { background: rgba(255,120,120,.16); color: var(--bad); }
+  .ai.info .dot { background: rgba(124,156,255,.14); color: var(--accent); }
+  .ai .t { flex: 1; min-width: 0; }
+  .ai .t b { font-weight: 600; font-size: 14px; }
+  .ai .t div { color: var(--dim); font-size: 12.5px; margin-top: 2px; line-height: 1.45; }
+  .bars { display: flex; flex-direction: column; gap: 8px; }
+  .barrow { display: grid; grid-template-columns: 170px 1fr 56px; gap: 10px; align-items: center; font-size: 13px; }
+  .barrow .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .barrow .track { height: 8px; border-radius: 6px; background: rgba(255,255,255,.06); overflow: hidden; }
+  .barrow .track div { height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+  .barrow .n { color: var(--dim); text-align: right; font-variant-numeric: tabular-nums; }
+  .owner { color: var(--dim); font-size: 11.5px; margin-left: 6px; }
+  .perm { display: flex; gap: 12px; align-items: center; padding: 9px 2px; font-size: 13.5px; }
+  .perm + .perm { border-top: 1px solid var(--line); }
+  .perm .grow { flex: 1; }
+  .tag { font-size: 11.5px; padding: 2px 8px; border-radius: 8px; }
+  .tag.allow { background: rgba(110,207,150,.14); color: var(--ok); }
+  .tag.deny { background: rgba(255,120,120,.12); color: var(--bad); }
+  .empty2 { color: var(--dim); font-size: 13px; padding: 6px 2px; }
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } .hero { flex-direction: column; align-items: flex-start; } }
+  .busy { color: var(--accent); font-size: 13px; margin-left: 8px; }
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<main>
+  <header>
+    <div class="logo icon">&#xE83D;</div>
+    <div class="grow"><h1>Центр безопасности</h1><div class="sub">Что браузер заблокировал и что можно улучшить</div></div>
+  </header>
+
+  <section>
+    <div class="hero">
+      <div class="ring">
+        <svg viewBox="0 0 120 120"><circle class="bg" cx="60" cy="60" r="52"/><circle class="fg" id="arc" cx="60" cy="60" r="52" stroke-dasharray="326.7" stroke-dashoffset="326.7"/></svg>
+        <div class="val"><div><span id="score">—</span><small>из 100</small></div></div>
+      </div>
+      <div class="grow">
+        <h2 id="verdict">Проверяю…</h2>
+        <div class="note" id="verdictText"></div>
+        <button class="btn" id="refresh">Проверить снова</button><span class="busy" id="busy"></span>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="icon">&#xE9D9;</span>Защита в этом сеансе <span class="sub" id="since" style="margin:0 0 0 auto;font-weight:400"></span></h2>
+    <div class="stats" id="stats"></div>
+  </section>
+
+  <section>
+    <h2><span class="icon">&#xE8FB;</span>Проверка настроек</h2>
+    <div class="audit" id="audit"></div>
+  </section>
+
+  <div class="cols">
+    <section>
+      <h2><span class="icon">&#xE909;</span>Кто пытался следить</h2>
+      <div class="note">Компании, чьи трекеры заблокированы в этом сеансе</div>
+      <div class="bars" id="owners"></div>
+    </section>
+    <section>
+      <h2><span class="icon">&#xE774;</span>Чаще всего заблокировано</h2>
+      <div class="note">Адреса, к которым сайты обращались без вашего ведома</div>
+      <div class="bars" id="hosts"></div>
+    </section>
+  </div>
+
+  <section>
+    <h2><span class="icon">&#xE8A1;</span>Открытые вкладки</h2>
+    <div class="bars" id="tabs"></div>
+  </section>
+
+  <section>
+    <h2><span class="icon">&#xE72E;</span>Разрешения сайтам</h2>
+    <div class="note">Камера, микрофон, местоположение и другое — что вы разрешили или запретили</div>
+    <div id="perms"></div>
+  </section>
+
+  <div style="text-align:center"><button class="btn" id="reset">Сбросить статистику сеанса</button></div>
+</main>
+<script src="security.js"></script>
+</body>
+</html>

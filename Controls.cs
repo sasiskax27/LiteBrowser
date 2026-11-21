@@ -32,6 +32,7 @@ sealed class BrowserTab
     public string? YtScriptId { get; set; }
     public string AdSig { get; set; } = "";
     public (string origin, string user)? LastUser { get; set; }
+    public DevMonitor? Dev { get; set; }
 }
 
 /// <summary>Круглая кнопка-иконка; умеет показывать кольцо прогресса.</summary>

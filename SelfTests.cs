@@ -146,3 +146,81 @@ static class ExtensionSelfTest
         try { Directory.Delete(root, true); } catch { }
     }
 }
+
+/// <summary>Самотест лёгких инструментов разработчика и палитры команд: настоящий WebView2 во временной папке.</summary>
+static class DevToolsSelfTest
+{
+    public static void Run(string outFile)
+    {
+        var log = new List<string>();
+        void Check(string name, bool ok, string? extra = null) => log.Add((ok ? "OK   " : "FAIL ") + name + (extra != null ? " — " + extra : ""));
+        var root = Path.Combine(Path.GetTempPath(), "LiteDevTest-" + Guid.NewGuid().ToString("N"));
+        var form = new Form { Width = 900, Height = 700, ShowInTaskbar = false, StartPosition = FormStartPosition.Manual, Location = new Point(-2000, -2000) };
+        var view = new WebView2 { Dock = DockStyle.Fill };
+        form.Controls.Add(view);
+        form.Shown += async (_, _) =>
+        {
+            try
+            {
+                // Палитра команд: нечёткий поиск
+                Check("поиск «вкл» находит «Новая вкладка»", CommandPalette.Score("Новая вкладка", "вкл") > 0);
+                Check("«нвк» находит «Новая вкладка» по буквам", CommandPalette.Score("Новая вкладка", "нвк") > 0);
+                Check("начало строки важнее середины", CommandPalette.Score("История", "ист") > CommandPalette.Score("Очистить историю", "ист"));
+                Check("«zzz» ничего не находит", CommandPalette.Score("Новая вкладка", "zzz") == 0);
+
+                var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(root, "data"));
+                await view.EnsureCoreWebView2Async(env);
+                var core = view.CoreWebView2;
+                var dev = new DevMonitor(core);
+                await dev.AttachAsync();
+                var loaded = new TaskCompletionSource<bool>();
+                core.NavigationCompleted += (_, e) => loaded.TrySetResult(e.IsSuccess);
+                dev.OnNavigation("https://example.com/");
+                core.Navigate("https://example.com/");
+                bool ok = await Task.WhenAny(loaded.Task, Task.Delay(30_000)) == loaded.Task && loaded.Task.Result;
+                Check("страница загрузилась", ok);
+                await core.ExecuteScriptAsync("console.log('lite-test', {a: 1}, [1,2]); console.warn('lite-warn'); setTimeout(() => { throw new Error('lite-boom'); }, 0); fetch('/lite-404').catch(() => {});");
+                await Task.Delay(2500);
+                var doc = dev.Net.FirstOrDefault(n => n.Type == "Document");
+                Check("сеть: запрос страницы записан", doc != null, doc == null ? null : $"{doc.Status} {doc.Url} {doc.Size} Б {doc.Ms:0} мс");
+                Check("сеть: статус 200", doc?.Status == 200);
+                var f = dev.Net.FirstOrDefault(n => n.Url.Contains("lite-404"));
+                Check("сеть: fetch записан со статусом 404", f?.Status == 404, f == null ? "нет записи" : f.Status.ToString());
+                var logEntry = dev.Console.FirstOrDefault(c => c.Text.Contains("lite-test"));
+                Check("консоль: console.log пойман", logEntry != null, logEntry?.Text);
+                Check("консоль: объект показан", logEntry?.Text.Contains("a: 1") == true || logEntry?.Text.Contains("\"a\"") == true, logEntry?.Text);
+                Check("консоль: предупреждение", dev.Console.Any(c => c.Level == "warn" && c.Text.Contains("lite-warn")));
+                var err = dev.Console.FirstOrDefault(c => c.Level == "error" && c.Text.Contains("lite-boom"));
+                Check("консоль: необработанная ошибка поймана", err != null, err?.Text.Split('\n')[0]);
+                var (r1, e1) = await dev.EvaluateAsync("1 + 1");
+                Check("выполнение: 1 + 1 = 2", r1 == "2" && !e1, r1);
+                var (r2, _) = await dev.EvaluateAsync("document.title");
+                Check("выполнение: заголовок страницы", r2.Contains("Example"), r2);
+                var (r3, e3) = await dev.EvaluateAsync("nope.x");
+                Check("выполнение: ошибка возвращается", e3, r3.Split('\n')[0]);
+                var (r4, _) = await dev.EvaluateAsync("let q = 5; q * 2");
+                Check("выполнение: let в консоли", r4 == "10", r4);
+                var m = await dev.MetricsAsync();
+                Check("скорость: метрики получены", m.GetValueOrDefault("Nodes") > 0, $"узлов {m.GetValueOrDefault("Nodes")}, память {m.GetValueOrDefault("JSHeapUsedSize") / 1024:0} КБ");
+                var timing = System.Text.Json.JsonSerializer.Deserialize<string>(await core.ExecuteScriptAsync(DevMonitor.TimingScript));
+                Check("скорость: замеры страницы", timing?.Contains("\"ttfb\"") == true, timing?.Length > 160 ? timing[..160] : timing);
+                dev.OnNavigation("https://example.org/");
+                Check("переход очищает журнал сети", dev.Net.Count == 0);
+                dev.Detach();
+                Check("отключение от вкладки", !dev.Attached);
+                Check("загрузки: .exe считается программой", DownloadGuard.Risk(@"C:\x\setup.EXE") == "exec");
+                Check("загрузки: .pdf безопасен", DownloadGuard.Risk(@"C:\x\doc.pdf") == "");
+                var tmp = Path.Combine(root, "t.bin");
+                File.WriteAllText(tmp, "abc");
+                Check("загрузки: SHA-256", await DownloadGuard.Sha256Async(tmp) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+                DownloadGuard.MarkOfTheWeb(tmp, "https://example.com/file?secret=1");
+                var zone = File.ReadAllText(tmp + ":Zone.Identifier");
+                Check("загрузки: метка «из интернета»", zone.Contains("ZoneId=3") && !zone.Contains("secret"), zone.Replace("\r\n", " | "));
+            }
+            catch (Exception ex) { log.Add("FAIL исключение: " + ex); }
+            finally { File.WriteAllLines(outFile, log); form.Close(); }
+        };
+        Application.Run(form);
+        try { Directory.Delete(root, true); } catch { }
+    }
+}
