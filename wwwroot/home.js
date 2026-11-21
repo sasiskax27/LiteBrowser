@@ -29,7 +29,8 @@ if (wv) {
     $('import').classList.toggle('show', !!m.importSuggest);
     $('foot').innerHTML = item('Только HTTPS', m.settings.httpsOnly) +
       item('Блокировка рекламы и трекеров', m.settings.blockAds) + item('SmartScreen', true) +
-      (m.proxyRunning ? item('Обход блокировок', true) : '');
+      (m.proxyRunning ? item('Обход блокировок', true) : '') +
+      (m.adblock && m.adblock.total ? `<span>🛡 Заблокировано: <b>${m.adblock.total.toLocaleString('ru-RU')}</b></span>` : '');
   });
   wv.postMessage({ type: 'get' });
   $('importClose').onclick = () => { $('import').classList.remove('show'); wv.postMessage({ type: 'dismissImport' }); };

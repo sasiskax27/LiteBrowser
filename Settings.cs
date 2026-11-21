@@ -45,6 +45,15 @@ sealed class AppSettings
     public bool HttpsOnly { get; set; } = true;
     public bool BlockAds { get; set; } = true;
     public bool ExtendedBlocklist { get; set; } = true;
+    // Блокировщик рекламы
+    public bool ListEasyList { get; set; } = true;
+    public bool ListEasyPrivacy { get; set; } = true;
+    public bool ListRuAdList { get; set; } = true;
+    public bool ListCookies { get; set; } = false;
+    public bool CosmeticFiltering { get; set; } = true;
+    public bool YouTubeAds { get; set; } = true;
+    public bool BlockPopups { get; set; } = true;
+    public List<string> AdblockAllow { get; set; } = new();
     // Обход блокировок
     public string ProxyMode { get; set; } = "off";      // off | all | list
     public string ProxyType { get; set; } = "socks5";   // socks5 | http
@@ -85,6 +94,7 @@ sealed class AppSettings
         if (!UiScales.Contains(UiScale)) UiScale = 100;
         if (AutoLockMinutes is not (0 or 5 or 15 or 30 or 60)) AutoLockMinutes = 15;
         NeverSave = (NeverSave ?? new()).Where(s => s.Length is > 0 and < 300).Distinct().Take(1000).ToList();
+        AdblockAllow = (AdblockAllow ?? new()).Select(CleanSite).Where(s => s.Length > 0 && HostRx.IsMatch(s)).Distinct().Take(1000).ToList();
         if (!ZoomSteps.Contains(PageZoom)) PageZoom = 100;
         ProxySites = (ProxySites ?? new()).Select(CleanSite).Where(s => s.Length > 0 && HostRx.IsMatch(s))
             .Distinct().Take(2000).ToList();

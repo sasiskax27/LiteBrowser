@@ -51,6 +51,7 @@ function render() {
   if (document.activeElement !== $('sites')) $('sites').value = state.proxySites.join('\n');
   renderProxy();
 
+  renderAdblock();
   const bl = info.blocklist;
   $('blStatus').textContent = bl.updating ? 'Загружается список…'
     : bl.count > 0 ? `Загружено ${bl.count.toLocaleString('ru-RU')} доменов, обновлено ${bl.updated}` : 'Список ещё не загружен';
@@ -62,6 +63,49 @@ function render() {
     'Данные браузера хранятся только на этом компьютере',
   ]) { const d = document.createElement('div'); d.textContent = line; $('about').appendChild(d); }
 }
+
+// Блокировка рекламы
+let abPoll = 0;
+const listKey = { easylist: 'listEasyList', easyprivacy: 'listEasyPrivacy', ruadlist: 'listRuAdList', cookies: 'listCookies' };
+function renderAdblock() {
+  const ab = info.adblock;
+  $('abTotal').textContent = `Всего заблокировано: ${ab.total.toLocaleString('ru-RU')}. Активных правил: ${ab.rules.toLocaleString('ru-RU')}.`;
+  const box = $('abLists');
+  box.innerHTML = '';
+  for (const l of ab.lists) {
+    const key = listKey[l.id];
+    const row = document.createElement('div');
+    row.className = 'row';
+    const status = ab.updating ? 'Обновляется…'
+      : l.error ? 'Ошибка загрузки: ' + l.error
+      : state[key] && l.rules ? `${l.rules.toLocaleString('ru-RU')} правил · обновлён ${l.updated}`
+      : state[key] ? 'Загружается…' : 'Выключен';
+    row.innerHTML = '<div><div class="row-title"></div><div class="row-sub"></div></div><label class="switch"><input type="checkbox"><span class="slider"></span></label>';
+    row.querySelector('.row-title').textContent = l.name;
+    row.querySelector('.row-sub').textContent = l.desc + ' — ' + status;
+    if (l.error) row.querySelector('.row-sub').style.color = 'var(--bad)';
+    const cb = row.querySelector('input');
+    cb.checked = !!state[key];
+    cb.onchange = () => { state[key] = cb.checked; save(); };
+    box.appendChild(row);
+  }
+  // Пока списки скачиваются или собираются — обновляем страницу сами
+  const loading = ab.updating || ab.lists.some(l => state[listKey[l.id]] && !l.rules && !l.error);
+  clearTimeout(abPoll);
+  if (loading) abPoll = setTimeout(() => wv.postMessage({ type: 'get' }), 1500);
+  const allow = $('abAllow');
+  allow.innerHTML = '';
+  $('abAllowEmpty').textContent = state.adblockAllow.length ? 'Здесь реклама не блокируется' : 'Список пуст. Добавить сайт можно кнопкой-щитом в адресной строке';
+  for (const h of state.adblockAllow) {
+    const c = document.createElement('button');
+    c.className = 'chip';
+    c.textContent = h + '  ✕';
+    c.title = 'Снова блокировать рекламу на этом сайте';
+    c.onclick = () => { state.adblockAllow = state.adblockAllow.filter(x => x !== h); save(); render(); };
+    allow.appendChild(c);
+  }
+}
+$('abUpdate').onclick = () => { toast('Обновляю списки…'); wv.postMessage({ type: 'updateBlocklist' }); };
 
 // Переключатели
 document.querySelectorAll('input[data-key]').forEach(i => i.onchange = () => { state[i.dataset.key] = i.checked; save(); });

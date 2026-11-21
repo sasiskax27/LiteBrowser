@@ -58,11 +58,48 @@ static class Program
                 Check("CSV Chrome разобран", csv.Count == 1 && csv[0].origin == "https://vk.com" && csv[0].password == "pa,ss\"1");
                 var ff = PasswordTools.ParseCsv("\"url\",\"username\",\"password\",\"httpRealm\"\n\"https://github.com\",\"me\",\"x1\",\"\"\n");
                 Check("CSV Firefox разобран", ff.Count == 1 && ff[0].origin == "https://github.com");
+                var bwExport = PasswordTools.ExportCsv(Vault.All());
+                var back = PasswordTools.ParseCsv(bwExport);
+                Check("экспорт в формат Bitwarden читается обратно", back.Count == 1 && back[0].password == "S3cret-Пароль!" && bwExport.StartsWith("folder,favorite,type,name"));
+                var bw = PasswordTools.ParseCsv("folder,favorite,type,name,notes,fields,reprompt,login_uri,login_username,login_password,login_totp\nSocial,,login,VK,,,0,https://vk.com,ivan,pw123,\n");
+                Check("CSV из Bitwarden разобран", bw.Count == 1 && bw[0].origin == "https://vk.com" && bw[0].username == "ivan" && bw[0].password == "pw123");
                 var g = PasswordTools.Generate(20);
                 Check("генератор: 20 символов, все группы", g.Length == 20 && g.Any(char.IsUpper) && g.Any(char.IsLower) && g.Any(char.IsDigit) && g.Any(c => !char.IsLetterOrDigit(c)));
             }
             catch (Exception ex) { log.Add("FAIL исключение: " + ex); }
             finally { Vault.Lock(); try { Directory.Delete(dir, true); } catch { } }
+            File.WriteAllLines(args[1], log);
+            return;
+        }
+
+        // Самотест блокировщика рекламы на настоящих списках
+        if (args.Length == 2 && args[0] == "--adblock-selftest")
+        {
+            var log = new List<string>();
+            void Check(string name, bool ok) => log.Add((ok ? "OK   " : "FAIL ") + name);
+            try
+            {
+                var s = new AppSettings();
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                AdBlock.UpdateAsync(s, force: true).GetAwaiter().GetResult();
+                log.Add($"загрузка и разбор: {sw.ElapsedMilliseconds} мс");
+                foreach (var l in AdBlock.Lists)
+                    log.Add($"     {l.Name}: правил {AdBlock.Status[l.Id].Rules}, ошибка: {AdBlock.Status[l.Id].Error ?? "нет"}");
+                var e = AdBlock.Engine;
+                log.Add($"     сетевых правил {e.NetworkRules}, скрытия {e.CosmeticRules}, общий CSS {e.GenericCss.Length / 1024} КБ");
+                Check("doubleclick.net блокируется", AdBlock.ShouldBlock("securepubads.g.doubleclick.net", "example.com"));
+                Check("google-analytics блокируется (EasyPrivacy)", AdBlock.ShouldBlock("www.google-analytics.com", "example.com"));
+                Check("Яндекс.Метрика блокируется", AdBlock.ShouldBlock("mc.yandex.ru", "lenta.ru"));
+                Check("vk.com на vk.com не блокируется", !AdBlock.ShouldBlock("vk.com", "vk.com"));
+                Check("youtube.com не блокируется", !AdBlock.ShouldBlock("www.youtube.com", "www.youtube.com"));
+                Check("github.com не блокируется", !AdBlock.ShouldBlock("github.githubassets.com", "github.com"));
+                Check("yandex.ru не блокируется", !AdBlock.ShouldBlock("yandex.ru", "yandex.ru"));
+                Check("есть правила скрытия для youtube.com", AdBlock.PageScript("www.youtube.com").Contains("lite-ab-s"));
+                sw.Restart();
+                for (int i = 0; i < 100_000; i++) AdBlock.ShouldBlock("cdn" + (i % 50) + ".static.example-site.com", "example-site.com");
+                log.Add($"скорость: 100 000 проверок за {sw.ElapsedMilliseconds} мс");
+            }
+            catch (Exception ex) { log.Add("FAIL исключение: " + ex); }
             File.WriteAllLines(args[1], log);
             return;
         }
@@ -163,6 +200,7 @@ sealed class BrowserApp : ApplicationContext
 
         if (AppEnv.Settings.BlockAds && AppEnv.Settings.ExtendedBlocklist)
             _ = Blocklist.UpdateAsync(AppEnv.DataDir, AppEnv.Settings, force: false);
+        _ = AdBlock.InitAsync(AppEnv.Settings);
     }
 
     void OnRemote(string msg)

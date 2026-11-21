@@ -23,6 +23,12 @@ sealed class BrowserTab
     public string FilterMode { get; set; } = "none";
     public HistoryEntry? HistoryEntry { get; set; }
     public bool HasLoginForm { get; set; }
+    public string PageHost { get; set; } = "";
+    public Dictionary<string, int> BlockedHosts { get; } = new();
+    public int PopupsBlocked { get; set; }
+    public string? AdScriptId { get; set; }
+    public string? YtScriptId { get; set; }
+    public string AdSig { get; set; } = "";
     public (string origin, string user)? LastUser { get; set; }
 }
 
@@ -105,6 +111,8 @@ sealed class AddressBox : Control
 
     public event Action? StarClicked;
     public event Action? KeyClicked;
+    public event Action? ShieldClicked;
+    bool shieldOff, pillHover;
 
     public AddressBox()
     {
@@ -120,17 +128,29 @@ sealed class AddressBox : Control
         Cursor = Cursors.IBeam;
     }
 
+    bool PillVisible => blocked > 0 || shieldOff;
+    string PillText => shieldOff ? "выкл" : blocked.ToString();
+
     int PillWidth
     {
         get
         {
-            if (blocked <= 0) return 0;
-            int tw = TextRenderer.MeasureText(blocked.ToString(), smallFont, Size.Empty, TextFormatFlags.NoPadding).Width;
+            if (!PillVisible) return 0;
+            int tw = TextRenderer.MeasureText(PillText, smallFont, Size.Empty, TextFormatFlags.NoPadding).Width;
             return tw + Theme.S(30);
         }
     }
 
-    int IconsRight => Width - Theme.S(6) - (blocked > 0 ? PillWidth + Theme.S(4) : 0);
+    Rectangle PillRect
+    {
+        get
+        {
+            int w = PillWidth, h = Theme.S(22);
+            return new Rectangle(Width - w - Theme.S(7), (Height - h) / 2, w, h);
+        }
+    }
+
+    int IconsRight => Width - Theme.S(6) - (PillVisible ? PillWidth + Theme.S(4) : 0);
 
     Rectangle StarRect
     {
@@ -151,22 +171,27 @@ sealed class AddressBox : Control
     }
 
     /// <summary>Левая граница значков справа — до неё тянется поле ввода.</summary>
-    int IconsLeft => keyVisible ? KeyRect.X : starVisible ? StarRect.X : IconsRight + (blocked > 0 ? Theme.S(4) : Theme.S(6));
+    int IconsLeft => keyVisible ? KeyRect.X : starVisible ? StarRect.X : IconsRight + (PillVisible ? Theme.S(4) : Theme.S(6));
 
     protected override void OnMouseMove(MouseEventArgs e)
     {
         bool h = starVisible && StarRect.Contains(e.Location);
         bool k = keyVisible && KeyRect.Contains(e.Location);
-        Cursor = h || k ? Cursors.Hand : Cursors.IBeam;
-        if (h != starHover || k != keyHover) { starHover = h; keyHover = k; Invalidate(); }
+        bool p = PillVisible && PillRect.Contains(e.Location);
+        Cursor = h || k || p ? Cursors.Hand : Cursors.IBeam;
+        if (h != starHover || k != keyHover || p != pillHover) { starHover = h; keyHover = k; pillHover = p; Invalidate(); }
         base.OnMouseMove(e);
     }
 
-    protected override void OnMouseLeave(EventArgs e) { starHover = keyHover = false; Invalidate(); base.OnMouseLeave(e); }
+    protected override void OnMouseLeave(EventArgs e) { starHover = keyHover = pillHover = false; Invalidate(); base.OnMouseLeave(e); }
+
+    /// <summary>Положение значка щита на экране (для меню).</summary>
+    public Rectangle PillScreenRect => RectangleToScreen(PillVisible ? PillRect : new Rectangle(Width - Theme.S(30), 0, Theme.S(24), Height));
 
     protected override void OnMouseDown(MouseEventArgs e)
     {
-        if (starVisible && StarRect.Contains(e.Location)) StarClicked?.Invoke();
+        if (PillVisible && PillRect.Contains(e.Location)) ShieldClicked?.Invoke();
+        else if (starVisible && StarRect.Contains(e.Location)) StarClicked?.Invoke();
         else if (keyVisible && KeyRect.Contains(e.Location)) KeyClicked?.Invoke();
         else { Box.Focus(); Box.SelectAll(); }
         base.OnMouseDown(e);
@@ -194,10 +219,10 @@ sealed class AddressBox : Control
         lockGlyph = glyph; lockColor = color; Invalidate();
     }
 
-    public void SetBlocked(int n)
+    public void SetBlocked(int n, bool off = false)
     {
-        if (n == blocked) return;
-        blocked = n; PerformLayout(); Invalidate();
+        if (n == blocked && off == shieldOff) return;
+        blocked = n; shieldOff = off; PerformLayout(); Invalidate();
     }
 
     public void SetStar(bool visible, bool filled)
@@ -210,7 +235,7 @@ sealed class AddressBox : Control
     {
         base.OnLayout(e);
         int x = Theme.S(40), bh = Box.PreferredHeight;
-        int right = IconsLeft - Theme.S(8);
+        int right = (keyVisible || starVisible ? IconsLeft : PillVisible ? PillRect.X : Width) - Theme.S(8);
         Box.SetBounds(x, (Height - bh) / 2 + Theme.S(1), Math.Max(10, right - x), bh);
     }
 
@@ -253,16 +278,17 @@ sealed class AddressBox : Control
             TextRenderer.DrawText(g, "", starFont, kr, keyActive ? Theme.Accent : Theme.TextDim, Theme.Center);
         }
 
-        if (blocked > 0)
+        if (PillVisible)
         {
-            var text = blocked.ToString();
-            int w = PillWidth, h = Theme.S(22);
-            var pill = new RectangleF(Width - w - Theme.S(7), (Height - h) / 2f, w, h);
+            var text = PillText;
+            var pill = PillRect;
+            int w = pill.Width, h = pill.Height;
+            var color = shieldOff ? Theme.TextDim : Theme.Accent;
             using var path = Theme.Round(pill, h / 2f);
-            using var b = new SolidBrush(Color.FromArgb(44, 124, 156, 255));
+            using var b = new SolidBrush(shieldOff ? Color.FromArgb(pillHover ? 50 : 30, 255, 255, 255) : Color.FromArgb(pillHover ? 80 : 44, 124, 156, 255));
             g.FillPath(b, path);
-            TextRenderer.DrawText(g, "", iconFont, new Rectangle((int)pill.X + Theme.S(6), (int)pill.Y, Theme.S(16), h), Theme.Accent, Theme.Center);
-            TextRenderer.DrawText(g, text, smallFont, new Rectangle((int)pill.X + Theme.S(23), (int)pill.Y, w - Theme.S(23), h), Theme.Accent,
+            TextRenderer.DrawText(g, "", iconFont, new Rectangle(pill.X + Theme.S(6), pill.Y, Theme.S(16), h), color, Theme.Center);
+            TextRenderer.DrawText(g, text, smallFont, new Rectangle(pill.X + Theme.S(23), pill.Y, w - Theme.S(23), h), color,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
         }
     }

@@ -201,6 +201,7 @@ $('moreBtn').onclick = () => {
 };
 $('moreClose').onclick = () => show('moreModal', false);
 $('importCsv').onclick = () => send({ type: 'pw:importCsv' });
+$('exportCsv').onclick = () => send({ type: 'pw:exportCsv' });
 $('emptyImport').onclick = () => $('moreBtn').onclick();
 $('cmBtn').onclick = () => {
   if ($('cmNew').value !== $('cmNew2').value) { toast('Новые пароли не совпадают'); return; }
@@ -249,6 +250,12 @@ if (wv) {
       case 'pwImported':
         importedFile = m.file;
         $('importTitle').textContent = m.count ? `Перенесено паролей: ${m.count}` : 'Новых паролей не найдено';
+        show('moreModal', false);
+        show('importModal', true);
+        break;
+      case 'pwExported':
+        importedFile = m.file;
+        $('importTitle').textContent = `Экспортировано паролей: ${m.count}. Импортируйте файл в Bitwarden, а потом удалите его`;
         show('moreModal', false);
         show('importModal', true);
         break;

@@ -274,6 +274,17 @@ static class PasswordTools
         return result;
     }
 
+    /// <summary>CSV в формате Bitwarden — его понимают Bitwarden, KeePassXC, 1Password, Proton Pass и браузеры.</summary>
+    public static string ExportCsv(IEnumerable<PasswordEntry> entries)
+    {
+        static string Q(string s) => "\"" + s.Replace("\"", "\"\"") + "\"";
+        var sb = new StringBuilder();
+        sb.Append("folder,favorite,type,name,notes,fields,reprompt,login_uri,login_username,login_password,login_totp\r\n");
+        foreach (var e in entries)
+            sb.Append($",,login,{Q(HostKey(e.Origin))},,,0,{Q(e.Origin)},{Q(e.Username)},{Q(e.Password)},\r\n");
+        return sb.ToString();
+    }
+
     static List<List<string>> ReadCsv(string text)
     {
         var rows = new List<List<string>>();

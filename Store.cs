@@ -157,8 +157,24 @@ static class Store
     public static void SaveSession(Session s) => Write("session.json", s);
     public static Session? LoadSession() => Read<Session>("session.json");
 
+    // ---- Счётчик заблокированного за всё время ----
+    static long blockedTotal = -1;
+    static bool statsDirty;
+
+    public static long BlockedTotal
+    {
+        get
+        {
+            if (blockedTotal < 0) blockedTotal = Read<Dictionary<string, long>>("stats.json")?.GetValueOrDefault("blocked") ?? 0;
+            return blockedTotal;
+        }
+    }
+
+    public static void CountBlocked() { _ = BlockedTotal; blockedTotal++; statsDirty = true; }
+
     public static void Flush()
     {
+        if (statsDirty) { statsDirty = false; Write("stats.json", new Dictionary<string, long> { ["blocked"] = blockedTotal }); }
         if (bookmarksDirty) { bookmarksDirty = false; Write("bookmarks.json", Bookmarks); }
         if (historyDirty) { historyDirty = false; Write("history.json", History); }
     }

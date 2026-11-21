@@ -61,7 +61,7 @@
   </header>
 
   <nav>
-    <a href="#search">Поиск</a><a href="#security">Безопасность</a><a href="#proxy">Обход блокировок</a><a href="#passwords">Пароли</a>
+    <a href="#search">Поиск</a><a href="#security">Безопасность</a><a href="#adblock">Реклама</a><a href="#proxy">Обход блокировок</a><a href="#passwords">Пароли</a>
     <a href="#tabs">Вкладки</a><a href="#bookmarks">Закладки и история</a><a href="#look">Вид и масштаб</a><a href="#import">Перенос</a><a href="#system">Система</a><a href="#data">Данные</a>
   </nav>
 
@@ -88,6 +88,33 @@
           <br><span id="blStatus"></span></div></div>
       <div class="actions"><button class="btn" id="blUpdate">Обновить</button>
         <label class="switch"><input type="checkbox" data-key="extendedBlocklist"><span class="slider"></span></label></div>
+    </div>
+  </section>
+
+  <section id="adblock">
+    <h2><span class="icon">&#xE8F8;</span>Блокировка рекламы</h2>
+    <p class="note">Работает на тех же списках фильтров, что uBlock Origin и AdBlock. Если сайт сломался, нажмите на щит 🛡 в адресной строке
+      и выключите блокировку для этого сайта. <span id="abTotal"></span></p>
+    <div id="abLists"></div>
+    <div class="row">
+      <div><div class="row-title">Скрывать рекламные блоки на страницах</div>
+        <div class="row-sub">Убирает пустые места и баннеры, которые остались после блокировки</div></div>
+      <label class="switch"><input type="checkbox" data-key="cosmeticFiltering"><span class="slider"></span></label>
+    </div>
+    <div class="row">
+      <div><div class="row-title">Реклама на YouTube</div>
+        <div class="row-sub">Вырезает рекламу из видео, а если она всё-таки началась, пропускает её. YouTube часто меняет сайт, поэтому иногда может не срабатывать</div></div>
+      <label class="switch"><input type="checkbox" data-key="youTubeAds"><span class="slider"></span></label>
+    </div>
+    <div class="row">
+      <div><div class="row-title">Блокировать всплывающие окна</div>
+        <div class="row-sub">Окна и вкладки, которые сайт открывает сам, без вашего клика</div></div>
+      <label class="switch"><input type="checkbox" data-key="blockPopups"><span class="slider"></span></label>
+    </div>
+    <div class="row">
+      <div><div class="row-title">Сайты без блокировки</div><div class="row-sub" id="abAllowEmpty">Список пуст</div>
+        <div class="chips" id="abAllow" style="margin-top:8px"></div></div>
+      <button class="btn" id="abUpdate">Обновить списки</button>
     </div>
   </section>
 

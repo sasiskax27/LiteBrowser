@@ -203,6 +203,7 @@ sealed class MainForm : Form
 
         address.StarClicked += ToggleBookmark;
         address.KeyClicked += async () => await ShowKeyMenu();
+        address.ShieldClicked += ShowShieldMenu;
         passwordPopup.OpenManager = () => OpenLitePage(LitePages.Passwords);
         passwordPopup.NeverForSite = origin => { var h = PasswordTools.HostKey(origin); CopyAndSave(x => x.NeverSave.Add(h)); pendingCapture = null; UpdateKey(); };
         passwordPopup.Saved += () => { pendingCapture = null; UpdateKey(); };
@@ -233,8 +234,10 @@ sealed class MainForm : Form
         Store.BookmarksChanged += OnBookmarksChanged;
         Downloads.Changed += OnDownloadsChanged;
         Vault.Changed += OnVaultChanged;
+        AdBlock.Changed += OnAdBlockChanged;
         FormClosed += (_, _) =>
         {
+            AdBlock.Changed -= OnAdBlockChanged;
             AppEnv.SettingsChanged -= OnSettingsChanged;
             Store.BookmarksChanged -= OnBookmarksChanged;
             Downloads.Changed -= OnDownloadsChanged;
@@ -329,6 +332,7 @@ sealed class MainForm : Form
             else await tab.View.EnsureCoreWebView2Async(env);
             if (tab.View.IsDisposed || tab.Core == null) return;
             Configure(tab, env);
+            ApplyAdScripts(tab);
             tab.View.ZoomFactor = Cfg.PageZoom / 100.0;
             tab.View.ZoomFactorChanged += (_, _) => { if (tab == active) UpdateZoomLabel(); };
             var url = tab.PendingUrl;
@@ -482,10 +486,17 @@ sealed class MainForm : Form
                 return;
             }
             if (!Cfg.BlockAds || !Uri.TryCreate(uri, UriKind.Absolute, out var u)) return;
-            if (!Blocklist.IsBlocked(u.Host, Cfg.ExtendedBlocklist)) return;
+            if (e.ResourceContext == CoreWebView2WebResourceContext.Document && u.Host == tab.PageHost) return; // саму страницу не трогаем
+            if (SiteAllowed(tab.PageHost)) return;
+            var host = u.Host;
+            bool block = AdBlock.IsException(host) ? false
+                : Blocklist.IsBlocked(host, Cfg.ExtendedBlocklist) || (AdBlock.AnyEnabled(Cfg) && AdBlock.ShouldBlock(host, tab.PageHost));
+            if (!block) return;
             e.Response = env.CreateWebResourceResponse(null, 403, "Blocked", "");
             tab.Blocked++;
-            if (tab == active) address.SetBlocked(tab.Blocked);
+            tab.BlockedHosts[host] = tab.BlockedHosts.GetValueOrDefault(host) + 1;
+            Store.CountBlocked();
+            if (tab == active) UpdateShield();
         };
 
         core.NavigationStarting += (_, e) =>
@@ -539,7 +550,10 @@ sealed class MainForm : Form
             }
             tab.Loading = true;
             tab.Blocked = 0;
+            tab.BlockedHosts.Clear();
+            tab.PopupsBlocked = 0;
             tab.HasLoginForm = false;
+            if (Uri.TryCreate(e.Uri, UriKind.Absolute, out var nu)) tab.PageHost = nu.Host;
             StartAnim();
             if (tab == active) UpdateUi();
             strip.Invalidate();
@@ -594,6 +608,16 @@ sealed class MainForm : Form
 
         core.NewWindowRequested += async (_, e) =>
         {
+            // Всплывающие окна, которые сайт открывает сам, без клика пользователя
+            if (Cfg.BlockAds && Cfg.BlockPopups && !e.IsUserInitiated && !SiteAllowed(tab.PageHost))
+            {
+                e.Handled = true;
+                tab.PopupsBlocked++;
+                tab.Blocked++;
+                Store.CountBlocked();
+                if (tab == active) UpdateShield();
+                return;
+            }
             var deferral = e.GetDeferral();
             var t = CreateTab(null, select: true);
             await InitTab(t);
@@ -618,7 +642,7 @@ sealed class MainForm : Form
             if (!e.Source.StartsWith(LitePages.Prefix, StringComparison.Ordinal))
             {
                 // Сообщения обычных сайтов — только от скрипта паролей, и только про их собственный адрес
-                try { HandlePageMessage(tab, e.Source, e.WebMessageAsJson); } catch { }
+                try { HandlePageMessage(tab, core, e.Source, e.WebMessageAsJson); } catch { }
                 return;
             }
             try { await HandleMessage(core, e.WebMessageAsJson); }
@@ -671,12 +695,86 @@ sealed class MainForm : Form
         core.ContainsFullScreenElementChanged += (_, _) => SetFullscreen(core.ContainsFullScreenElement);
     }
 
-    /// <summary>Фильтры запросов: свой список (быстро) или «все запросы» для расширенного списка.</summary>
+    // ================= Блокировщик рекламы =================
+
+    static bool SiteAllowed(string host) =>
+        host.Length > 0 && Cfg.AdblockAllow.Count > 0 && Cfg.AdblockAllow.Contains(PasswordTools.HostKey(host));
+
+    void UpdateShield()
+    {
+        var host = active?.PageHost ?? "";
+        bool web = active?.Core?.Source is { } s && s.StartsWith("http") && !s.StartsWith(LitePages.Prefix);
+        address.SetBlocked(active?.Blocked ?? 0, web && Cfg.BlockAds && SiteAllowed(host));
+    }
+
+    /// <summary>Скрипты скрытия рекламы и YouTube в странице: пересоздаются при смене списков или настроек.</summary>
+    async void ApplyAdScripts(BrowserTab tab)
+    {
+        var core = tab.Core;
+        if (core == null) return;
+        bool cosmetic = Cfg.BlockAds && Cfg.CosmeticFiltering;
+        bool yt = Cfg.BlockAds && Cfg.YouTubeAds;
+        var eng = AdBlock.Engine;
+        string sig = (cosmetic ? eng.Version : -1) + "|" + yt;
+        if (sig == tab.AdSig) return;
+        tab.AdSig = sig;
+        try
+        {
+            if (tab.AdScriptId != null) { core.RemoveScriptToExecuteOnDocumentCreated(tab.AdScriptId); tab.AdScriptId = null; }
+            if (tab.YtScriptId != null) { core.RemoveScriptToExecuteOnDocumentCreated(tab.YtScriptId); tab.YtScriptId = null; }
+            if (cosmetic) tab.AdScriptId = await core.AddScriptToExecuteOnDocumentCreatedAsync(AdScripts.Cosmetic(eng.GenericCss));
+            if (yt) tab.YtScriptId = await core.AddScriptToExecuteOnDocumentCreatedAsync(AdScripts.YouTube);
+        }
+        catch { tab.AdSig = ""; }
+    }
+
+    void OnAdBlockChanged()
+    {
+        if (IsDisposed) return;
+        if (InvokeRequired) { BeginInvoke(OnAdBlockChanged); return; }
+        foreach (var t in tabs) { ApplyFilters(t); ApplyAdScripts(t); }
+    }
+
+    void ShowShieldMenu()
+    {
+        var tab = active;
+        if (tab == null) return;
+        var host = tab.PageHost;
+        bool web = tab.Core?.Source is { } s && s.StartsWith("http") && !s.StartsWith(LitePages.Prefix);
+        bool off = SiteAllowed(host);
+        var menu = Theme.NewMenu();
+        menu.Items.Add(new ToolStripMenuItem(off ? $"Блокировка на {host} выключена" : $"Заблокировано на этой странице: {tab.Blocked}")
+        { Enabled = false, Padding = new Padding(6, 6, 6, 3) });
+        if (!off)
+        {
+            if (tab.PopupsBlocked > 0)
+                menu.Items.Add(new ToolStripMenuItem($"   всплывающих окон: {tab.PopupsBlocked}") { Enabled = false });
+            foreach (var kv in tab.BlockedHosts.OrderByDescending(x => x.Value).Take(8))
+                menu.Items.Add(new ToolStripMenuItem($"   {kv.Key}  ×{kv.Value}") { Enabled = false });
+        }
+        menu.Items.Add(new ToolStripSeparator());
+        if (web && host.Length > 0)
+        {
+            var key = PasswordTools.HostKey(host);
+            menu.Items.Add(Theme.Item(off ? $"Включить блокировку на {key}" : $"Выключить блокировку на {key}", () =>
+            {
+                CopyAndSave(x => { if (off) x.AdblockAllow.Remove(key); else x.AdblockAllow.Add(key); });
+                tab.Core?.Reload();
+            }));
+        }
+        menu.Items.Add(Theme.Item("Настройки блокировки", () => OpenLitePage(LitePages.Settings, "#adblock")));
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(new ToolStripMenuItem($"Всего заблокировано: {Store.BlockedTotal:N0}") { Enabled = false, Padding = new Padding(6, 3, 6, 6) });
+        var r = RectangleToClient(address.PillScreenRect);
+        menu.Show(this, new Point(r.Right - menu.PreferredSize.Width, r.Bottom + Theme.S(6)));
+    }
+
+    /// <summary>Фильтры запросов: свой список (быстро) или «все запросы» для списков фильтров.</summary>
     static void ApplyFilters(BrowserTab tab)
     {
         var core = tab.Core;
         if (core == null) return;
-        string mode = !Cfg.BlockAds ? "none" : Cfg.ExtendedBlocklist ? "all" : "builtin";
+        string mode = !Cfg.BlockAds ? "none" : Cfg.ExtendedBlocklist || AdBlock.AnyEnabled(Cfg) ? "all" : "builtin";
         if (mode == tab.FilterMode) return;
         ForEachFilter(tab.FilterMode, f => core.RemoveWebResourceRequestedFilter(f, CoreWebView2WebResourceContext.All, CoreWebView2WebResourceRequestSourceKinds.All));
         ForEachFilter(mode, f => core.AddWebResourceRequestedFilter(f, CoreWebView2WebResourceContext.All, CoreWebView2WebResourceRequestSourceKinds.All));
@@ -715,11 +813,22 @@ sealed class MainForm : Form
     }
 
     /// <summary>Сообщение от скрипта паролей на обычной странице. Адрес сайта берём из движка, а не из сообщения.</summary>
-    void HandlePageMessage(BrowserTab tab, string source, string json)
+    void HandlePageMessage(BrowserTab tab, CoreWebView2 core, string source, string json)
     {
-        if (!Cfg.PasswordManager || json.Length > 4000) return;
+        if (json.Length > 4000) return;
         var origin = PasswordTools.Origin(source);
         if (origin == null) return;
+
+        // Блокировщик: страница просит правила скрытия рекламы для своего сайта
+        if (json.Contains("\"ab:css\""))
+        {
+            var host = new Uri(origin).Host;
+            var script = !Cfg.BlockAds || !Cfg.CosmeticFiltering || SiteAllowed(host) ? AdScripts.Disable : AdBlock.PageScript(host);
+            _ = core.ExecuteScriptAsync(script);
+            return;
+        }
+
+        if (!Cfg.PasswordManager) return;
         bool secure = origin.StartsWith("https://") || Uri.TryCreate(origin, UriKind.Absolute, out var lu) && lu.IsLoopback;
         if (!secure) return; // по незащищённому соединению пароли не сохраняем
 
@@ -929,6 +1038,25 @@ sealed class MainForm : Form
                     catch (Exception ex) { Post(core, new { type = "pwError", text = ex.Message }); }
                 });
                 break;
+            case "pw:exportCsv":
+                BeginInvoke(async () =>
+                {
+                    // Экспорт — только после повторного ввода мастер-пароля
+                    var m = InputDialog.AskPassword(this, "Мастер-пароль для экспорта");
+                    if (m == null) return;
+                    var (okM, errM) = await Task.Run(() => Vault.Unlock(m));
+                    if (!okM) { Post(core, new { type = "pwError", text = errM }); return; }
+                    using var dlg = new SaveFileDialog
+                    {
+                        Title = "Экспорт паролей (формат Bitwarden)",
+                        Filter = "CSV-файл|*.csv",
+                        FileName = $"LiteBrowser-пароли-{DateTime.Now:yyyy-MM-dd}.csv",
+                    };
+                    if (dlg.ShowDialog(this) != DialogResult.OK) return;
+                    File.WriteAllText(dlg.FileName, PasswordTools.ExportCsv(Vault.All()), new System.Text.UTF8Encoding(false));
+                    Post(core, new { type = "pwExported", file = dlg.FileName, count = Vault.Count });
+                });
+                break;
             case "pw:deleteFile":
                 var path = Str("file");
                 if (path.EndsWith(".csv", StringComparison.OrdinalIgnoreCase) && File.Exists(path))
@@ -961,6 +1089,19 @@ sealed class MainForm : Form
         proxyRunning = AppEnv.RunningSignature != "off",
         defaultSites = AppSettings.DefaultProxySites,
         blocklist = new { count = Blocklist.ExtendedCount, updated = Blocklist.Updated?.ToString("dd.MM.yyyy HH:mm"), updating = Blocklist.Updating },
+        adblock = new
+        {
+            updating = AdBlock.Updating,
+            total = Store.BlockedTotal,
+            rules = AdBlock.Engine.NetworkRules + AdBlock.Engine.CosmeticRules,
+            lists = AdBlock.Lists.Select(l => new
+            {
+                id = l.Id, name = l.Name, desc = l.Description,
+                rules = AdBlock.Status[l.Id].Rules,
+                updated = AdBlock.Status[l.Id].Updated?.ToString("dd.MM.yyyy"),
+                error = AdBlock.Status[l.Id].Error,
+            }),
+        },
         engines = SearchEngines.All.Select(x => new { id = x.Id, name = x.Name, desc = x.Description, @private = x.Private }),
     });
 
@@ -987,8 +1128,10 @@ sealed class MainForm : Form
                 var ns = root.GetProperty("settings").Deserialize<AppSettings>(AppSettings.Json);
                 if (ns == null) return;
                 bool wantBlocklist = ns.ExtendedBlocklist && ns.BlockAds && Blocklist.ExtendedCount == 0;
+                bool listsChanged = AdBlock.Lists.Any(l => AdBlock.Enabled(ns, l.Id) != AdBlock.Enabled(Cfg, l.Id));
                 AppEnv.UpdateSettings(ns);
                 Post(core, new { type = "saved", restartNeeded = AppEnv.RestartNeeded });
+                if (listsChanged) { await AdBlock.ReloadAsync(Cfg); SendSettings(core); }
                 if (wantBlocklist) { await Blocklist.UpdateAsync(AppEnv.DataDir, Cfg, force: true); SendSettings(core); }
                 break;
 
@@ -1010,10 +1153,13 @@ sealed class MainForm : Form
                 break;
 
             case "updateBlocklist":
+                var adTask = AdBlock.UpdateAsync(Cfg, force: true);
                 SendSettings(core);
                 bool updated = await Blocklist.UpdateAsync(AppEnv.DataDir, Cfg, force: true);
+                await adTask;
                 SendSettings(core);
-                Post(core, new { type = "done", text = updated ? "Список обновлён" : "Не удалось обновить список" });
+                bool adErrors = AdBlock.Lists.Any(l => AdBlock.Enabled(Cfg, l.Id) && AdBlock.Status[l.Id].Error != null);
+                Post(core, new { type = "done", text = updated && !adErrors ? "Списки обновлены" : "Часть списков не удалось обновить" });
                 break;
 
             case "shortcuts":
@@ -1127,6 +1273,7 @@ sealed class MainForm : Form
             if (t.Core == null) continue;
             t.Core.Profile.PreferredColorScheme = ColorScheme();
             ApplyFilters(t);
+            ApplyAdScripts(t);
             if (zoomChanged) t.View.ZoomFactor = Cfg.PageZoom / 100.0;
         }
         if (Cfg.UiScale != appliedUiScale) ApplyScale();
@@ -1374,7 +1521,7 @@ sealed class MainForm : Form
         else if (src.StartsWith("http://", StringComparison.OrdinalIgnoreCase)) address.SetLock("", Theme.Danger);
         else address.SetLock("", Theme.TextDim);
 
-        address.SetBlocked(active?.Blocked ?? 0);
+        UpdateShield();
         UpdateStar();
         UpdateZoomLabel();
         UpdateKey();
