@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<title>Загрузки</title>
+<link rel="stylesheet" href="common.css">
+<link rel="stylesheet" href="lists.css">
+</head>
+<body>
+<div class="glow"></div>
+<main>
+  <header>
+    <div class="logo icon">&#xE896;</div>
+    <div class="grow"><h1>Загрузки</h1><div class="sub" id="folder"></div></div>
+    <button class="btn" id="openFolder"><span class="icon">&#xE838;</span> Открыть папку</button>
+  </header>
+  <div class="bar">
+    <input class="text" id="q" placeholder="Поиск по загрузкам" spellcheck="false" autofocus>
+    <button class="btn danger" id="clear">Очистить список</button>
+  </div>
+  <div id="out"></div>
+</main>
+<div class="toast" id="toast"><span class="icon">&#xE73E;</span><span id="toastText"></span></div>
+<script src="downloads.js"></script>
+</body>
+</html>

@@ -41,6 +41,7 @@ sealed class AppSettings
 
     // Поиск
     public string Engine { get; set; } = "duckduckgo";
+    public bool SearchSuggestions { get; set; } = false;   // подсказки от поисковика (запросы уходят ему по мере ввода)
     // Безопасность
     public bool HttpsOnly { get; set; } = true;
     public bool BlockAds { get; set; } = true;
@@ -77,6 +78,14 @@ sealed class AppSettings
     public bool PasswordManager { get; set; } = true;
     public int AutoLockMinutes { get; set; } = 15;      // 0 — до закрытия браузера
     public List<string> NeverSave { get; set; } = new();
+    // Боковая панель
+    public bool SidePanelOpen { get; set; } = false;
+    public string SidePanelUrl { get; set; } = "https://lite.home/bookmarks.html";
+    public int SidePanelWidth { get; set; } = 380;
+    // Обновления и браузер по умолчанию
+    public bool AutoUpdate { get; set; } = true;
+    public string SkippedUpdate { get; set; } = "";
+    public bool DefaultPromptDismissed { get; set; } = false;
     public int UiScale { get; set; } = 100;             // размер интерфейса, %
     public int PageZoom { get; set; } = 100;            // масштаб страниц по умолчанию, %
     // Предложение перенести данные на стартовой странице уже показано/скрыто
@@ -96,6 +105,8 @@ sealed class AppSettings
         if (ProxyPort is < 1 or > 65535) ProxyPort = 10808;
         if (FreezeMinutes is not (0 or 5 or 15 or 30 or 60)) FreezeMinutes = 15;
         if (!UiScales.Contains(UiScale)) UiScale = 100;
+        SidePanelWidth = Math.Clamp(SidePanelWidth, 260, 1000);
+        if (!(SidePanelUrl ?? "").StartsWith("https://") && !(SidePanelUrl ?? "").StartsWith("http://")) SidePanelUrl = "https://lite.home/bookmarks.html";
         if (AutoLockMinutes is not (0 or 5 or 15 or 30 or 60)) AutoLockMinutes = 15;
         NeverSave = (NeverSave ?? new()).Where(s => s.Length is > 0 and < 300).Distinct().Take(1000).ToList();
         AdblockAllow = (AdblockAllow ?? new()).Select(CleanSite).Where(s => s.Length > 0 && HostRx.IsMatch(s)).Distinct().Take(1000).ToList();

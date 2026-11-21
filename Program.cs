@@ -220,12 +220,14 @@ sealed class BrowserApp : ApplicationContext
 
         List<string>? tabs = null;
         int active = 0;
+        Session? session = null;
         if (url == null && !incognito && (restore || AppEnv.Settings.RestoreSession))
         {
             var s = Store.LoadSession();
-            if (s is { Tabs.Count: > 0 }) { tabs = s.Tabs; active = s.Active; }
+            if (s is { Tabs.Count: > 0 }) { tabs = s.Tabs; active = s.Active; session = s; }
         }
-        OpenWindow(incognito, url, tabs, active);
+        var first = OpenWindow(incognito, url, tabs, active, session);
+        _ = first.RunStartupChecks();
 
         if (AppEnv.Settings.BlockAds && AppEnv.Settings.ExtendedBlocklist)
             _ = Blocklist.UpdateAsync(AppEnv.DataDir, AppEnv.Settings, force: false);
@@ -243,9 +245,9 @@ sealed class BrowserApp : ApplicationContext
         else OpenWindow(false, url);
     }
 
-    public MainForm OpenWindow(bool incognito, string? url = null, List<string>? tabs = null, int active = 0)
+    public MainForm OpenWindow(bool incognito, string? url = null, List<string>? tabs = null, int active = 0, Session? session = null)
     {
-        var f = new MainForm(incognito, url, tabs, active);
+        var f = new MainForm(incognito, url, tabs, active) { StartSession = session };
         windows.Add(f);
         f.Activated += (_, _) => lastActive = f;
         f.FormClosed += (_, _) =>
@@ -274,10 +276,37 @@ sealed class BrowserApp : ApplicationContext
 /// <summary>Ярлыки и регистрация браузером по умолчанию (только для текущего пользователя).</summary>
 static class SystemIntegration
 {
-    static string Exe => Environment.ProcessPath!;
+    static string InstallDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "LiteBrowser");
+    static string Exe => Path.Combine(InstallDir, "LiteBrowser.exe");
+
+    public static bool IsInstalled => Environment.ProcessPath!.Equals(Exe, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Если браузер запущен, например, из «Загрузок» — копируем его в папку программ, чтобы ярлыки и ссылки не сломались.</summary>
+    public static void EnsureInstalled()
+    {
+        if (IsInstalled) return;
+        Directory.CreateDirectory(InstallDir);
+        if (File.Exists(Exe))
+        {
+            var old = Path.ChangeExtension(Exe, ".old");
+            try { if (File.Exists(old)) File.Delete(old); File.Move(Exe, old); } catch { }
+        }
+        File.Copy(Environment.ProcessPath!, Exe, true);
+    }
+
+    public static bool IsDefaultBrowser()
+    {
+        try
+        {
+            using var k = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice");
+            return (k?.GetValue("ProgId") as string) == "LiteBrowserURL";
+        }
+        catch { return false; }
+    }
 
     public static void CreateShortcuts()
     {
+        EnsureInstalled();
         var shellType = Type.GetTypeFromProgID("WScript.Shell") ?? throw new InvalidOperationException("WScript.Shell недоступен");
         dynamic shell = Activator.CreateInstance(shellType)!;
         foreach (var dir in new[]
@@ -297,6 +326,9 @@ static class SystemIntegration
 
     public static void RegisterAsBrowser()
     {
+        EnsureInstalled();
+        if (!File.Exists(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "LiteBrowser.lnk")))
+            try { CreateShortcuts(); } catch { }
         string exe = Exe, open = $"\"{exe}\" \"%1\"", icon = exe + ",0";
         const string app = @"Software\Clients\StartMenuInternet\LiteBrowser";
         using (var k = Registry.CurrentUser.CreateSubKey(app)) k.SetValue("", "LiteBrowser");

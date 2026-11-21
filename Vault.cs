@@ -10,6 +10,7 @@ sealed class PasswordEntry
     public string Origin { get; set; } = "";   // https://site.com
     public string Username { get; set; } = "";
     public string Password { get; set; } = "";
+    public string Totp { get; set; } = "";       // секрет 2FA или otpauth://
     public DateTime Created { get; set; } = DateTime.Now;
     public DateTime Updated { get; set; } = DateTime.Now;
 }
@@ -169,11 +170,11 @@ static class Vault
 
     static PasswordEntry Clone(PasswordEntry e) => new()
     {
-        Id = e.Id, Origin = e.Origin, Username = e.Username, Password = e.Password, Created = e.Created, Updated = e.Updated,
+        Id = e.Id, Origin = e.Origin, Username = e.Username, Password = e.Password, Totp = e.Totp, Created = e.Created, Updated = e.Updated,
     };
 
     /// <summary>Добавляет или обновляет запись (по id, иначе по сайту + логину).</summary>
-    public static void Upsert(string? id, string origin, string username, string password)
+    public static void Upsert(string? id, string origin, string username, string password, string? totp = null)
     {
         lock (sync)
         {
@@ -181,23 +182,25 @@ static class Vault
             e ??= entries.FirstOrDefault(x => PasswordTools.HostKey(x.Origin) == PasswordTools.HostKey(origin) && x.Username == username);
             if (e == null) entries.Add(e = new PasswordEntry());
             e.Origin = origin; e.Username = username; e.Password = password; e.Updated = DateTime.Now;
+            if (totp != null) e.Totp = totp.Trim();
             SaveLocked();
             Touch();
         }
         Raise();
     }
 
-    public static int ImportMany(IEnumerable<(string origin, string username, string password)> items)
+    public static int ImportMany(IEnumerable<(string origin, string username, string password, string totp)> items)
     {
         int n = 0;
         lock (sync)
         {
-            foreach (var (origin, username, password) in items)
+            foreach (var (origin, username, password, totp) in items)
             {
                 var e = entries.FirstOrDefault(x => PasswordTools.HostKey(x.Origin) == PasswordTools.HostKey(origin) && x.Username == username);
-                if (e != null && e.Password == password) continue;
+                if (e != null && e.Password == password && (totp.Length == 0 || e.Totp == totp)) continue;
                 if (e == null) entries.Add(e = new PasswordEntry());
                 e.Origin = origin; e.Username = username; e.Password = password; e.Updated = DateTime.Now;
+                if (totp.Length > 0) e.Totp = totp;
                 n++;
             }
             if (n > 0) SaveLocked();
@@ -205,6 +208,16 @@ static class Vault
         }
         if (n > 0) Raise();
         return n;
+    }
+
+    /// <summary>Текущие коды 2FA. Не продлевает автоблокировку.</summary>
+    public static Dictionary<string, (string code, int left)> Codes()
+    {
+        var res = new Dictionary<string, (string, int)>();
+        lock (sync)
+            foreach (var e in entries)
+                if (Totp.Code(e.Totp, out var left) is { } c) res[e.Id] = (c, left);
+        return res;
     }
 
     public static void Delete(string id)
@@ -253,15 +266,16 @@ static class PasswordTools
     }
 
     /// <summary>CSV из Chrome, Edge, Яндекса, Opera, Brave (name,url,username,password) и Firefox (url,username,password,…).</summary>
-    public static List<(string origin, string username, string password)> ParseCsv(string text)
+    public static List<(string origin, string username, string password, string totp)> ParseCsv(string text)
     {
         var rows = ReadCsv(text);
-        var result = new List<(string, string, string)>();
+        var result = new List<(string, string, string, string)>();
         if (rows.Count < 2) return result;
         var head = rows[0].Select(h => h.Trim().ToLowerInvariant()).ToList();
         int iu = head.FindIndex(h => h is "url" or "origin" or "login_uri" or "website");
         int il = head.FindIndex(h => h is "username" or "login" or "login_username" or "user");
         int ip = head.FindIndex(h => h is "password" or "login_password");
+        int it = head.FindIndex(h => h is "login_totp" or "totp" or "otpauth" or "otp");
         if (iu < 0 || ip < 0) throw new InvalidDataException("Не похоже на файл паролей: нет столбцов url и password");
         foreach (var r in rows.Skip(1))
         {
@@ -269,7 +283,7 @@ static class PasswordTools
             var origin = Origin(r[iu].Trim());
             var pass = r[ip];
             if (origin == null || pass.Length == 0) continue;
-            result.Add((origin, il >= 0 && il < r.Count ? r[il] : "", pass));
+            result.Add((origin, il >= 0 && il < r.Count ? r[il] : "", pass, it >= 0 && it < r.Count ? r[it].Trim() : ""));
         }
         return result;
     }
@@ -281,7 +295,7 @@ static class PasswordTools
         var sb = new StringBuilder();
         sb.Append("folder,favorite,type,name,notes,fields,reprompt,login_uri,login_username,login_password,login_totp\r\n");
         foreach (var e in entries)
-            sb.Append($",,login,{Q(HostKey(e.Origin))},,,0,{Q(e.Origin)},{Q(e.Username)},{Q(e.Password)},\r\n");
+            sb.Append($",,login,{Q(HostKey(e.Origin))},,,0,{Q(e.Origin)},{Q(e.Username)},{Q(e.Password)},{Q(e.Totp)}\r\n");
         return sb.ToString();
     }
 

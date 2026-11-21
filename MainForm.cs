@@ -18,6 +18,8 @@ static class LitePages
     public const string Blocked = Prefix + "blocked.html";
     public const string Passwords = Prefix + "passwords.html";
     public const string ExtensionsPage = Prefix + "extensions.html";
+    public const string DownloadsPage = Prefix + "downloads.html";
+    public const string BookmarksPage = Prefix + "bookmarks.html";
 
     public static CoreWebView2WebResourceResponse Response(CoreWebView2Environment env, string uri)
     {
@@ -48,6 +50,8 @@ static class LitePages
         if (src.StartsWith(History, StringComparison.Ordinal)) return "lite://history";
         if (src.StartsWith(Passwords, StringComparison.Ordinal)) return "lite://passwords";
         if (src.StartsWith(ExtensionsPage, StringComparison.Ordinal)) return "lite://extensions";
+        if (src.StartsWith(DownloadsPage, StringComparison.Ordinal)) return "lite://downloads";
+        if (src.StartsWith(BookmarksPage, StringComparison.Ordinal)) return "lite://bookmarks";
         if (src.StartsWith(Blocked, StringComparison.Ordinal))
             return HttpUtility.ParseQueryString(new Uri(src).Query)["url"] ?? "lite://blocked";
         return null;
@@ -144,6 +148,13 @@ sealed class MainForm : Form
     int appliedUiScale, appliedPageZoom;
     bool showDownloads, showProxy;
     readonly PasswordPopup passwordPopup = new();
+    readonly InfoBar infoBar = new();
+    readonly SuggestPopup suggest = new();
+    readonly SidePanel sidePanel;
+    readonly Splitter splitter = new() { Dock = DockStyle.Right, Visible = false, MinSize = 200, MinExtra = 300 };
+    readonly IconButton sideBtn;
+    FindBar findBar = null!;
+    CancellationTokenSource? suggestCts;
     (string origin, string user, string pass, DateTime time)? pendingCapture;
     readonly IconButton zoomBtn, installBtn;
     bool showInstall;
@@ -178,6 +189,8 @@ sealed class MainForm : Form
         strip.TabClosed += CloseTab;
         strip.TabMuteToggled += t => { if (t.Core != null) t.Core.IsMuted = !t.Core.IsMuted; };
         strip.TabMenu += ShowTabMenu;
+        strip.GroupClicked += g => { g.Collapsed = !g.Collapsed; if (g.Collapsed && active?.Group == g) { var other = tabs.FirstOrDefault(t => t.Group != g); if (other != null) SelectTab(other); } strip.Invalidate(); };
+        strip.GroupMenu += ShowGroupMenu;
         strip.NewTab += () => _ = AddTab(homeUrl);
 
         toolbar.Height = Theme.S(50);
@@ -213,21 +226,52 @@ sealed class MainForm : Form
         passwordPopup.OpenManager = () => OpenLitePage(LitePages.Passwords);
         passwordPopup.NeverForSite = origin => { var h = PasswordTools.HostKey(origin); CopyAndSave(x => x.NeverSave.Add(h)); pendingCapture = null; UpdateKey(); };
         passwordPopup.Saved += () => { pendingCapture = null; UpdateKey(); };
+        downloadsPopup.OpenAll = () => OpenLitePage(LitePages.DownloadsPage);
         address.Box.KeyDown += (_, e) =>
         {
-            if (e.KeyCode == Keys.Escape) { e.SuppressKeyPress = true; UpdateUi(force: true); active?.View.Focus(); return; }
+            if (e.KeyCode is Keys.Down or Keys.Up && suggest.Visible) { e.SuppressKeyPress = true; suggest.Step(e.KeyCode == Keys.Down ? 1 : -1); return; }
+            if (e.KeyCode == Keys.Escape)
+            {
+                e.SuppressKeyPress = true;
+                if (suggest.Visible) { suggest.Hide(); return; }
+                UpdateUi(force: true); active?.View.Focus(); return;
+            }
             if (e.KeyCode != Keys.Enter) return;
             e.SuppressKeyPress = true;
-            Navigate(ToUrl(address.Box.Text));
+            var target = suggest.Visible && suggest.Selected is { } sel ? sel.Url : ToUrl(address.Box.Text);
+            suggest.Hide();
+            Navigate(target);
             active?.View.Focus();
         };
+        address.Box.TextChanged += (_, _) => UpdateSuggestions();
+        address.Box.LostFocus += (_, _) => BeginInvoke(async () => { await Task.Delay(150); if (!address.Box.Focused) suggest.Hide(); });
+        suggest.Chosen += it => { suggest.Hide(); Navigate(it.Url); active?.View.Focus(); };
+
+        findBar = new FindBar(tips);
+        findBar.Search += async term => await RunFind(term);
+        findBar.Next += () => active?.Core?.Find.FindNext();
+        findBar.Previous += () => active?.Core?.Find.FindPrevious();
+        findBar.Closed += CloseFind;
+        content.Controls.Add(findBar);
+        content.Resize += (_, _) => PlaceFindBar();
         address.Box.Enter += (_, _) => BeginInvoke(address.Box.SelectAll);
 
-        toolbar.Controls.AddRange(new Control[] { back, forward, reload, home, address, installBtn, zoomBtn, proxyBtn, downloadsBtn, menuBtn });
+        toolbar.Controls.AddRange(new Control[] { back, forward, reload, home, address, installBtn, zoomBtn, proxyBtn, downloadsBtn, sideBtn, menuBtn });
         toolbar.Resize += (_, _) => LayoutToolbar();
         toolbar.Paint += PaintProgress;
 
+        sidePanel = new SidePanel(tips, HandleMessage);
+        sidePanel.OpenInMain += u => _ = AddTab(u);
+        sidePanel.CloseRequested += () => ToggleSidePanel(false);
+        sidePanel.UrlChanged += u => { if (u != Cfg.SidePanelUrl && !Incognito) CopyAndSave(x => x.SidePanelUrl = u); };
+        splitter.SplitterMoved += (_, _) => CopyAndSave(x => x.SidePanelWidth = (int)(sidePanel.Width / Theme.Dpi));
+        sideBtn = new IconButton("", "Боковая панель (Ctrl+B)", tips);
+        sideBtn.Click += (_, _) => ToggleSidePanel(!sidePanel.Visible);
+
         Controls.Add(content);
+        Controls.Add(splitter);
+        Controls.Add(sidePanel);
+        Controls.Add(infoBar);
         Controls.Add(bookmarksBar);
         Controls.Add(toolbar);
         Controls.Add(strip);
@@ -250,9 +294,10 @@ sealed class MainForm : Form
             Vault.Changed -= OnVaultChanged;
             downloadsPopup.Dispose();
             passwordPopup.Dispose();
+            suggest.Dispose();
         };
 
-        Load += (_, _) => OpenStartTabs();
+        Load += (_, _) => { OpenStartTabs(); if (Cfg.SidePanelOpen && !Incognito) ToggleSidePanel(true); };
         Shown += (_, _) => LayoutToolbar();
         ApplyChrome();
     }
@@ -274,7 +319,7 @@ sealed class MainForm : Form
         int s = Theme.S(36), y = (toolbar.Height - s) / 2, x = Theme.S(10);
         foreach (var b in new[] { back, forward, reload, home }) { b.SetBounds(x, y, s, s); x += s + Theme.S(2); }
         int right = toolbar.Width - Theme.S(10);
-        foreach (var b in new[] { menuBtn, downloadsBtn, proxyBtn, zoomBtn, installBtn })
+        foreach (var b in new[] { menuBtn, sideBtn, downloadsBtn, proxyBtn, zoomBtn, installBtn })
         {
             // Visible до показа окна всегда false, поэтому храним желаемое состояние отдельно
             bool want = b == downloadsBtn ? showDownloads : b == proxyBtn ? showProxy : b == installBtn ? showInstall : true;
@@ -295,12 +340,33 @@ sealed class MainForm : Form
     {
         if (startTabs is { Count: > 0 })
         {
+            var info = StartSession?.Info;
+            var groups = new Dictionary<string, TabGroup>();
             for (int i = 0; i < startTabs.Count; i++)
             {
                 var u = startTabs[i];
                 string title = u.StartsWith(LitePages.Prefix) ? "Новая вкладка" : Uri.TryCreate(u, UriKind.Absolute, out var x) ? x.Host : u;
-                CreateTab(u, select: false, title);
+                var t = CreateTab(u, select: false, title);
+                if (info != null && i < info.Count)
+                {
+                    t.Pinned = info[i].Pinned;
+                    if (info[i].Group != null)
+                    {
+                        var key = info[i].Group + "|" + info[i].GroupColor;
+                        if (!groups.TryGetValue(key, out var g))
+                        {
+                            Color c = TabGroup.Palette[0];
+                            try { if (info[i].GroupColor != null) c = ColorTranslator.FromHtml(info[i].GroupColor!); } catch { }
+                            groups[key] = g = new TabGroup { Name = info[i].Group!, Color = c, Collapsed = info[i].GroupCollapsed };
+                        }
+                        t.Group = g;
+                    }
+                }
             }
+            // CreateTab вставляет фоновые вкладки после активной — восстанавливаем исходный порядок
+            var ordered = tabs.OrderBy(t => startTabs.IndexOf(t.PendingUrl ?? "")).ToList();
+            tabs.Clear();
+            tabs.AddRange(ordered.Where(t => t.Pinned).Concat(ordered.Where(t => !t.Pinned)));
             SelectTab(tabs[Math.Clamp(startActive, 0, tabs.Count - 1)]);
         }
         else
@@ -372,6 +438,7 @@ sealed class MainForm : Form
 
     void SelectTab(BrowserTab tab)
     {
+        if (findBar != null && active != tab) CloseFind();
         if (active != null && active != tab) active.LastActive = DateTime.Now;
         active = tab;
         tab.LastActive = DateTime.Now;
@@ -428,6 +495,22 @@ sealed class MainForm : Form
         if (tab.Core != null)
             menu.Items.Add(Theme.Item(tab.Core.IsMuted ? "Включить звук" : "Выключить звук", () => tab.Core.IsMuted = !tab.Core.IsMuted));
         menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(Theme.Item(tab.Pinned ? "Открепить вкладку" : "Закрепить вкладку", () => TogglePin(tab)));
+        menu.Items.Add(Theme.Item("Добавить в новую группу…", () => NewGroup(tab)));
+        if (Groups.Any())
+        {
+            var sub = new ToolStripMenuItem("Добавить в группу") { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
+            foreach (var g in Groups.ToList())
+            {
+                var grp = g;
+                var it = Theme.Item(g.Name.Length > 0 ? g.Name : "(без названия)", () => AddToGroup(tab, grp));
+                it.ForeColor = g.Color;
+                sub.DropDownItems.Add(it);
+            }
+            menu.Items.Add(sub);
+        }
+        if (tab.Group != null) menu.Items.Add(Theme.Item("Убрать из группы", () => { tab.Group = null; strip.Invalidate(); }));
+        menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(Theme.Item("Закрыть", () => CloseTab(tab), "Ctrl+W"));
         menu.Items.Add(Theme.Item("Закрыть другие вкладки", () => { foreach (var t in tabs.Where(x => x != tab).ToList()) CloseTab(t); }));
         menu.Items.Add(Theme.Item("Открыть закрытую вкладку", ReopenClosedTab, "Ctrl+Shift+T"));
@@ -441,11 +524,76 @@ sealed class MainForm : Form
         Activate();
     }
 
+    static string TabUrl(BrowserTab t) => t.Core?.Source is { Length: > 0 } s && !s.StartsWith(LitePages.Blocked) ? s : t.PendingUrl ?? LitePages.Home;
+
     public Session GetSession() => new()
     {
-        Tabs = tabs.Select(t => t.Core?.Source is { Length: > 0 } s && !s.StartsWith(LitePages.Blocked) ? s : t.PendingUrl ?? LitePages.Home).ToList(),
+        Tabs = tabs.Select(TabUrl).ToList(),
+        Info = tabs.Select(t => new SessionTab
+        {
+            Url = TabUrl(t), Pinned = t.Pinned, Group = t.Group?.Name, GroupColor = t.Group != null ? ColorTranslator.ToHtml(t.Group.Color) : null,
+            GroupCollapsed = t.Group?.Collapsed ?? false,
+        }).ToList(),
         Active = active == null ? 0 : Math.Max(0, tabs.IndexOf(active)),
     };
+
+    public Session? StartSession { get; init; }
+
+    // ================= Группы и закреплённые вкладки =================
+
+    void TogglePin(BrowserTab t)
+    {
+        tabs.Remove(t);
+        t.Pinned = !t.Pinned;
+        if (t.Pinned) t.Group = null;
+        int pinned = tabs.Count(x => x.Pinned);
+        tabs.Insert(t.Pinned ? pinned : pinned, t);
+        strip.Invalidate();
+    }
+
+    IEnumerable<TabGroup> Groups => tabs.Where(t => t.Group != null).Select(t => t.Group!).Distinct();
+
+    void AddToGroup(BrowserTab t, TabGroup g)
+    {
+        if (t.Pinned) TogglePin(t);
+        tabs.Remove(t);
+        int last = tabs.FindLastIndex(x => x.Group == g);
+        tabs.Insert(last >= 0 ? last + 1 : tabs.Count, t);
+        t.Group = g;
+        g.Collapsed = false;
+        strip.Invalidate();
+    }
+
+    void NewGroup(BrowserTab t)
+    {
+        var name = InputDialog.Ask(this, "Название группы", "");
+        if (name == null) return;
+        var used = Groups.Select(g => g.Color).ToHashSet();
+        var color = TabGroup.Palette.FirstOrDefault(c => !used.Contains(c), TabGroup.Palette[Groups.Count() % TabGroup.Palette.Length]);
+        AddToGroup(t, new TabGroup { Name = name, Color = color });
+    }
+
+    void ShowGroupMenu(TabGroup g, Point screen)
+    {
+        var menu = Theme.NewMenu();
+        menu.Items.Add(Theme.Item(g.Collapsed ? "Развернуть группу" : "Свернуть группу", () => { g.Collapsed = !g.Collapsed; strip.Invalidate(); }));
+        menu.Items.Add(Theme.Item("Переименовать…", () => { var n = InputDialog.Ask(this, "Название группы", g.Name); if (n != null) { g.Name = n; strip.Invalidate(); } }));
+        var colors = new ToolStripMenuItem("Цвет") { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
+        string[] names = { "Синий", "Красный", "Жёлтый", "Зелёный", "Розовый", "Фиолетовый", "Бирюзовый", "Оранжевый" };
+        for (int i = 0; i < TabGroup.Palette.Length; i++)
+        {
+            var c = TabGroup.Palette[i];
+            var item = Theme.Item((c == g.Color ? "●  " : "○  ") + names[i], () => { g.Color = c; strip.Invalidate(); });
+            item.ForeColor = c;
+            colors.DropDownItems.Add(item);
+        }
+        menu.Items.Add(colors);
+        menu.Items.Add(Theme.Item("Новая вкладка в группе", async () => { var t = await AddTab(homeUrl); AddToGroup(t, g); }));
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(Theme.Item("Разгруппировать", () => { foreach (var t in tabs.Where(x => x.Group == g)) t.Group = null; strip.Invalidate(); }));
+        menu.Items.Add(Theme.Item("Закрыть группу", () => { foreach (var t in tabs.Where(x => x.Group == g).ToList()) CloseTab(t); }));
+        menu.Show(screen);
+    }
 
     async Task FreezeIdleTabs()
     {
@@ -712,6 +860,8 @@ sealed class MainForm : Form
             strip.Invalidate();
         };
 
+        core.Find.MatchCountChanged += (_, _) => { if (tab == active) findBar.SetCount(core.Find.ActiveMatchIndex + 1, core.Find.MatchCount); };
+        core.Find.ActiveMatchIndexChanged += (_, _) => { if (tab == active) findBar.SetCount(core.Find.ActiveMatchIndex + 1, core.Find.MatchCount); };
         core.IsDocumentPlayingAudioChanged += (_, _) => { tab.Audio = core.IsDocumentPlayingAudio; strip.Invalidate(); };
         core.IsMutedChanged += (_, _) => { tab.Muted = core.IsMuted; strip.Invalidate(); };
         core.HistoryChanged += (_, _) => { if (tab == active) UpdateUi(); };
@@ -1014,6 +1164,17 @@ sealed class MainForm : Form
             var label = (entry.Username.Length > 0 ? entry.Username : "(без логина)") + "   ••••••••";
             menu.Items.Add(Theme.Item(label, () => FillEntry(core, entry)));
         }
+        var codes = Vault.Codes();
+        foreach (var e in list.Where(x => codes.ContainsKey(x.Id)))
+        {
+            var (code, _) = codes[e.Id];
+            var c = code;
+            menu.Items.Add(Theme.Item($"Вставить код 2FA {c[..3]} {c[3..]}" + (list.Count > 1 ? $" ({e.Username})" : ""), async () =>
+            {
+                var r = await core.ExecuteScriptAsync(Totp.FillScript(c));
+                if (r.Contains("none")) { PasswordTools.CopySecret(c); MessageBox.Show(this, "Поле для кода не найдено — код скопирован в буфер обмена.", "Код 2FA"); }
+            }));
+        }
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(Theme.Item("Вставить новый надёжный пароль", async () =>
         {
@@ -1060,6 +1221,7 @@ sealed class MainForm : Form
             {
                 id = e.Id, origin = e.Origin, host = PasswordTools.HostKey(e.Origin), username = e.Username,
                 updated = e.Updated.ToString("dd.MM.yyyy"), weak = Weak(e.Password), reused = reuse.Contains(e.Id), length = e.Password.Length,
+                hasTotp = e.Totp.Length > 0,
             }),
         };
     }
@@ -1094,7 +1256,27 @@ sealed class MainForm : Form
                 break;
             case "pw:reveal":
                 var re = Vault.Get(Str("id"));
-                if (re != null) Post(core, new { type = "pwReveal", id = re.Id, password = re.Password });
+                if (re != null) Post(core, new { type = "pwReveal", id = re.Id, password = re.Password, totp = re.Totp });
+                break;
+            case "pw:codes": // не продлевает автоблокировку
+                if (!Vault.Unlocked) break;
+                Post(core, new { type = "pwCodes", codes = Vault.Codes().ToDictionary(k => k.Key, v => new { code = v.Value.code, left = v.Value.left }) });
+                break;
+            case "pw:copyCode":
+                if (Vault.Codes().TryGetValue(Str("id"), out var cc))
+                {
+                    PasswordTools.CopySecret(cc.code);
+                    Post(core, new { type = "done", text = "Код 2FA скопирован" });
+                }
+                break;
+            case "pw:breach":
+                Post(core, new { type = "done", text = "Проверяю пароли по базе утечек…" });
+                try
+                {
+                    var found = await BreachCheck.CheckAsync(Vault.All());
+                    Post(core, new { type = "pwBreach", found });
+                }
+                catch (Exception ex) { Post(core, new { type = "pwError", text = "Не удалось проверить: " + ex.Message }); }
                 break;
             case "pw:copy":
                 var ce = Vault.Get(Str("id"));
@@ -1109,7 +1291,9 @@ sealed class MainForm : Form
                 if (origin == null) { Post(core, new { type = "pwError", text = "Укажите адрес сайта, например vk.com" }); break; }
                 if (Str("password").Length == 0) { Post(core, new { type = "pwError", text = "Пароль не может быть пустым" }); break; }
                 var sid = Str("id");
-                Vault.Upsert(sid.Length > 0 ? sid : null, origin, Str("username").Trim(), Str("password"));
+                var totpIn = Str("totp").Trim();
+                if (totpIn.Length > 0 && Totp.Parse(totpIn) == null) { Post(core, new { type = "pwError", text = "Не похоже на ключ 2FA. Вставьте секретный ключ (буквы и цифры) или ссылку otpauth://" }); break; }
+                Vault.Upsert(sid.Length > 0 ? sid : null, origin, Str("username").Trim(), Str("password"), totpIn);
                 Post(core, VaultList());
                 Post(core, new { type = "done", text = "Сохранено" });
                 break;
@@ -1181,6 +1365,253 @@ sealed class MainForm : Form
                 Post(core, VaultState());
                 break;
         }
+    }
+
+    // ================= Боковая панель =================
+
+    void ToggleSidePanel(bool show)
+    {
+        if (show)
+        {
+            sidePanel.ApplyTheme();
+            sidePanel.Width = Math.Min(Theme.S(Cfg.SidePanelWidth), Math.Max(Theme.S(260), ClientSize.Width - Theme.S(400)));
+            splitter.Width = Theme.S(4);
+            splitter.BackColor = Theme.Line;
+        }
+        sidePanel.Visible = splitter.Visible = show;
+        sideBtn.GlyphColor = show ? Theme.Accent : null;
+        if (show) sidePanel.EnsureLoaded(Cfg.SidePanelUrl);
+        if (!Incognito && Cfg.SidePanelOpen != show) CopyAndSave(x => x.SidePanelOpen = show);
+    }
+
+    // ================= Видео, медиа, скриншоты, чтение =================
+
+    async Task PictureInPicture()
+    {
+        var core = active?.Core;
+        if (core == null) return;
+        string r;
+        try { r = await PageTools.EvalAsync(core, PageTools.PictureInPicture); } catch { r = "fail"; }
+        if (r is "ok" or "exit") return;
+        // Запасной вариант для YouTube — свой мини-плеер поверх окон
+        if ((active!.PageHost.EndsWith("youtube.com") || active.PageHost == "youtu.be"))
+        {
+            var info = (await core.ExecuteScriptAsync(PageTools.YouTubeInfo)).Trim('"');
+            var parts = info.Split('|');
+            if (parts.Length == 2 && int.TryParse(parts[1], out var t)) { new MiniPlayer(parts[0], t).Show(); return; }
+        }
+        MessageBox.Show(this, r == "novideo" ? "На странице нет видео." : "Этот сайт не разрешает «картинку в картинке».", "Картинка в картинке");
+    }
+
+    async Task SetSpeed(double rate)
+    {
+        var core = active?.Core;
+        if (core == null) return;
+        var n = await core.ExecuteScriptAsync(PageTools.SetSpeed(rate));
+        infoBar.ShowBar("speed", "", n == "0" ? "На странице нет видео или аудио" : $"Скорость воспроизведения: ×{rate:0.##}",
+            ("Обычная скорость", () => { _ = SetSpeed(1); infoBar.HideBar(); }, false));
+        if (rate == 1) infoBar.HideBar();
+    }
+
+    async Task DownloadMedia()
+    {
+        var core = active?.Core;
+        if (core == null) return;
+        string json;
+        try { json = JsonSerializer.Deserialize<string>(await core.ExecuteScriptAsync(PageTools.FindMedia)) ?? "{}"; } catch { json = "{}"; }
+        using var doc = JsonDocument.Parse(json);
+        var items = doc.RootElement.TryGetProperty("items", out var it) ? it.EnumerateArray().ToList() : new();
+        if (items.Count == 0)
+        {
+            MessageBox.Show(this, "На этой странице нет файлов видео или аудио, которые можно скачать напрямую.\n\n" +
+                "Сайты вроде YouTube, ВК и Netflix передают видео потоком по кусочкам и не разрешают его скачивать.", "Скачать медиа");
+            return;
+        }
+        var title = doc.RootElement.TryGetProperty("title", out var tt) ? tt.GetString() ?? "" : "";
+        var page = core.Source;
+        var menu = Theme.NewMenu();
+        menu.Items.Add(new ToolStripMenuItem("Что скачать?") { Enabled = false });
+        int n = 0;
+        foreach (var m in items)
+        {
+            var src = m.GetProperty("src").GetString()!;
+            var kind = m.GetProperty("kind").GetString();
+            var fileName = Path.GetFileName(new Uri(src).AbsolutePath);
+            var label = $"{kind}: {(fileName.Length > 0 ? fileName : new Uri(src).Host)}";
+            var idx = ++n;
+            menu.Items.Add(Theme.Item(label.Length > 70 ? label[..68] + "…" : label, async () =>
+            {
+                string cookies = "";
+                try { cookies = string.Join("; ", (await core.CookieManager.GetCookiesAsync(src)).Select(c => c.Name + "=" + c.Value)); } catch { }
+                var ext = Path.GetExtension(new Uri(src).AbsolutePath);
+                var nice = title.Length > 0 ? title + (items.Count > 1 ? $" ({idx})" : "") + (ext.Length is > 1 and < 6 ? ext : kind == "аудио" ? ".mp3" : ".mp4") : null;
+                Downloads.StartDirect(src, page, cookies, nice);
+                showDownloads = true;
+                LayoutToolbar();
+                downloadsPopup.ShowBelow(downloadsBtn);
+            }));
+        }
+        menu.Show(menuBtn, new Point(menuBtn.Width - menu.PreferredSize.Width, menuBtn.Height + Theme.S(4)));
+    }
+
+    async Task TakeScreenshot(bool full)
+    {
+        var core = active?.Core;
+        if (core == null) return;
+        try
+        {
+            var path = await PageTools.Screenshot(core, full);
+            infoBar.ShowBar("shot", "", $"Скриншот сохранён и скопирован в буфер обмена: {Path.GetFileName(path)}",
+                ("Открыть", () => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }), true),
+                ("Показать в папке", () => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true }), false));
+        }
+        catch (Exception ex) { MessageBox.Show(this, "Не удалось сделать скриншот: " + ex.Message, "Скриншот"); }
+    }
+
+    async Task ToggleReader()
+    {
+        var core = active?.Core;
+        if (core == null || !core.Source.StartsWith("http")) return;
+        var r = (await core.ExecuteScriptAsync(PageTools.Reader)).Trim('"');
+        if (r == "notarticle") infoBar.ShowBar("reader", "", "На этой странице не нашлось статьи для режима чтения", ("OK", () => infoBar.HideBar(), false));
+    }
+
+    // ================= Поиск по странице =================
+
+    void PlaceFindBar()
+    {
+        if (findBar == null) return;
+        findBar.Location = new Point(content.Width - findBar.Width - Theme.S(20), Theme.S(8));
+    }
+
+    void ShowFind()
+    {
+        if (active?.Core == null) return;
+        findBar.ApplyTheme();
+        PlaceFindBar();
+        findBar.Visible = true;
+        findBar.BringToFront();
+        findBar.Box.Focus();
+        findBar.Box.SelectAll();
+        if (findBar.Box.Text.Length > 0) _ = RunFind(findBar.Box.Text);
+    }
+
+    async Task RunFind(string term)
+    {
+        var core = active?.Core;
+        if (core == null) return;
+        if (term.Length == 0) { core.Find.Stop(); findBar.SetCount(0, 0); return; }
+        var env = await AppEnv.GetEnvironment();
+        var o = env.CreateFindOptions();
+        o.FindTerm = term;
+        o.SuppressDefaultFindDialog = true;
+        o.ShouldHighlightAllMatches = true;
+        await core.Find.StartAsync(o);
+        findBar.SetCount(core.Find.ActiveMatchIndex + 1, core.Find.MatchCount);
+    }
+
+    void CloseFind()
+    {
+        if (!findBar.Visible) return;
+        try { active?.Core?.Find.Stop(); } catch { }
+        findBar.Visible = false;
+        active?.View.Focus();
+    }
+
+    // ================= Подсказки адресной строки =================
+
+    void UpdateSuggestions()
+    {
+        if (!address.Box.Focused) { suggest.Hide(); return; }
+        var q = address.Box.Text.Trim();
+        if (q.Length == 0 || q.StartsWith("lite://")) { suggest.Hide(); return; }
+        var engine = SearchEngines.Get(Cfg.Engine);
+        bool looksUrl = !q.Contains(' ') && q.Contains('.') && !q.EndsWith('.');
+        var list = new List<SuggestPopup.Item>();
+        if (looksUrl) list.Add(new("", q, "перейти на сайт", ToUrl(q)));
+        list.Add(new("", q, "поиск в " + engine.Name, engine.Url + Uri.EscapeDataString(q)));
+        var seen = new HashSet<string>(list.Select(x => x.Url));
+        foreach (var b in Store.Bookmarks.Where(b => b.Title.Contains(q, StringComparison.OrdinalIgnoreCase) || b.Url.Contains(q, StringComparison.OrdinalIgnoreCase)).Take(3))
+            if (seen.Add(b.Url)) list.Add(new("", b.Title, b.Url, b.Url));
+        if (!Incognito)
+            foreach (var h in Store.SearchHistory(q, 60).Where(h => h.Url.Length < 500).DistinctBy(h => h.Url).Take(6))
+            {
+                if (list.Count >= 8) break;
+                if (seen.Add(h.Url)) list.Add(new("", h.Title.Length > 0 ? h.Title : h.Url, h.Url, h.Url));
+            }
+        suggest.ShowItems(address, list);
+
+        suggestCts?.Cancel();
+        if (!Cfg.SearchSuggestions || Incognito || looksUrl) return;
+        var cts = suggestCts = new CancellationTokenSource();
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(180, cts.Token);
+            var remote = await RemoteSuggest.Get(engine.Id, q, cts.Token);
+            if (cts.IsCancellationRequested || remote.Count == 0) return;
+            BeginInvoke(() =>
+            {
+                if (cts.IsCancellationRequested || address.Box.Text.Trim() != q || !address.Box.Focused) return;
+                var merged = list.Take(2).ToList();
+                foreach (var r in remote.Where(r => !r.Equals(q, StringComparison.OrdinalIgnoreCase)).Take(4))
+                    merged.Add(new("", r, "поиск", engine.Url + Uri.EscapeDataString(r)));
+                merged.AddRange(list.Skip(2).Take(Math.Max(0, 9 - merged.Count)));
+                suggest.ShowItems(address, merged);
+            });
+        });
+    }
+
+    // ================= Обновления и браузер по умолчанию =================
+
+    /// <summary>Через несколько секунд после запуска: проверить обновления и предложить стать основным браузером.</summary>
+    public async Task RunStartupChecks()
+    {
+        await Task.Delay(4000);
+        if (IsDisposed || Incognito) return;
+        if (Cfg.AutoUpdate)
+        {
+            try
+            {
+                var r = await Updater.CheckAsync();
+                if (r != null && r.Tag != Cfg.SkippedUpdate && !IsDisposed) { ShowUpdate(r); return; }
+            }
+            catch { /* нет сети — проверим в другой раз */ }
+        }
+        if (!IsDisposed && !Cfg.DefaultPromptDismissed && !SystemIntegration.IsDefaultBrowser()) ShowDefaultPrompt();
+    }
+
+    void ShowDefaultPrompt()
+    {
+        infoBar.ShowBar("default", "", "Сделать LiteBrowser основным браузером? Ссылки из Telegram, Discord и других программ будут открываться здесь.",
+            ("Сделать основным", () =>
+            {
+                try { SystemIntegration.RegisterAsBrowser(); infoBar.SetText("Выберите LiteBrowser в открывшемся окне Windows → «Веб-браузер»"); }
+                catch (Exception ex) { MessageBox.Show(this, ex.Message, "LiteBrowser"); }
+            }, true),
+            ("Не сейчас", () => infoBar.HideBar(), false),
+            ("Больше не спрашивать", () => { CopyAndSave(x => x.DefaultPromptDismissed = true); infoBar.HideBar(); }, false));
+    }
+
+    void ShowUpdate(ReleaseInfo r)
+    {
+        infoBar.ShowBar("update", "", $"Доступна новая версия LiteBrowser {r.Version.ToString(2)} (у вас {AppEnv.Version})",
+            ("Обновить и перезапустить", () => _ = DoUpdate(r), true),
+            ("Что нового", () => _ = AddTab(r.PageUrl), false),
+            ("Пропустить", () => { CopyAndSave(x => x.SkippedUpdate = r.Tag); infoBar.HideBar(); }, false));
+    }
+
+    async Task DoUpdate(ReleaseInfo r)
+    {
+        try
+        {
+            infoBar.SetText("Скачиваю обновление…");
+            var prog = new Progress<double>(p => infoBar.SetText($"Скачиваю обновление… {p:P0}"));
+            await Updater.InstallAsync(r, prog);
+            infoBar.SetText("Готово, перезапускаю…");
+            await Task.Delay(500);
+            BrowserApp.Instance.Restart();
+        }
+        catch (Exception ex) { infoBar.SetText("Не удалось обновить: " + ex.Message); }
     }
 
     // ================= Расширения =================
@@ -1313,6 +1744,7 @@ sealed class MainForm : Form
         version = AppEnv.Version,
         browserVersion = AppEnv.GetEnvironment().IsCompletedSuccessfully ? AppEnv.GetEnvironment().Result.BrowserVersionString : "",
         incognito = Incognito,
+        isDefault = SystemIntegration.IsDefaultBrowser(),
         importSuggest = !Incognito && !Cfg.ImportOffered && Store.Bookmarks.Count == 0,
         restartNeeded = AppEnv.RestartNeeded,
         proxyRunning = AppEnv.RunningSignature != "off",
@@ -1407,6 +1839,16 @@ sealed class MainForm : Form
                 Post(core, new { type = "done", text = "Выберите LiteBrowser в открывшемся окне Windows" });
                 break;
 
+            case "checkUpdate":
+                try
+                {
+                    var rel = await Updater.CheckAsync();
+                    if (rel == null) Post(core, new { type = "done", text = $"У вас последняя версия ({AppEnv.Version})" });
+                    else { ShowUpdate(rel); Post(core, new { type = "done", text = $"Найдена версия {rel.Version.ToString(2)} — смотрите плашку сверху" }); }
+                }
+                catch (Exception ex) { Post(core, new { type = "error", text = "Не удалось проверить: " + ex.Message }); }
+                break;
+
             case "historyGet":
                 Post(core, new
                 {
@@ -1486,6 +1928,57 @@ sealed class MainForm : Form
 
             case "dismissImport":
                 CopyAndSave(x => x.ImportOffered = true);
+                break;
+
+            // ---- Загрузки ----
+            case "dl:list":
+                Post(core, new
+                {
+                    type = "dlList",
+                    folder = Downloads.DefaultFolder,
+                    items = Downloads.Items.Select(i => new
+                    {
+                        id = i.Id, name = i.Name, url = i.Url, path = i.Path, received = i.Received, total = i.Total,
+                        state = i.State.ToString(), canceled = i.Canceled, time = i.Time, speed = (long)i.Speed,
+                        exists = i.State == DlState.Completed && File.Exists(i.Path),
+                    }),
+                });
+                break;
+            case "dl:open":
+                if (Downloads.Get(Str("id")) is { } d1) Downloads.Open(d1);
+                break;
+            case "dl:folder":
+                Downloads.ShowInFolder(Downloads.Get(Str("id")));
+                break;
+            case "dl:cancel":
+                Downloads.Get(Str("id"))?.Cancel();
+                break;
+            case "dl:remove":
+                Downloads.Remove(Str("id"));
+                break;
+            case "dl:clear":
+                Downloads.Clear();
+                break;
+
+            // ---- Закладки ----
+            case "bm:list":
+                Post(core, new { type = "bmList", items = Store.Bookmarks.Select((b, i) => new { i, title = b.Title, url = b.Url, icon = b.Icon }) });
+                break;
+            case "bm:remove":
+                var bmr = Store.FindBookmark(Str("url"));
+                if (bmr != null) Store.RemoveBookmark(bmr);
+                Post(core, new { type = "bmList", items = Store.Bookmarks.Select((b, i) => new { i, title = b.Title, url = b.Url, icon = b.Icon }) });
+                break;
+            case "bm:rename":
+                var bmn = Store.FindBookmark(Str("url"));
+                if (bmn != null && Str("title").Trim().Length > 0) Store.RenameBookmark(bmn, Str("title").Trim());
+                break;
+            case "bm:add":
+                var bu = Str("url").Trim();
+                if (!bu.Contains("://")) bu = "https://" + bu;
+                if (Uri.TryCreate(bu, UriKind.Absolute, out var buu) && buu.Scheme is "http" or "https")
+                    Store.AddBookmark(Str("title").Trim().Length > 0 ? Str("title").Trim() : buu.Host, buu.ToString(), null);
+                Post(core, new { type = "bmList", items = Store.Bookmarks.Select((b, i) => new { i, title = b.Title, url = b.Url, icon = b.Icon }) });
                 break;
         }
     }
@@ -1588,7 +2081,7 @@ sealed class MainForm : Form
             ? "Обход блокировок: нужен перезапуск браузера"
             : Cfg.ProxyMode == "all" ? $"Обход блокировок: все сайты через {Cfg.ProxyHost}:{Cfg.ProxyPort}"
             : $"Обход блокировок: {Cfg.ProxySites.Count} сайтов через {Cfg.ProxyHost}:{Cfg.ProxyPort}");
-        showDownloads = Downloads.Items.Count > 0;
+        showDownloads = Downloads.AnyActive || Downloads.Items.Any(i => (DateTime.Now - i.Time).TotalHours < 12);
         LayoutToolbar();
     }
 
@@ -1620,9 +2113,28 @@ sealed class MainForm : Form
         menu.Items.Add(Theme.Item("История", () => OpenLitePage(LitePages.History), "Ctrl+H"));
         menu.Items.Add(Theme.Item("Пароли", () => OpenLitePage(LitePages.Passwords), "Ctrl+Shift+P"));
         menu.Items.Add(Theme.Item("Расширения", () => OpenLitePage(LitePages.ExtensionsPage), "Ctrl+Shift+E"));
-        menu.Items.Add(Theme.Item("Загрузки", ToggleDownloads, "Ctrl+J"));
+        menu.Items.Add(Theme.Item("Загрузки", () => OpenLitePage(LitePages.DownloadsPage), "Ctrl+J"));
+        menu.Items.Add(Theme.Item("Закладки", () => OpenLitePage(LitePages.BookmarksPage), "Ctrl+Shift+O"));
+        menu.Items.Add(Theme.Item(sidePanel.Visible ? "Скрыть боковую панель" : "Боковая панель", () => ToggleSidePanel(!sidePanel.Visible), "Ctrl+B"));
         menu.Items.Add(Theme.Item(Cfg.ShowBookmarksBar ? "Скрыть панель закладок" : "Показать панель закладок", ToggleBookmarksBar, "Ctrl+Shift+B"));
         menu.Items.Add(Theme.Item("Открыть закрытую вкладку", ReopenClosedTab, "Ctrl+Shift+T"));
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(Theme.Item("Найти на странице", ShowFind, "Ctrl+F"));
+        menu.Items.Add(Theme.Item("Режим чтения", () => _ = ToggleReader(), "Ctrl+Alt+R"));
+        var video = new ToolStripMenuItem("Видео и аудио") { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
+        video.DropDownItems.Add(Theme.Item("Картинка в картинке", () => _ = PictureInPicture(), "Ctrl+Shift+V"));
+        foreach (var r in new[] { 0.5, 1, 1.25, 1.5, 2, 3 })
+        {
+            var rate = r;
+            video.DropDownItems.Add(Theme.Item($"Скорость ×{rate:0.##}", () => _ = SetSpeed(rate)));
+        }
+        video.DropDownItems.Add(new ToolStripSeparator());
+        video.DropDownItems.Add(Theme.Item("Скачать видео или аудио со страницы", () => _ = DownloadMedia()));
+        menu.Items.Add(video);
+        var shot = new ToolStripMenuItem("Скриншот") { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
+        shot.DropDownItems.Add(Theme.Item("Видимая часть", () => _ = TakeScreenshot(false), "Ctrl+Shift+S"));
+        shot.DropDownItems.Add(Theme.Item("Вся страница целиком", () => _ = TakeScreenshot(true)));
+        menu.Items.Add(shot);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(Theme.Item("Обход блокировок", () => OpenLitePage(LitePages.Settings, "#proxy")));
         menu.Items.Add(Theme.Item("Очистить историю и данные", () => OpenLitePage(LitePages.Settings, "#data")));
@@ -1753,6 +2265,8 @@ sealed class MainForm : Form
         else if (src.StartsWith(LitePages.History)) address.SetLock("", Theme.Accent);
         else if (src.StartsWith(LitePages.Passwords)) address.SetLock("", Theme.Accent);
         else if (src.StartsWith(LitePages.ExtensionsPage) || src.StartsWith("chrome-extension://")) address.SetLock("", Theme.Accent);
+        else if (src.StartsWith(LitePages.DownloadsPage)) address.SetLock("", Theme.Accent);
+        else if (src.StartsWith(LitePages.BookmarksPage)) address.SetLock("", Theme.Accent);
         else if (src.StartsWith(LitePages.Prefix)) address.SetLock("", Theme.TextDim);
         else if (src.StartsWith("http") && Untrusted(active?.PageHost ?? "")) address.SetLock("", Color.FromArgb(255, 184, 107));
         else if (src.StartsWith("http") && Trusted(active?.PageHost ?? "")) address.SetLock("", Theme.Secure);
@@ -1804,6 +2318,8 @@ sealed class MainForm : Form
                 case "history": return LitePages.History + rest;
                 case "passwords": return LitePages.Passwords + rest;
                 case "extensions": return LitePages.ExtensionsPage + rest;
+                case "downloads": return LitePages.DownloadsPage + rest;
+                case "bookmarks": return LitePages.BookmarksPage + rest;
                 case "home": return homeUrl;
             }
         }
@@ -1826,10 +2342,16 @@ sealed class MainForm : Form
             case Keys.Control | Keys.Shift | Keys.Tab: CycleTab(-1); return true;
             case Keys.Control | Keys.L: case Keys.F6: address.Box.Focus(); address.Box.SelectAll(); return true;
             case Keys.Control | Keys.D: ToggleBookmark(); return true;
+            case Keys.Control | Keys.F: case Keys.F3: ShowFind(); return true;
+            case Keys.Control | Keys.B: ToggleSidePanel(!sidePanel.Visible); return true;
+            case Keys.Control | Keys.Alt | Keys.R: _ = ToggleReader(); return true;
+            case Keys.Control | Keys.Shift | Keys.V: _ = PictureInPicture(); return true;
+            case Keys.Control | Keys.Shift | Keys.S: _ = TakeScreenshot(false); return true;
             case Keys.Control | Keys.H: OpenLitePage(LitePages.History); return true;
             case Keys.Control | Keys.Shift | Keys.P: OpenLitePage(LitePages.Passwords); return true;
             case Keys.Control | Keys.Shift | Keys.E: OpenLitePage(LitePages.ExtensionsPage); return true;
-            case Keys.Control | Keys.J: ToggleDownloads(); return true;
+            case Keys.Control | Keys.Shift | Keys.O: OpenLitePage(LitePages.BookmarksPage); return true;
+            case Keys.Control | Keys.J: OpenLitePage(LitePages.DownloadsPage); return true;
             case Keys.Control | Keys.Shift | Keys.B: ToggleBookmarksBar(); return true;
             case Keys.Control | Keys.Oemcomma: OpenLitePage(LitePages.Settings); return true;
             case Keys.Control | Keys.Oemplus: case Keys.Control | Keys.Add: case Keys.Control | Keys.Shift | Keys.Oemplus: ZoomStep(1); return true;

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<title>Закладки</title>
+<link rel="stylesheet" href="common.css">
+<link rel="stylesheet" href="lists.css">
+</head>
+<body>
+<div class="glow"></div>
+<main>
+  <header>
+    <div class="logo icon">&#xE734;</div>
+    <div class="grow"><h1>Закладки</h1><div class="sub" id="count"></div></div>
+    <button class="btn" id="add"><span class="icon">&#xE710;</span> Добавить</button>
+  </header>
+  <div class="bar"><input class="text" id="q" placeholder="Поиск по закладкам" spellcheck="false" autofocus></div>
+  <div class="list" id="out"></div>
+</main>
+<script src="bookmarks.js"></script>
+</body>
+</html>

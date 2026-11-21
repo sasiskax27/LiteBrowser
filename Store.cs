@@ -16,9 +16,19 @@ sealed class HistoryEntry
     public DateTime Time { get; set; }
 }
 
+sealed class SessionTab
+{
+    public string Url { get; set; } = "";
+    public bool Pinned { get; set; }
+    public string? Group { get; set; }
+    public string? GroupColor { get; set; }
+    public bool GroupCollapsed { get; set; }
+}
+
 sealed class Session
 {
     public List<string> Tabs { get; set; } = new();
+    public List<SessionTab>? Info { get; set; }
     public int Active { get; set; }
 }
 

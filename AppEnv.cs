@@ -24,6 +24,7 @@ static class AppEnv
         Settings = AppSettings.Load(DataDir);
         Store.Load(DataDir);
         Blocklist.LoadCached(DataDir);
+        Downloads.Load();
     }
 
     public static void UpdateSettings(AppSettings s)

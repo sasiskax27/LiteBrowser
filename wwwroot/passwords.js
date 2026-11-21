@@ -3,6 +3,7 @@ if (window.top !== window) document.documentElement.innerHTML = '';
 const $ = id => document.getElementById(id);
 const wv = window.chrome && window.chrome.webview;
 const send = m => wv && wv.postMessage(m);
+let codes = {}, breached = {};
 let state = null, items = [], filter = 'all', editing = null, revealed = {}, toastTimer = 0, importedFile = '', listLoaded = false;
 
 function toast(text) {
@@ -117,6 +118,8 @@ function renderList() {
     const host = row.querySelector('.host');
     if (it.weak) host.insertAdjacentHTML('beforeend', '<span class="badge weak">Слабый</span>');
     if (it.reused) host.insertAdjacentHTML('beforeend', '<span class="badge reused">Повторяется</span>');
+    if (breached[it.id]) host.insertAdjacentHTML('beforeend', '<span class="badge reused">Утёк ×' + breached[it.id].toLocaleString('ru-RU') + '</span>');
+    if (it.hasTotp) { const c = codes[it.id]; const b = document.createElement('span'); b.className = 'badge weak code2fa'; b.dataset.id = it.id; b.style.cursor = 'pointer'; b.title = 'Скопировать код 2FA'; b.textContent = c ? c.code.slice(0,3) + ' ' + c.code.slice(3) + ' · ' + c.left + 'с' : '2FA'; b.onclick = () => send({ type: 'pw:copyCode', id: it.id }); host.appendChild(b); }
     row.querySelector('.user').textContent = (it.username || '(без логина)') + ' · изменён ' + it.updated;
     const pw = row.querySelector('.pw');
     if (revealed[it.id]) { pw.textContent = revealed[it.id]; pw.classList.remove('hidden'); }
@@ -151,6 +154,7 @@ function openEdit(it) {
   $('eUrl').value = it ? it.origin : '';
   $('eUser').value = it ? it.username : '';
   $('ePass').value = '';
+  $('eTotp').value = '';
   $('ePass').type = 'password';
   show('eDelete', !!it);
   meter('ePass', 'eMeter', 'eMeterLabel');
@@ -163,7 +167,7 @@ $('eCancel').onclick = () => show('editModal', false);
 $('eEye').onclick = () => { $('ePass').type = $('ePass').type === 'password' ? 'text' : 'password'; };
 $('eGen').onclick = () => { genTarget = 'edit'; send({ type: 'pw:generate', length: 20, symbols: true }); };
 $('ePass').oninput = () => meter('ePass', 'eMeter', 'eMeterLabel');
-$('eSave').onclick = () => send({ type: 'pw:save', id: editing ? editing.id : '', url: $('eUrl').value, username: $('eUser').value, password: $('ePass').value });
+$('eSave').onclick = () => send({ type: 'pw:save', id: editing ? editing.id : '', url: $('eUrl').value, username: $('eUser').value, password: $('ePass').value, totp: $('eTotp').value });
 $('eDelete').onclick = () => { if (editing && confirm('Удалить этот пароль?')) { send({ type: 'pw:delete', id: editing.id }); show('editModal', false); } };
 
 // ---------- Генератор ----------
@@ -240,12 +244,20 @@ if (wv) {
         show('editModal', false);
         break;
       case 'pwReveal':
-        if (pendingEdit === m.id) { $('ePass').value = m.password; meter('ePass', 'eMeter', 'eMeterLabel'); pendingEdit = null; }
+        if (pendingEdit === m.id) { $('ePass').value = m.password; $('eTotp').value = m.totp || ''; meter('ePass', 'eMeter', 'eMeterLabel'); pendingEdit = null; }
         else { revealed[m.id] = m.password; renderList(); }
         break;
       case 'pwGenerated':
         if (genTarget === 'edit') { $('ePass').value = m.password; $('ePass').type = 'text'; meter('ePass', 'eMeter', 'eMeterLabel'); }
         else { $('gOut').textContent = m.password; $('gOut').dataset.v = m.password; const s = strength(m.password); $('gMeter').style.width = s.score + '%'; $('gMeter').style.background = s.color; $('gMeterLabel').textContent = s.label; }
+        break;
+      case 'pwCodes':
+        codes = m.codes;
+        document.querySelectorAll('.code2fa').forEach(b => { const c = codes[b.dataset.id]; if (c) b.textContent = c.code.slice(0,3) + ' ' + c.code.slice(3) + ' · ' + c.left + 'с'; });
+        break;
+      case 'pwBreach':
+        breached = m.found; renderList();
+        toast(Object.keys(breached).length ? 'Утёкших паролей: ' + Object.keys(breached).length + ' — смените их!' : 'Ни один пароль не найден в утечках');
         break;
       case 'pwImported':
         importedFile = m.file;
@@ -272,5 +284,7 @@ if (wv) {
   send({ type: 'pw:state' });
   // Хранилище может заблокироваться само (таймер, Win+L) — проверяем, не продлевая блокировку
   setInterval(() => send({ type: 'pw:state' }), 15000);
+  setInterval(() => { if (state && state.unlocked && !document.hidden && items.some(i => i.hasTotp)) send({ type: 'pw:codes' }); }, 1000);
+  $('breachBtn').onclick = () => send({ type: 'pw:breach' });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) send({ type: 'pw:state' }); });
 }
