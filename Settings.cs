@@ -190,7 +190,7 @@ sealed class AppSettings
         ParentalBlocked = (ParentalBlocked ?? new()).Select(CleanSite).Where(s => s.Length > 0 && HostRx.IsMatch(s)).Distinct().Take(2000).ToList();
         ParentalPinHash ??= "";
         if (!Theme.Accents.ContainsKey(Accent ?? "")) Accent = "blue";
-        if (!Path.IsPathRooted(SyncFolder ?? "")) SyncFolder = "";
+        if (!Path.IsPathRooted(SyncFolder ?? "") && !(WebDav.IsUrl(SyncFolder) && WebDav.Allowed(SyncFolder!))) SyncFolder = "";
         HomeTiles = (HomeTiles ?? HomeTile.Defaults())
             .Where(t => t != null && (t.Name ?? "").Trim().Length is > 0 and <= 40 && Uri.TryCreate(t.Url, UriKind.Absolute, out var tu) && tu.Scheme is "http" or "https")
             .Take(24).ToList();

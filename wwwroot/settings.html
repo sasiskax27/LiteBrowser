@@ -455,6 +455,16 @@
       <button class="btn" id="syncPick">Выбрать папку</button>
     </div>
     <div class="row">
+      <div><div class="row-title">Или свой сервер (WebDAV)</div>
+        <div class="row-sub">Nextcloud, ownCloud, Яндекс Диск (https://webdav.yandex.ru/LiteBrowser, пароль приложения), NAS. Логин и пароль сервера остаются только на этом компьютере</div>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+          <input class="text" id="davUrl" placeholder="https://cloud.example.com/remote.php/dav/files/имя/LiteBrowser" style="width:330px" autocomplete="off">
+          <input class="text" id="davUser" placeholder="Логин" style="width:130px" autocomplete="off">
+          <input class="text" type="password" id="davPass" placeholder="Пароль" style="width:130px" autocomplete="new-password">
+        </div></div>
+      <button class="btn" id="davSave">Подключить</button>
+    </div>
+    <div class="row">
       <div><div class="row-title">Пароль синхронизации</div><div class="row-sub" id="syncPwState">Задайте одинаковый пароль на всех компьютерах (от 8 символов)</div></div>
       <div class="actions"><input class="text" type="password" id="syncPw" placeholder="Пароль" style="width:170px"><button class="btn" id="syncPwSave">Сохранить</button></div>
     </div>

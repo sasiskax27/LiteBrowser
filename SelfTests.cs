@@ -580,6 +580,72 @@ static class RecordSelfTest
 /// </summary>
 static class DirectDownloadSelfTest
 {
+    /// <summary>WebDAV: свой мини-сервер с логином, загрузка/скачивание файла синхронизации, неверный пароль, запрет http на чужие адреса.</summary>
+    static void WebDavPart(string root, Action<string, bool, string?> Check)
+    {
+        var files = new Dictionary<string, byte[]>();
+        bool folder = false;
+        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+        var good = "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes("user:secret"));
+        var cts = new CancellationTokenSource();
+        _ = Task.Run(async () =>
+        {
+            while (!cts.IsCancellationRequested)
+            {
+                System.Net.Sockets.TcpClient c;
+                try { c = await listener.AcceptTcpClientAsync(cts.Token); } catch { break; }
+                _ = Task.Run(async () =>
+                {
+                    using var client = c;
+                    try
+                    {
+                        var ns = client.GetStream();
+                        var head = new StringBuilder(); var one = new byte[1];
+                        while (!head.ToString().EndsWith("\r\n\r\n") && await ns.ReadAsync(one) > 0) head.Append((char)one[0]);
+                        var h = head.ToString();
+                        var first = h.Split("\r\n")[0].Split(' ');
+                        string method = first[0], path = first[1];
+                        var lenM = System.Text.RegularExpressions.Regex.Match(h, @"Content-Length: (\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                        var body = new byte[lenM.Success ? int.Parse(lenM.Groups[1].Value) : 0];
+                        int got = 0; while (got < body.Length) { int n = await ns.ReadAsync(body.AsMemory(got)); if (n <= 0) break; got += n; }
+                        string status; byte[] resp = Array.Empty<byte>();
+                        if (!h.Contains("Authorization: " + good)) status = "401 Unauthorized";
+                        else if (method == "MKCOL") { status = folder ? "405 Method Not Allowed" : "201 Created"; folder = true; }
+                        else if (method == "PROPFIND") status = folder ? "207 Multi-Status" : "404 Not Found";
+                        else if (method == "PUT") { files[path] = body; status = "201 Created"; }
+                        else if (method == "GET") { if (files.TryGetValue(path, out var f)) { status = "200 OK"; resp = f; } else status = "404 Not Found"; }
+                        else status = "405 Method Not Allowed";
+                        await ns.WriteAsync(Encoding.ASCII.GetBytes($"HTTP/1.1 {status}\r\nContent-Length: {resp.Length}\r\nConnection: close\r\n\r\n"));
+                        await ns.WriteAsync(resp);
+                    }
+                    catch { }
+                });
+            }
+        });
+        try
+        {
+            var url = $"http://127.0.0.1:{port}/dav/LiteBrowser";
+            Check("webdav: http только для своего компьютера и домашней сети", WebDav.Allowed(url) && WebDav.Allowed("http://192.168.1.5/dav") && !WebDav.Allowed("http://example.com/dav") && WebDav.Allowed("https://example.com/dav"), null);
+            bool wrongRejected = false;
+            try { WebDav.TestAsync(url, "user", "wrong").GetAwaiter().GetResult(); } catch (UnauthorizedAccessException) { wrongRejected = true; }
+            Check("webdav: неверный пароль сервера отклоняется", wrongRejected, null);
+            WebDav.TestAsync(url, "user", "secret").GetAwaiter().GetResult();
+            WebDav.SaveCredentials("user", "secret");
+            var local = Path.Combine(root, "sync.lbsync");
+            var payload = System.Security.Cryptography.RandomNumberGenerator.GetBytes(50_000);
+            File.WriteAllBytes(local, payload);
+            bool before = WebDav.DownloadAsync(url, local + ".x").GetAwaiter().GetResult();
+            WebDav.UploadAsync(url, local).GetAwaiter().GetResult();
+            bool after = WebDav.DownloadAsync(url, local + ".back").GetAwaiter().GetResult();
+            Check("webdav: выгрузка и скачивание файла синхронизации", !before && after && File.ReadAllBytes(local + ".back").AsSpan().SequenceEqual(payload), null);
+            WebDav.Forget();
+        }
+        catch (Exception ex) { Check("webdav: исключение", false, ex.Message); }
+        finally { cts.Cancel(); listener.Stop(); }
+    }
+
     public static void Run(string outFile)
     {
         var log = new List<string>();
@@ -646,6 +712,7 @@ static class DirectDownloadSelfTest
             Check("продолжение после паузы — докачка частями", it.State == DlState.Completed && rangeRequests > beforeResume, $"{it.State}, запросов частей после паузы {rangeRequests - beforeResume}");
             var got = File.Exists(it.Path) ? File.ReadAllBytes(it.Path) : Array.Empty<byte>();
             Check("файл совпадает побайтно", got.AsSpan().SequenceEqual(data), $"{got.Length / 1024} КБ из {data.Length / 1024}");
+            WebDavPart(root, Check);
         }
         catch (Exception ex) { log.Add("FAIL исключение: " + ex); }
         finally

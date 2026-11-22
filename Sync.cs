@@ -133,7 +133,10 @@ static class Sync
         Running = true;
         try
         {
-            var file = FileIn(s.SyncFolder);
+            // Свой сервер (WebDAV): работаем с локальной копией файла, скачивая и выгружая её целиком
+            bool dav = WebDav.IsUrl(s.SyncFolder);
+            var file = dav ? Path.Combine(AppEnv.DataDir, "sync-cache.lbsync") : FileIn(s.SyncFolder);
+            if (dav && pull && !await WebDav.DownloadAsync(s.SyncFolder, file)) { try { File.Delete(file); } catch { } }
             int added = 0;
             bool settingsApplied = false, vaultApplied = false;
             int offlineAdded = 0, notesAdded = 0;
@@ -190,6 +193,7 @@ static class Sync
                     Offline = Offline.Export(),
                 };
                 await Task.Run(() => WriteRemote(file, pw, bundle));
+                if (dav) await WebDav.UploadAsync(s.SyncFolder, file);
             }
             var parts = new List<string> { "Синхронизировано " + DateTime.Now.ToString("dd.MM HH:mm") };
             if (added > 0) parts.Add($"новых закладок: {added}");

@@ -200,6 +200,7 @@ function renderLookAndSync() {
 $('pickWall').onclick = () => wv.postMessage({ type: 'pickWallpaper' });
 $('removeWall').onclick = () => wv.postMessage({ type: 'removeWallpaper' });
 $('syncPick').onclick = () => wv.postMessage({ type: 'sync:pick' });
+$('davSave').onclick = () => wv.postMessage({ type: 'sync:webdav', url: $('davUrl').value, user: $('davUser').value, pass: $('davPass').value });
 $('syncPwSave').onclick = () => {
   const p = $('syncPw').value;
   if (p.length < 8) { toast('Пароль синхронизации — не короче 8 символов'); return; }

@@ -347,6 +347,23 @@ sealed partial class MainForm
                 var sf = Str("path");
                 if (Path.IsPathRooted(sf)) { CopyAndSave(x => x.SyncFolder = sf); SendSettings(core); }
                 break;
+            case "sync:webdav":
+            {
+                var url = Str("url").Trim();
+                var user = Str("user").Trim();
+                var pass = Str("pass");
+                if (!WebDav.Allowed(url)) { Post(core, new { type = "error", text = L.T("Нужен адрес https:// (http — только для своего компьютера или домашней сети)") }); break; }
+                try
+                {
+                    await WebDav.TestAsync(url, user, pass);
+                    WebDav.SaveCredentials(user, pass);
+                    CopyAndSave(x => x.SyncFolder = url);
+                    Post(core, new { type = "done", text = L.T("Сервер подключён. Задайте пароль синхронизации и нажмите «Синхронизировать»") });
+                }
+                catch (Exception ex) { Post(core, new { type = "error", text = ex.Message }); }
+                SendSettings(core);
+                break;
+            }
             case "sync:password":
                 Sync.SetPassword(Str("password"));
                 Post(core, new { type = "done", text = "Пароль синхронизации сохранён. Задайте такой же на других компьютерах" });
@@ -354,6 +371,7 @@ sealed partial class MainForm
                 break;
             case "sync:forget":
                 Sync.Forget();
+                WebDav.Forget();
                 CopyAndSave(x => x.SyncEnabled = false);
                 SendSettings(core);
                 break;

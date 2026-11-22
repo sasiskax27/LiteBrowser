@@ -115,7 +115,7 @@ sealed partial class MainForm : Form
         forward.Click += (_, _) => active?.Core?.GoForward();
         reload.Click += (_, _) => ReloadOrStop();
         home.Click += (_, _) => Navigate(homeUrl);
-        proxyBtn.Click += (_, _) => OpenLitePage(LitePages.Settings, "#proxy");
+        proxyBtn.Click += (_, _) => ShowProxyMenu();
         downloadsBtn.Click += (_, _) => ToggleDownloads();
         menuBtn.Click += (_, _) => ShowMainMenu();
 
