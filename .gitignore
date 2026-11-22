@@ -5,3 +5,5 @@ obj/
 publish/
 publish-full/
 release/
+dist/
+out/

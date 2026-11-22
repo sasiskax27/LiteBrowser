@@ -7,7 +7,7 @@ namespace LiteBrowser;
 /// <summary>Общие для всех окон: папка данных, настройки и движок WebView2.</summary>
 static class AppEnv
 {
-    public const string Version = "3.5.0";
+    public const string Version = "3.6.0";
     /// <summary>Сколько миллисекунд прошло от запуска процесса до первой загруженной страницы (0 — ещё не загрузилась).</summary>
     public static long StartupMs;
     /// <summary>Папка данных. LITEBROWSER_DATA — отдельная папка для тестов (тогда и отдельный экземпляр браузера).</summary>
