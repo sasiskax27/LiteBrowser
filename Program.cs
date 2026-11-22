@@ -191,6 +191,9 @@ static class Program
             return;
         }
 
+        if (args.Contains("--uninstall")) { Installer.Uninstall(args.Contains("--quiet")); return; }
+        if (args.Contains("--install")) { Installer.Install(args.Contains("--quiet")); return; }
+
         bool restore = args.Contains("--restore");
         bool incognito = args.Contains("--incognito");
         string? url = args.FirstOrDefault(a => !a.StartsWith("--"));
@@ -205,6 +208,7 @@ static class Program
 
         ApplicationConfiguration.Initialize();
         AppEnv.Init();
+        if (SystemIntegration.IsInstalled) Installer.RegisterUninstall();
         Theme.ApplyPalette(AppEnv.Settings.UiTheme, AppEnv.Settings.Accent);
         Application.Run(new BrowserApp(url, incognito, restore));
     }
@@ -364,6 +368,7 @@ static class SystemIntegration
             try { if (File.Exists(old)) File.Delete(old); File.Move(Exe, old); } catch { }
         }
         File.Copy(Environment.ProcessPath!, Exe, true);
+        Installer.RegisterUninstall();
     }
 
     public static bool IsDefaultBrowser()

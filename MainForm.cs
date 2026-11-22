@@ -150,6 +150,8 @@ sealed partial class MainForm : Form
         address.Box.MouseUp += (_, _) => { if (selectOnClick && address.Box.SelectionLength == 0) address.Box.SelectAll(); selectOnClick = false; };
         address.Box.Leave += (_, _) => selectOnClick = false;
 
+        sideBtn = new IconButton("", "Боковая панель (Ctrl+B)", tips);
+        sideBtn.Click += (_, _) => ToggleSidePanel(!sidePanel!.Visible);
         toolbar.Controls.AddRange(new Control[] { back, forward, reload, home, address, installBtn, zoomBtn, proxyBtn, downloadsBtn, sideBtn, menuBtn });
         toolbar.Resize += (_, _) => LayoutToolbar();
         toolbar.Paint += PaintProgress;
@@ -159,8 +161,6 @@ sealed partial class MainForm : Form
         sidePanel.CloseRequested += () => ToggleSidePanel(false);
         sidePanel.UrlChanged += u => { if (u != Cfg.SidePanelUrl && !Incognito) CopyAndSave(x => x.SidePanelUrl = u); };
         splitter.SplitterMoved += (_, _) => CopyAndSave(x => x.SidePanelWidth = (int)(sidePanel.Width / Theme.Dpi));
-        sideBtn = new IconButton("", "Боковая панель (Ctrl+B)", tips);
-        sideBtn.Click += (_, _) => ToggleSidePanel(!sidePanel.Visible);
 
         Controls.Add(content);
         Controls.Add(splitter);

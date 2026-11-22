@@ -83,15 +83,15 @@ sealed class CommandPalette : Form
         switch (e.KeyCode)
         {
             case System.Windows.Forms.Keys.Escape: e.SuppressKeyPress = true; Close(); break;
-            case System.Windows.Forms.Keys.Down: e.SuppressKeyPress = true; Move(1); break;
-            case System.Windows.Forms.Keys.Up: e.SuppressKeyPress = true; Move(-1); break;
-            case System.Windows.Forms.Keys.PageDown: e.SuppressKeyPress = true; Move(MaxRows); break;
-            case System.Windows.Forms.Keys.PageUp: e.SuppressKeyPress = true; Move(-MaxRows); break;
+            case System.Windows.Forms.Keys.Down: e.SuppressKeyPress = true; MoveSelection(1); break;
+            case System.Windows.Forms.Keys.Up: e.SuppressKeyPress = true; MoveSelection(-1); break;
+            case System.Windows.Forms.Keys.PageDown: e.SuppressKeyPress = true; MoveSelection(MaxRows); break;
+            case System.Windows.Forms.Keys.PageUp: e.SuppressKeyPress = true; MoveSelection(-MaxRows); break;
             case System.Windows.Forms.Keys.Enter: e.SuppressKeyPress = true; Run(selected); break;
         }
     }
 
-    void Move(int d)
+    void MoveSelection(int d)
     {
         if (items.Count == 0) return;
         selected = Math.Clamp(selected + d, 0, items.Count - 1);
