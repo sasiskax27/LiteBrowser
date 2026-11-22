@@ -342,6 +342,24 @@ sealed partial class MainForm
                     catch (Exception ex) { Post(core, new { type = "pwError", text = ex.Message }); }
                 });
                 break;
+            case "pw:browsers":
+                Post(core, new { type = "pwBrowsers", items = Importer.Scan().Where(PasswordImport.Supported).Select(p => new { id = p.Id, browser = p.Browser, profile = p.Profile }) });
+                break;
+            case "pw:importBrowser":
+            {
+                var id = root.TryGetProperty("id", out var bid) ? bid.GetString() ?? "" : "";
+                var prof = Importer.Scan().FirstOrDefault(p => p.Id == id);
+                if (prof == null || !PasswordImport.Supported(prof)) { Post(core, new { type = "pwError", text = L.T("Профиль не найден") }); break; }
+                try
+                {
+                    var res = await Task.Run(() => PasswordImport.Read(prof));
+                    int n = Vault.ImportMany(res.Items);
+                    Post(core, VaultList());
+                    Post(core, new { type = "pwBrowserImported", count = n, found = res.Items.Count, note = res.Note, browser = prof.Browser });
+                }
+                catch (Exception ex) { Post(core, new { type = "pwError", text = ex.Message }); }
+                break;
+            }
             case "pw:exportCsv":
                 BeginInvoke(async () =>
                 {

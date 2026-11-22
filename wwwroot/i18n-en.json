@@ -978,5 +978,14 @@
 "Идёт запись этой вкладки (без звука)": "Recording this tab (no sound)",
 ". Можно переключаться — запишется, когда вернётесь": ". You can switch tabs; it records again when you come back",
 "страница не отрисовалась": "the page didn't render",
-"кодировщик звука недоступен": "the audio encoder isn't available"
+"кодировщик звука недоступен": "the audio encoder isn't available",
+"Из этого браузера пароли переносятся через CSV-файл": "Passwords from this browser are moved via a CSV file",
+"{0} паролей защищены самим браузером (Chrome 127+) — их перенесите через «Экспорт паролей» в CSV": "{0} passwords are locked by the browser itself (Chrome 127+) — move them via \"Export passwords\" to CSV",
+"Профиль не найден": "Profile not found",
+"Перенести пароли из браузера на этом компьютере": "Move passwords from a browser on this computer",
+"Edge, Chrome, Brave, Opera, Vivaldi. Пароли расшифровываются вашей учётной записью Windows и сразу попадают в зашифрованное хранилище.": "Edge, Chrome, Brave, Opera, Vivaldi. Passwords are decrypted with your Windows account and go straight into the encrypted vault.",
+"Ищу браузеры…": "Looking for browsers…",
+"Перенос паролей из другого браузера через CSV": "Move passwords from another browser via CSV",
+"Подходящих браузеров не найдено — используйте CSV ниже": "No supported browsers found — use CSV below",
+"Переношу…": "Moving…"
 }

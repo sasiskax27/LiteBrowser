@@ -75,6 +75,16 @@ static class Program
                 Check("синхронизация: неверный пароль не подходит", syncWrong);
                 var g = PasswordTools.Generate(20);
                 Check("генератор: 20 символов, все группы", g.Length == 20 && g.Any(char.IsUpper) && g.Any(char.IsLower) && g.Any(char.IsDigit) && g.Any(c => !char.IsLetterOrDigit(c)));
+                // Перенос из Chromium: v10 (AES-GCM), старый DPAPI, v20 (привязан к Chrome — пропускаем)
+                var ck = System.Security.Cryptography.RandomNumberGenerator.GetBytes(32);
+                var nonce = System.Security.Cryptography.RandomNumberGenerator.GetBytes(12);
+                var plain = System.Text.Encoding.UTF8.GetBytes("пароль-123");
+                var ct = new byte[plain.Length]; var tag = new byte[16];
+                using (var gcm = new System.Security.Cryptography.AesGcm(ck, 16)) gcm.Encrypt(nonce, plain, ct, tag);
+                var v10 = "v10"u8.ToArray().Concat(nonce).Concat(ct).Concat(tag).ToArray();
+                var dp = System.Security.Cryptography.ProtectedData.Protect(plain, null, System.Security.Cryptography.DataProtectionScope.CurrentUser);
+                Check("перенос паролей: v10, DPAPI, v20", PasswordImport.Decrypt(v10, ck, out _) == "пароль-123" && PasswordImport.Decrypt(dp, null, out _) == "пароль-123"
+                    && PasswordImport.Decrypt("v20xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"u8.ToArray(), ck, out bool bound) == null && bound);
             }
             catch (Exception ex) { log.Add("FAIL исключение: " + ex); }
             finally { Vault.Lock(); try { Directory.Delete(dir, true); } catch { } }

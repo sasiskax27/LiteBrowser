@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -16,7 +16,7 @@ sealed record BrowserProfile(string Id, string Browser, string Profile, string D
 /// <summary>
 /// Перенос закладок и истории из Chrome, Edge, Яндекс Браузера, Opera, Brave, Vivaldi и Firefox,
 /// а также экспорт/импорт закладок в HTML (формат, который понимают все браузеры).
-/// Пароли и cookies не переносятся: браузеры шифруют их, и LiteBrowser их не хранит.
+/// Пароли переносит PasswordImport (Edge, Chrome, Brave, Opera, Vivaldi), cookies не переносятся.
 /// </summary>
 static class Importer
 {
@@ -184,12 +184,14 @@ static class Importer
     static bool IsWeb(string url) => url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || url.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Читает файл, даже если его держит открытым работающий браузер.</summary>
-    static string ReadShared(string path)
+    internal static string ReadShared(string path)
     {
         using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         using var sr = new StreamReader(fs, Encoding.UTF8);
         return sr.ReadToEnd();
     }
+
+    internal static void WithDb(string db, Action<SqliteCommand> work) => WithDbCopy(db, work);
 
     static void CopyShared(string from, string to)
     {

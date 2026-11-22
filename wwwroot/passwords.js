@@ -202,6 +202,7 @@ $('moreBtn').onclick = () => {
   $('autoLockVal').textContent = state.autoLock ? `через ${state.autoLock} мин бездействия` : 'только при закрытии браузера';
   renderNever();
   show('moreModal', true);
+  send({ type: 'pw:browsers' });
 };
 $('moreClose').onclick = () => show('moreModal', false);
 $('importCsv').onclick = () => send({ type: 'pw:importCsv' });
@@ -258,6 +259,21 @@ if (wv) {
       case 'pwBreach':
         breached = m.found; renderList();
         toast(Object.keys(breached).length ? 'Утёкших паролей: ' + Object.keys(breached).length + ' — смените их!' : 'Ни один пароль не найден в утечках');
+        break;
+      case 'pwBrowsers': {
+        const box = $('pwBrowsers'); box.innerHTML = '';
+        if (!m.items.length) { box.innerHTML = '<span class="sub-note">Подходящих браузеров не найдено — используйте CSV ниже</span>'; break; }
+        for (const it of m.items) {
+          const b = document.createElement('button'); b.className = 'btn';
+          b.textContent = it.browser + ' — ' + it.profile;
+          b.onclick = () => { b.disabled = true; b.textContent = 'Переношу…'; send({ type: 'pw:importBrowser', id: it.id }); };
+          box.appendChild(b);
+        }
+        break;
+      }
+      case 'pwBrowserImported':
+        send({ type: 'pw:browsers' });
+        toast((m.count ? `${m.browser}: перенесено паролей ${m.count}` : `${m.browser}: новых паролей нет`) + (m.note ? '. ' + m.note : ''));
         break;
       case 'pwImported':
         importedFile = m.file;
