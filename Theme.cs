@@ -158,9 +158,11 @@ static class Theme
         DwmSetWindowAttribute(hwnd, 34, ref border, 4);
     }
 
+    static readonly List<ContextMenuStrip> openMenus = new();
+
     public static ContextMenuStrip NewMenu()
     {
-        return new ContextMenuStrip
+        var m = new ContextMenuStrip
         {
             Renderer = new DarkMenuRenderer(),
             ShowImageMargin = false,
@@ -169,6 +171,17 @@ static class Theme
             ForeColor = Text,
             Padding = new Padding(4),
         };
+        m.Opened += (_, _) => { if (!openMenus.Contains(m)) openMenus.Add(m); };
+        m.Closed += (_, _) => openMenus.Remove(m);
+        return m;
+    }
+
+    /// <summary>Закрыть открытые меню. Клик внутри страницы (WebView2 — другой процесс) сам их не закрывает.</summary>
+    public static void CloseMenus()
+    {
+        foreach (var m in openMenus.ToList())
+            try { m.Close(ToolStripDropDownCloseReason.AppClicked); } catch { }
+        openMenus.Clear();
     }
 
     public static ToolStripMenuItem Item(string text, Action click, string? keys = null)

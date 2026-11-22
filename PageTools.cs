@@ -146,6 +146,9 @@ static class PageTools
 """;
 
     /// <summary>Жесты мышью: зажать правую кнопку и провести. Сообщает браузеру направление, а контекстное меню после жеста не показывается.</summary>
+    /// <summary>Сообщает браузеру о клике по странице (для разделённого экрана).</summary>
+    public const string FocusPing = "if (window.top === window) document.addEventListener('pointerdown', () => { try { chrome.webview.postMessage({ type: 'lite-focus' }); } catch (e) { } }, true);";
+
     public const string Gestures = """
 (() => {
   if (window.top !== window || !window.chrome || !window.chrome.webview) return;

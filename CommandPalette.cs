@@ -12,6 +12,7 @@ sealed class CommandPalette : Form
     List<Entry> items = new();
     int selected, hover = -1, scroll;
     bool closing;
+    DateTime shownAt;
     static int S(float v) => Theme.S(v);
     int RowH => S(40);
     int Top0 => S(58);
@@ -33,7 +34,13 @@ sealed class CommandPalette : Form
         Controls.Add(box);
         box.TextChanged += (_, _) => Refresh(box.Text);
         box.KeyDown += OnBoxKey;
-        Deactivate += (_, _) => { if (!closing) Close(); };
+        Deactivate += (_, _) =>
+        {
+            if (closing) return;
+            // Сразу после открытия из страницы WebView2 может забрать фокус обратно — возвращаем его палитре
+            if ((DateTime.Now - shownAt).TotalMilliseconds < 400) { BeginInvoke(() => { if (!IsDisposed) { Activate(); box.Focus(); } }); return; }
+            Close();
+        };
     }
 
     protected override CreateParams CreateParams
@@ -54,6 +61,7 @@ sealed class CommandPalette : Form
         Bounds = new Rectangle(p.X, p.Y, w, Top0 + S(10));
         box.SetBounds(S(46), S(18), w - S(62), S(26));
         Refresh("");
+        shownAt = DateTime.Now;
         Show(owner);
         Activate();
         box.Focus();

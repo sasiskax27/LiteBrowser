@@ -10,7 +10,9 @@ sealed partial class MainForm
         if (palette is { IsDisposed: false }) { palette.Activate(); return; }
         palette = new CommandPalette(PaletteEntries);
         palette.FormClosed += (_, _) => { palette?.Dispose(); palette = null; };
-        palette.ShowOver(this);
+        // Откладываем: если Ctrl+K нажали внутри страницы, WebView2 сначала закончит обработку клавиши
+        var p = palette;
+        BeginInvoke(() => { if (!p.IsDisposed) p.ShowOver(this); });
     }
 
     List<CommandPalette.Entry> PaletteCommands()

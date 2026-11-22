@@ -29,7 +29,7 @@ sealed partial class MainForm
 
     void NewWorkspace()
     {
-        var name = InputDialog.Ask(this, "Название нового пространства (например «Учёба» или «Работа»)", "");
+        var name = InputDialog.Ask(this, "Название пространства (например «Учёба»)", "");
         if (string.IsNullOrWhiteSpace(name)) return;
         try { SwitchWorkspace(Workspaces.Create(name)); }
         catch (ArgumentException ex) { MessageBox.Show(this, ex.Message, "Рабочие пространства"); }

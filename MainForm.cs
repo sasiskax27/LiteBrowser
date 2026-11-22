@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Text.Json;
@@ -144,7 +144,11 @@ sealed partial class MainForm : Form
         content.Controls.Add(findBar);
         content.Resize += (_, _) => PlaceFindBar();
         SetupSplit();
-        address.Box.Enter += (_, _) => BeginInvoke(address.Box.SelectAll);
+        // Первый клик по адресной строке выделяет весь адрес (как в других браузерах), следующие — ставят курсор
+        bool selectOnClick = false;
+        address.Box.Enter += (_, _) => { selectOnClick = true; BeginInvoke(address.Box.SelectAll); };
+        address.Box.MouseUp += (_, _) => { if (selectOnClick && address.Box.SelectionLength == 0) address.Box.SelectAll(); selectOnClick = false; };
+        address.Box.Leave += (_, _) => selectOnClick = false;
 
         toolbar.Controls.AddRange(new Control[] { back, forward, reload, home, address, installBtn, zoomBtn, proxyBtn, downloadsBtn, sideBtn, menuBtn });
         toolbar.Resize += (_, _) => LayoutToolbar();
@@ -298,6 +302,7 @@ sealed partial class MainForm : Form
             }
             else await tab.View.EnsureCoreWebView2Async(env);
             if (tab.View.IsDisposed || tab.Core == null) return;
+            HookController(tab);
             Configure(tab, env);
             ApplyAdScripts(tab);
             tab.View.ZoomFactor = Cfg.PageZoom / 100.0;
@@ -305,7 +310,7 @@ sealed partial class MainForm : Form
             var url = tab.PendingUrl;
             tab.PendingUrl = null;
             if (url != null) tab.Core.Navigate(url);
-            if (tab == active) { tab.View.Focus(); UpdateUi(force: true); }
+            if (tab == active) { FocusTab(tab); UpdateUi(force: true); }
         }
         catch (WebView2RuntimeNotFoundException)
         {
@@ -345,7 +350,7 @@ sealed partial class MainForm : Form
         }
         strip.Selected = tab;
         if (tab.Core == null) _ = InitTab(tab);
-        else tab.View.Focus();
+        else FocusTab(tab);
         UpdateUi(force: true);
     }
 
@@ -728,10 +733,13 @@ sealed partial class MainForm : Form
         // Скрипт менеджера паролей: находит формы входа на страницах
         _ = core.AddScriptToExecuteOnDocumentCreatedAsync(PasswordScripts.Page);
         _ = core.AddScriptToExecuteOnDocumentCreatedAsync(PageTools.Gestures);
+        _ = core.AddScriptToExecuteOnDocumentCreatedAsync(PageTools.FocusPing);
         SetupContextMenu(tab, core, env);
 
         core.WebMessageReceived += async (_, e) =>
         {
+            // Клик по странице: в разделённом экране делает эту половину активной
+            if (e.WebMessageAsJson == "{\"type\":\"lite-focus\"}") { OnViewFocused(tab); return; }
             if (!e.Source.StartsWith(LitePages.Prefix, StringComparison.Ordinal))
             {
                 // Сообщения обычных сайтов — только от скрипта паролей, и только про их собственный адрес
@@ -1002,49 +1010,71 @@ sealed partial class MainForm : Form
         menu.Items.Add(prof);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(Theme.Item("История", () => OpenLitePage(LitePages.History), "Ctrl+H"));
+        menu.Items.Add(Theme.Item("Закладки", () => OpenLitePage(LitePages.BookmarksPage), "Ctrl+Shift+O"));
+        menu.Items.Add(Theme.Item("Загрузки", () => OpenLitePage(LitePages.DownloadsPage), "Ctrl+J"));
         menu.Items.Add(Theme.Item("Пароли", () => OpenLitePage(LitePages.Passwords), "Ctrl+Shift+P"));
         menu.Items.Add(Theme.Item("Расширения", () => OpenLitePage(LitePages.ExtensionsPage), "Ctrl+Shift+E"));
-        menu.Items.Add(Theme.Item("Загрузки", () => OpenLitePage(LitePages.DownloadsPage), "Ctrl+J"));
-        menu.Items.Add(Theme.Item("Закладки", () => OpenLitePage(LitePages.BookmarksPage), "Ctrl+Shift+O"));
-        menu.Items.Add(Theme.Item(sidePanel.Visible ? "Скрыть боковую панель" : "Боковая панель", () => ToggleSidePanel(!sidePanel.Visible), "Ctrl+B"));
-        menu.Items.Add(Theme.Item(SplitPartner != null ? "Убрать разделение экрана" : "Разделить экран", ToggleSplit, "Ctrl+\\"));
-        menu.Items.Add(Theme.Item(Cfg.ShowBookmarksBar ? "Скрыть панель закладок" : "Показать панель закладок", ToggleBookmarksBar, "Ctrl+Shift+B"));
-        menu.Items.Add(Theme.Item("Открыть закрытую вкладку", ReopenClosedTab, "Ctrl+Shift+T"));
         menu.Items.Add(new ToolStripSeparator());
+        if (Cfg.AiEnabled) menu.Items.Add(Theme.Item("✦ ИИ-помощник Lite AI", () => OpenAi(), "Ctrl+Shift+A"));
         menu.Items.Add(Theme.Item("Команды и быстрый поиск", ShowPalette, "Ctrl+K"));
         menu.Items.Add(Theme.Item("Найти на странице", ShowFind, "Ctrl+F"));
-        menu.Items.Add(Theme.Item("Режим чтения", () => _ = ToggleReader(), "Ctrl+Alt+R"));
-        if (Cfg.AiEnabled) menu.Items.Add(Theme.Item("✦ ИИ-помощник Lite AI", () => OpenAi(), "Ctrl+Shift+A"));
-        menu.Items.Add(Theme.Item("Перевести страницу", TranslatePage));
-        menu.Items.Add(Theme.Item("Читать вслух", () => _ = ReadAloud(), "Ctrl+Shift+U"));
-        menu.Items.Add(Theme.Item("Голосовой ввод", () => _ = VoiceInput(), "Ctrl+Shift+M"));
-        menu.Items.Add(Theme.Item("QR-код страницы", ShowQr));
-        menu.Items.Add(Theme.Item("Заметки и выделения", () => OpenLitePage(LitePages.Notes)));
-        menu.Items.Add(Theme.Item("Сохранить для чтения без интернета", () => _ = SaveOffline(), "Ctrl+Shift+Y"));
-        menu.Items.Add(Theme.Item("Сохранённые страницы", () => OpenLitePage(LitePages.OfflinePage)));
-        menu.Items.Add(Theme.Item("Центр безопасности", () => OpenLitePage(LitePages.Security)));
-        menu.Items.Add(Theme.Item("Инструменты разработчика", OpenDevTools, "Ctrl+Shift+I"));
-        menu.Items.Add(Theme.Item((Cfg.DataSaver ? "✓  " : "") + "Экономия трафика (без картинок)", () => { bool v = !Cfg.DataSaver; CopyAndSave(x => x.DataSaver = v); active?.Core?.Reload(); }));
-        var video = new ToolStripMenuItem("Видео и аудио") { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
-        video.DropDownItems.Add(Theme.Item("Картинка в картинке", () => _ = PictureInPicture(), "Ctrl+Shift+V"));
+        menu.Items.Add(Theme.Item(SplitPartner != null ? "Убрать разделение экрана" : "Разделить экран", ToggleSplit, "Ctrl+\\"));
+        menu.Items.Add(Theme.Item(sidePanel.Visible ? "Скрыть боковую панель" : "Боковая панель", () => ToggleSidePanel(!sidePanel.Visible), "Ctrl+B"));
+
+        // Действия со страницей
+        var pageMenu = SubMenu("Эта страница");
+        pageMenu.DropDownItems.Add(Theme.Item("Режим чтения", () => _ = ToggleReader(), "Ctrl+Alt+R"));
+        pageMenu.DropDownItems.Add(Theme.Item("Перевести страницу", TranslatePage));
+        pageMenu.DropDownItems.Add(Theme.Item("Читать вслух", () => _ = ReadAloud(), "Ctrl+Shift+U"));
+        pageMenu.DropDownItems.Add(Theme.Item("Сохранить для чтения без интернета", () => _ = SaveOffline(), "Ctrl+Shift+Y"));
+        pageMenu.DropDownItems.Add(Theme.Item("Скриншот видимой части", () => _ = TakeScreenshot(false), "Ctrl+Shift+S"));
+        pageMenu.DropDownItems.Add(Theme.Item("Скриншот всей страницы", () => _ = TakeScreenshot(true)));
+        pageMenu.DropDownItems.Add(Theme.Item("QR-код страницы", ShowQr));
+        pageMenu.DropDownItems.Add(new ToolStripSeparator());
+        pageMenu.DropDownItems.Add(Theme.Item("Картинка в картинке", () => _ = PictureInPicture(), "Ctrl+Shift+V"));
+        var speed = SubMenu("Скорость видео");
         foreach (var r in new[] { 0.5, 1, 1.25, 1.5, 2, 3 })
         {
             var rate = r;
-            video.DropDownItems.Add(Theme.Item($"Скорость ×{rate:0.##}", () => _ = SetSpeed(rate)));
+            speed.DropDownItems.Add(Theme.Item($"×{rate:0.##}", () => _ = SetSpeed(rate)));
         }
-        video.DropDownItems.Add(new ToolStripSeparator());
-        video.DropDownItems.Add(Theme.Item("Скачать видео или аудио со страницы", () => _ = DownloadMedia()));
-        menu.Items.Add(video);
-        var shot = new ToolStripMenuItem("Скриншот") { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
-        shot.DropDownItems.Add(Theme.Item("Видимая часть", () => _ = TakeScreenshot(false), "Ctrl+Shift+S"));
-        shot.DropDownItems.Add(Theme.Item("Вся страница целиком", () => _ = TakeScreenshot(true)));
-        menu.Items.Add(shot);
+        pageMenu.DropDownItems.Add(speed);
+        pageMenu.DropDownItems.Add(Theme.Item("Скачать видео или аудио", () => _ = DownloadMedia()));
+        menu.Items.Add(pageMenu);
+
+        // Инструменты
+        var tools = SubMenu("Инструменты");
+        tools.DropDownItems.Add(Theme.Item("Голосовой ввод", () => _ = VoiceInput(), "Ctrl+Shift+M"));
+        tools.DropDownItems.Add(Theme.Item("Заметки и выделения", () => OpenLitePage(LitePages.Notes)));
+        tools.DropDownItems.Add(Theme.Item("Сохранённые страницы", () => OpenLitePage(LitePages.OfflinePage)));
+        tools.DropDownItems.Add(Theme.Item("Центр безопасности", () => OpenLitePage(LitePages.Security)));
+        tools.DropDownItems.Add(Theme.Item("Инструменты разработчика", OpenDevTools, "Ctrl+Shift+I"));
+        tools.DropDownItems.Add(new ToolStripSeparator());
+        tools.DropDownItems.Add(Theme.Item((Cfg.DataSaver ? "✓  " : "") + "Экономия трафика (без картинок)", () => { bool v = !Cfg.DataSaver; CopyAndSave(x => x.DataSaver = v); active?.Core?.Reload(); }));
+        tools.DropDownItems.Add(Theme.Item(Cfg.ShowBookmarksBar ? "Скрыть панель закладок" : "Показать панель закладок", ToggleBookmarksBar, "Ctrl+Shift+B"));
+        tools.DropDownItems.Add(Theme.Item("Открыть закрытую вкладку", ReopenClosedTab, "Ctrl+Shift+T"));
+        menu.Items.Add(tools);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(Theme.Item("Обход блокировок", () => OpenLitePage(LitePages.Settings, "#proxy")));
         menu.Items.Add(Theme.Item("Очистить историю и данные", () => OpenLitePage(LitePages.Settings, "#data")));
         menu.Items.Add(Theme.Item("Настройки", () => OpenLitePage(LitePages.Settings), "Ctrl+,"));
+        // Меню у правого края окна — подменю открываем влево, иначе они уходят за экран
+        OpenSubmenusLeft(menu.Items);
         menu.Show(menuBtn, new Point(menuBtn.Width - menu.PreferredSize.Width, menuBtn.Height + Theme.S(4)));
     }
+
+    static void OpenSubmenusLeft(ToolStripItemCollection items)
+    {
+        foreach (ToolStripItem i in items)
+            if (i is ToolStripMenuItem m && m.HasDropDownItems)
+            {
+                m.DropDownDirection = ToolStripDropDownDirection.Left;
+                OpenSubmenusLeft(m.DropDownItems);
+            }
+    }
+
+    static ToolStripMenuItem SubMenu(string text) =>
+        new(text) { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
 
     void ToggleBookmarksBar()
     {
@@ -1239,7 +1269,11 @@ sealed partial class MainForm : Form
         return Parental.SafeSearch(SearchEngines.Get(Cfg.Engine).Url + Uri.EscapeDataString(t));
     }
 
-    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData) =>
+        HandleShortcut(keyData) || base.ProcessCmdKey(ref msg, keyData);
+
+    /// <summary>Горячие клавиши браузера. true — сочетание наше и выполнено.</summary>
+    bool HandleShortcut(Keys keyData)
     {
         switch (keyData)
         {
@@ -1285,6 +1319,6 @@ sealed partial class MainForm : Form
             if (k is >= Keys.D1 and <= Keys.D8 && tabs.Count > k - Keys.D1) { SelectTab(tabs[k - Keys.D1]); return true; }
             if (k == Keys.D9 && tabs.Count > 0) { SelectTab(tabs[^1]); return true; }
         }
-        return base.ProcessCmdKey(ref msg, keyData);
+        return false;
     }
 }

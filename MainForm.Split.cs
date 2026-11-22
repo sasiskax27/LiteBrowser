@@ -88,9 +88,37 @@ sealed partial class MainForm
         content.MouseUp += (_, _) => { if (splitDragging) { splitDragging = false; content.Capture = false; content.Invalidate(); } };
     }
 
+    static readonly System.Reflection.FieldInfo? ControllerField =
+        typeof(Microsoft.Web.WebView2.WinForms.WebView2).GetField("_coreWebView2Controller", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+    /// <summary>
+    /// Горячие клавиши и фокус прямо от движка: когда фокус внутри страницы, WinForms не всегда получает сочетания клавиш
+    /// (Ctrl+K, Ctrl+T и др.), а событие фокуса до элемента WebView2 не доходит.
+    /// </summary>
+    void HookController(BrowserTab tab)
+    {
+        if (ControllerField?.GetValue(tab.View) is not CoreWebView2Controller c) return;
+        c.AcceleratorKeyPressed += (_, e) =>
+        {
+            if (e.Handled || e.KeyEventKind is not (CoreWebView2KeyEventKind.KeyDown or CoreWebView2KeyEventKind.SystemKeyDown)) return;
+            if (e.PhysicalKeyStatus.WasKeyDown != 0) return; // автоповтор
+            var keys = (Keys)(int)e.VirtualKey | ModifierKeys;
+            if (HandleShortcut(keys)) e.Handled = true;
+        };
+        c.GotFocus += (_, _) => OnViewFocused(tab);
+    }
+
+    /// <summary>Новая пустая вкладка — курсор в адресную строку, иначе — в страницу.</summary>
+    void FocusTab(BrowserTab tab)
+    {
+        if (tab.IsHome && (tab.Core?.Source ?? tab.PendingUrl ?? "").StartsWith(LitePages.Home)) { address.Box.Focus(); address.Box.SelectAll(); }
+        else tab.View.Focus();
+    }
+
     /// <summary>Клик внутри второй половины делает её активной (адресная строка показывает её адрес).</summary>
     void OnViewFocused(BrowserTab tab)
     {
+        Theme.CloseMenus();
         if (tab == active || SplitPartner != tab) return;
         active!.LastActive = DateTime.Now;
         active = tab;

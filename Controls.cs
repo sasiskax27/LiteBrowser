@@ -50,6 +50,9 @@ sealed class IconButton : Control
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
                  ControlStyles.UserPaint | ControlStyles.ResizeRedraw, true);
         SetStyle(ControlStyles.Selectable, false);
+        // Клик считаем сами: стандартный Click теряется, если между нажатием и отпусканием
+        // захват мыши ушёл (например, к движку WebView2 в другом процессе)
+        SetStyle(ControlStyles.StandardClick | ControlStyles.StandardDoubleClick, false);
         this.glyph = glyph;
         Font = new Font(Theme.IconFont, 11f);
         BackColor = Theme.Toolbar;
@@ -67,7 +70,14 @@ sealed class IconButton : Control
     protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
     protected override void OnMouseLeave(EventArgs e) { hover = down = false; Invalidate(); base.OnMouseLeave(e); }
     protected override void OnMouseDown(MouseEventArgs e) { down = true; Invalidate(); base.OnMouseDown(e); }
-    protected override void OnMouseUp(MouseEventArgs e) { down = false; Invalidate(); base.OnMouseUp(e); }
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        bool click = down && e.Button == MouseButtons.Left && ClientRectangle.Contains(e.Location);
+        down = false;
+        Invalidate();
+        base.OnMouseUp(e);
+        if (click && Enabled) OnClick(EventArgs.Empty);
+    }
     protected override void OnEnabledChanged(EventArgs e) { Invalidate(); base.OnEnabledChanged(e); }
 
     protected override void OnPaint(PaintEventArgs e)
