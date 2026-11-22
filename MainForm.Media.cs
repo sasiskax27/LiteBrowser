@@ -150,7 +150,9 @@ sealed partial class MainForm
             recorder = await TabRecorder.StartAsync(tab.Core);
             recordingTab = tab;
             recorder.AutoStopped += _ => BeginInvoke(async () => await StopRecording(L.T("Запись остановлена — достигнут предел длины. ")));
-            infoBar.ShowBar("rec", "\uE7C8", L.T("Идёт запись этой вкладки (без звука). Можно переключаться — запишется, когда вернётесь"),
+            var what = recorder.HasAudio ? L.T("Идёт запись этой вкладки со звуком браузера")
+                : recorder.IsMp4 ? L.T("Идёт запись этой вкладки (без звука: ") + recorder.AudioNote + ")" : L.T("Идёт запись этой вкладки (без звука)");
+            infoBar.ShowBar("rec", "\uE7C8", what + L.T(". Можно переключаться — запишется, когда вернётесь"),
                 (L.T("Остановить"), () => _ = StopRecording(), true));
         }
         catch (Exception ex)
@@ -167,7 +169,7 @@ sealed partial class MainForm
         recorder = null; recordingTab = null;
         var path = await r.StopAsync();
         var time = r.Elapsed;
-        int frames = r.Frames;
+        long frames = r.Frames;
         r.Dispose();
         if (IsDisposed) return;
         if (frames == 0) { infoBar.ShowBar("rec", "\uE7C8", L.T("Запись пустая — страница не менялась")); return; }

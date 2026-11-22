@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
 using Microsoft.Web.WebView2.Core;
 
@@ -6,38 +6,48 @@ namespace LiteBrowser;
 
 /// <summary>
 /// Запись видео вкладки: кадры берём из движка (DevTools «screencast»), сайт об этом не знает и ничего не может подменить.
-/// Пишем AVI с кадрами JPEG (MJPEG) — открывается в «Кино и ТВ», VLC, любом редакторе. Без звука.
-/// Кадры приходят только когда страница меняется, поэтому раз в 1/12 секунды повторяем последний.
+/// Основной формат — MP4 (H.264) со звуком браузера через Media Foundation Windows.
+/// Если Media Foundation недоступен (урезанные редакции Windows N) — AVI с кадрами JPEG, без звука.
+/// Кадры приходят, только когда страница меняется, поэтому повторяем последний с постоянной частотой.
 /// </summary>
 sealed class TabRecorder : IDisposable
 {
-    public const int Fps = 12;
+    public const int AviFps = 12, Mp4Fps = 15;
     const long MaxBytes = 1_500_000_000;          // ~1,5 ГБ — дальше AVI 1.0 не стоит
     public static readonly TimeSpan MaxLength = TimeSpan.FromMinutes(30);
 
     readonly CoreWebView2 core;
-    readonly FileStream fs;
-    readonly BinaryWriter w;
+    FileStream fs = null!;
+    BinaryWriter w = null!;
     readonly List<(long offset, int size)> index = new();
-    readonly System.Windows.Forms.Timer timer = new() { Interval = 1000 / Fps };
+    readonly System.Windows.Forms.Timer timer = new() { Interval = 1000 / AviFps };
     readonly DateTime started = DateTime.Now;
-    byte[]? last;
+    readonly TaskCompletionSource firstFrame = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    volatile byte[]? last;
     int width, height;
     long moviStart, riffSizePos, moviSizePos, framesPos, lengthPos, avihSizePos, strhSizePos, strfSizePos;
-    bool stopped;
+    volatile bool stopped;
 
-    public string FilePath { get; }
+    // MP4
+    Mp4Writer? mp4;
+    ProcessAudioCapture? audio;
+    Thread? videoThread;
+    long mp4Frames;
+    byte[] rgb = Array.Empty<byte>();
+
+    public string FilePath { get; private set; } = "";
     public TimeSpan Elapsed => DateTime.Now - started;
-    public int Frames => index.Count;
+    public long Frames => mp4 != null ? mp4Frames : index.Count;
+    public bool IsMp4 => mp4 != null;
+    public bool HasAudio { get; private set; }
+    /// <summary>Почему нет звука (пусто — звук пишется).</summary>
+    public string AudioNote { get; private set; } = "";
     /// <summary>Запись остановилась сама (лимит длины/размера) — окно покажет, куда сохранено.</summary>
     public event Action<TabRecorder>? AutoStopped;
 
-    TabRecorder(CoreWebView2 core, string path)
+    TabRecorder(CoreWebView2 core)
     {
         this.core = core;
-        FilePath = path;
-        fs = new FileStream(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.Read);
-        w = new BinaryWriter(fs);
         timer.Tick += (_, _) => Tick();
     }
 
@@ -48,18 +58,93 @@ sealed class TabRecorder : IDisposable
         return Path.Combine(dir, "LiteBrowser");
     }
 
-    public static async Task<TabRecorder> StartAsync(CoreWebView2 core, string? folder = null)
+    public static async Task<TabRecorder> StartAsync(CoreWebView2 core, string? folder = null, bool preferMp4 = true, bool withAudio = true)
     {
         var dir = folder ?? DefaultFolder();
         Directory.CreateDirectory(dir);
-        var path = Path.Combine(dir, $"{L.T("Запись вкладки")} {DateTime.Now:yyyy-MM-dd HH-mm-ss}.avi");
-        var r = new TabRecorder(core, path);
-        r.WriteHeader();
+        var name = Path.Combine(dir, $"{L.T("Запись вкладки")} {DateTime.Now:yyyy-MM-dd HH-mm-ss}");
+        var r = new TabRecorder(core);
         core.GetDevToolsProtocolEventReceiver("Page.screencastFrame").DevToolsProtocolEventReceived += r.OnFrame;
         await core.CallDevToolsProtocolMethodAsync("Page.startScreencast",
-            JsonSerializer.Serialize(new { format = "jpeg", quality = 72, maxWidth = 1600, maxHeight = 1000, everyNthFrame = 1 }));
+            JsonSerializer.Serialize(new { format = "jpeg", quality = 80, maxWidth = 1920, maxHeight = 1080, everyNthFrame = 1 }));
+        // Размер видео узнаём по первому кадру
+        await Task.WhenAny(r.firstFrame.Task, Task.Delay(4000));
+        if (r.last == null) { await r.StopAsync(); throw new InvalidOperationException(L.T("страница не отрисовалась")); }
+        if (preferMp4)
+        {
+            try { r.StartMp4(name + ".mp4", withAudio); return r; }
+            catch { r.mp4?.Dispose(); r.mp4 = null; try { File.Delete(name + ".mp4"); } catch { } }
+        }
+        r.FilePath = name + ".avi";
+        r.fs = new FileStream(r.FilePath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.Read);
+        r.w = new BinaryWriter(r.fs);
+        r.WriteHeader();
         r.timer.Start();
         return r;
+    }
+
+    void StartMp4(string path, bool withAudio)
+    {
+        // Чётные размеры (требование H.264), не больше Full HD
+        int vw = Math.Min(width, 1920) & ~1, vh = Math.Min(height, 1080) & ~1;
+        mp4 = new Mp4Writer(path, vw, vh, Mp4Fps, withAudio);
+        FilePath = path;
+        rgb = new byte[mp4.Width * mp4.Height * 4];
+        if (withAudio && mp4.HasAudio)
+        {
+            // Звук движка браузера (все вкладки; процессы движка — дочерние у его основного процесса)
+            audio = ProcessAudioCapture.TryStart((pcm, at) => { try { mp4?.WriteAudio(pcm, at); } catch { } }, out var err, (int)core.BrowserProcessId);
+            if (audio == null) AudioNote = err; else HasAudio = true;
+        }
+        else if (withAudio) AudioNote = L.T("кодировщик звука недоступен");
+        videoThread = new Thread(VideoLoop) { IsBackground = true, Name = "LiteBrowser video" };
+        videoThread.Start();
+    }
+
+    void VideoLoop()
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        byte[]? shown = null;
+        while (!stopped)
+        {
+            try
+            {
+                long due = sw.ElapsedMilliseconds * Mp4Fps / 1000 + 1;
+                while (mp4Frames < due && !stopped)
+                {
+                    var cur = last;
+                    if (cur != null && cur != shown) { Decode(cur); shown = cur; }
+                    mp4!.WriteVideo(rgb, mp4Frames++);
+                }
+                if (Elapsed > MaxLength) { AutoStopped?.Invoke(this); return; }
+            }
+            catch { }
+            Thread.Sleep(10);
+        }
+    }
+
+    /// <summary>JPEG → RGB32 нужного размера (если окно меняли — кадр масштабируется).</summary>
+    void Decode(byte[] jpeg)
+    {
+        int vw = mp4!.Width, vh = mp4.Height;
+        using var ms = new MemoryStream(jpeg);
+        using var src = Image.FromStream(ms, false, false);
+        using var bmp = new Bitmap(vw, vh, System.Drawing.Imaging.PixelFormat.Format32bppRgb);
+        using (var g = Graphics.FromImage(bmp))
+        {
+            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBilinear;
+            g.Clear(Color.Black);
+            float k = Math.Min((float)vw / src.Width, (float)vh / src.Height);
+            int dw = (int)(src.Width * k), dh = (int)(src.Height * k);
+            g.DrawImage(src, (vw - dw) / 2, (vh - dh) / 2, dw, dh);
+        }
+        var data = bmp.LockBits(new Rectangle(0, 0, vw, vh), System.Drawing.Imaging.ImageLockMode.ReadOnly, System.Drawing.Imaging.PixelFormat.Format32bppRgb);
+        try
+        {
+            for (int y = 0; y < vh; y++)
+                System.Runtime.InteropServices.Marshal.Copy(data.Scan0 + y * data.Stride, rgb, y * vw * 4, vw * 4);
+        }
+        finally { bmp.UnlockBits(data); }
     }
 
     void OnFrame(object? s, CoreWebView2DevToolsProtocolEventReceivedEventArgs e)
@@ -71,27 +156,25 @@ sealed class TabRecorder : IDisposable
             var root = doc.RootElement;
             int session = root.GetProperty("sessionId").GetInt32();
             _ = core.CallDevToolsProtocolMethodAsync("Page.screencastFrameAck", JsonSerializer.Serialize(new { sessionId = session }));
-            last = Convert.FromBase64String(root.GetProperty("data").GetString() ?? "");
-            if (width == 0 && root.TryGetProperty("metadata", out var m))
-            {
-                width = (int)Math.Round(m.GetProperty("deviceWidth").GetDouble());
-                height = (int)Math.Round(m.GetProperty("deviceHeight").GetDouble());
-                if (JpegSize(last) is { } sz) (width, height) = sz;
-            }
+            var bytes = Convert.FromBase64String(root.GetProperty("data").GetString() ?? "");
+            if (width == 0 && JpegSize(bytes) is { } sz) (width, height) = sz;
+            last = bytes;
+            firstFrame.TrySetResult();
         }
         catch { }
     }
 
     void Tick()
     {
-        if (stopped || last == null) return;
+        var cur = last;
+        if (stopped || cur == null || w == null) return;
         // Каждый тик — кадр: пауза на странице становится паузой в видео, а не «перемоткой»
         long off = fs.Position;
         w.Write(Encoding.ASCII.GetBytes("00dc"));
-        w.Write(last.Length);
-        w.Write(last);
-        if ((last.Length & 1) == 1) w.Write((byte)0);
-        index.Add((off - moviStart, last.Length));
+        w.Write(cur.Length);
+        w.Write(cur);
+        if ((cur.Length & 1) == 1) w.Write((byte)0);
+        index.Add((off - moviStart, cur.Length));
         if (fs.Length > MaxBytes || Elapsed > MaxLength) { timer.Stop(); AutoStopped?.Invoke(this); }
     }
 
@@ -102,8 +185,20 @@ sealed class TabRecorder : IDisposable
         timer.Stop();
         try { core.GetDevToolsProtocolEventReceiver("Page.screencastFrame").DevToolsProtocolEventReceived -= OnFrame; } catch { }
         try { await core.CallDevToolsProtocolMethodAsync("Page.stopScreencast", "{}"); } catch { }
-        Finish();
+        await Task.Run(FinishAll);
         return FilePath;
+    }
+
+    void FinishAll()
+    {
+        if (mp4 != null)
+        {
+            try { videoThread?.Join(2000); } catch { }
+            audio?.Dispose(); audio = null;
+            mp4.Dispose();
+            if (mp4Frames == 0) try { File.Delete(FilePath); } catch { }
+        }
+        else if (w != null) Finish();
     }
 
     // ---------------- AVI (RIFF) ----------------
@@ -117,7 +212,7 @@ sealed class TabRecorder : IDisposable
         Fourcc("LIST"); long hdrl = SizePlaceholder(); Fourcc("hdrl");
         Fourcc("avih"); w.Write(56);
         avihSizePos = fs.Position;
-        w.Write(1_000_000 / Fps);   // мкс на кадр
+        w.Write(1_000_000 / AviFps);   // мкс на кадр
         w.Write(0);                 // макс. байт/с
         w.Write(0);                 // выравнивание
         w.Write(0x10);              // AVIF_HASINDEX
@@ -132,7 +227,7 @@ sealed class TabRecorder : IDisposable
         strhSizePos = fs.Position;
         Fourcc("vids"); Fourcc("MJPG");
         w.Write(0); w.Write((short)0); w.Write((short)0); w.Write(0);
-        w.Write(1); w.Write(Fps);   // scale, rate → 12 кадров/с
+        w.Write(1); w.Write(AviFps);   // scale, rate → 12 кадров/с
         w.Write(0);
         lengthPos = fs.Position; w.Write(0); // длина в кадрах
         w.Write(0); w.Write(-1); w.Write(0);
@@ -195,7 +290,7 @@ sealed class TabRecorder : IDisposable
 
     public void Dispose()
     {
-        if (!stopped) { stopped = true; timer.Stop(); try { Finish(); } catch { } }
+        if (!stopped) { stopped = true; timer.Stop(); try { FinishAll(); } catch { } }
         timer.Dispose();
     }
 }

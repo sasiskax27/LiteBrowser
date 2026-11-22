@@ -480,29 +480,66 @@ static class RecordSelfTest
         {
             try
             {
-                var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(root, "data"));
+                // Звук без жеста пользователя — только для теста
+                var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(root, "data"),
+                    new CoreWebView2EnvironmentOptions("--autoplay-policy=no-user-gesture-required"));
                 await view.EnsureCoreWebView2Async(env);
                 var loaded = new TaskCompletionSource<bool>();
                 view.CoreWebView2.NavigationCompleted += (_, e) => loaded.TrySetResult(e.IsSuccess);
+                // Анимация + тихий тон 18 кГц (почти не слышен), чтобы проверить звук в записи
                 view.CoreWebView2.NavigateToString("<html><body style='margin:0;background:#123'><div id=b style='width:120px;height:120px;background:#7c9cff;position:absolute'></div>" +
-                    "<script>let t=0;setInterval(()=>{t+=8;b.style.left=(t%700)+'px';b.style.top=(100+Math.sin(t/50)*80)+'px'},30)</script></body></html>");
+                    "<script>let t=0;setInterval(()=>{t+=8;b.style.left=(t%700)+'px';b.style.top=(100+Math.sin(t/50)*80)+'px'},30);" +
+                    "const ac=new AudioContext();const o=ac.createOscillator();const g=ac.createGain();o.frequency.value=18000;g.gain.value=0.08;o.connect(g).connect(ac.destination);o.start();</script></body></html>");
                 await Task.WhenAny(loaded.Task, Task.Delay(15_000));
+                await Task.Delay(500);
+                var acState = await view.CoreWebView2.ExecuteScriptAsync("ac.state");
+                log.Add("INFO звук: AudioContext " + acState + ", играет: " + view.CoreWebView2.IsDocumentPlayingAudio);
+
+                // 1) Звук браузера ловится (только наши процессы)
+                int peak = 0; long got = 0;
+                var cap = ProcessAudioCapture.TryStart((pcm, _) =>
+                {
+                    got += pcm.Length;
+                    for (int i = 0; i + 1 < pcm.Length; i += 2) peak = Math.Max(peak, Math.Abs((int)BitConverter.ToInt16(pcm, i)));
+                }, out var capErr, (int)view.CoreWebView2.BrowserProcessId);
+                if (cap != null) { await Task.Delay(1500); log.Add($"INFO звук: пакетов {cap.RealPackets}, тихих {cap.SilentPackets}, досыпано {cap.PaddedChunks}"); cap.Dispose(); }
+                Check("звук: захват звука браузера", cap != null && got > 48000 * 4 / 2, cap == null ? capErr : $"{got / 1024} КБ, пик {peak}");
+                bool audioWorks = cap != null && peak > 300;
+                log.Add((audioWorks ? "OK   " : "INFO ") + $"звук: тон слышен в захвате — пик {peak}" + (audioWorks ? "" : " (нет звуковой карты/звук выключен — не ошибка)"));
+
+                // 2) MP4 со звуком
                 var rec = await TabRecorder.StartAsync(view.CoreWebView2, root);
                 await Task.Delay(3000);
                 var path = await rec.StopAsync();
-                int frames = rec.Frames;
+                long frames = rec.Frames;
+                bool mp4 = rec.IsMp4, hasAudio = rec.HasAudio;
+                var note = rec.AudioNote;
                 rec.Dispose();
-                Check("кадры записаны", frames >= 25, $"{frames} кадров за 3 с");
+                Check("mp4: запись в MP4", mp4 && path.EndsWith(".mp4"), path);
+                Check("mp4: кадры записаны", frames >= 40, $"{frames} кадров за 3 с");
+                var m = File.ReadAllBytes(path);
+                Check("mp4: структура (ftyp, moov, H.264)", IndexOf(m, "ftyp"u8.ToArray()) == 4 && IndexOf(m, "moov"u8.ToArray()) > 0 && IndexOf(m, "avc1"u8.ToArray()) > 0, $"{m.Length / 1024} КБ");
+                Check("mp4: дорожка звука AAC", !hasAudio || IndexOf(m, "mp4a"u8.ToArray()) > 0, hasAudio ? "есть" : "без звука: " + note);
+                if (Environment.GetEnvironmentVariable("LITEBROWSER_KEEP_TEST_VIDEO") is { } keep) File.Copy(path, keep, true);
+                File.Delete(path);
+
+                // 3) Запасной формат AVI
+                var rec2 = await TabRecorder.StartAsync(view.CoreWebView2, root, preferMp4: false);
+                await Task.Delay(2000);
+                path = await rec2.StopAsync();
+                frames = rec2.Frames;
+                rec2.Dispose();
+                Check("avi: кадры записаны", frames >= 15, $"{frames} кадров за 2 с");
                 var b = File.ReadAllBytes(path);
-                Check("заголовок RIFF AVI", System.Text.Encoding.ASCII.GetString(b, 0, 4) == "RIFF" && System.Text.Encoding.ASCII.GetString(b, 8, 4) == "AVI ");
-                Check("размер RIFF совпадает", BitConverter.ToInt32(b, 4) == b.Length - 8, $"{b.Length / 1024} КБ");
+                Check("avi: заголовок RIFF AVI", System.Text.Encoding.ASCII.GetString(b, 0, 4) == "RIFF" && System.Text.Encoding.ASCII.GetString(b, 8, 4) == "AVI ");
+                Check("avi: размер RIFF совпадает", BitConverter.ToInt32(b, 4) == b.Length - 8, $"{b.Length / 1024} КБ");
                 int idx = IndexOf(b, "idx1"u8.ToArray());
-                Check("есть индекс кадров", idx > 0 && BitConverter.ToInt32(b, idx + 4) == frames * 16);
+                Check("avi: есть индекс кадров", idx > 0 && BitConverter.ToInt32(b, idx + 4) == frames * 16);
                 int movi = IndexOf(b, "movi"u8.ToArray());
                 int first = movi + BitConverter.ToInt32(b, idx + 8 + 8);
-                Check("первый кадр — JPEG", b[first] == '0' && b[first + 8] == 0xFF && b[first + 9] == 0xD8);
+                Check("avi: первый кадр — JPEG", b[first] == '0' && b[first + 8] == 0xFF && b[first + 9] == 0xD8);
                 int w = BitConverter.ToInt32(b, 64), h = BitConverter.ToInt32(b, 68);
-                Check("размер кадра записан", w > 100 && h > 100, $"{w}×{h}");
+                Check("avi: размер кадра записан", w > 100 && h > 100, $"{w}×{h}");
                 File.Delete(path);
             }
             catch (Exception ex) { log.Add("FAIL исключение: " + ex); }
