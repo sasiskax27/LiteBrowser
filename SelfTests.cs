@@ -1,4 +1,5 @@
-﻿using Microsoft.Web.WebView2.Core;
+﻿using System.Text;
+using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 
 namespace LiteBrowser;
@@ -570,6 +571,89 @@ static class RecordSelfTest
             if (j == pat.Length) return i;
         }
         return -1;
+    }
+}
+
+/// <summary>
+/// Самотест прямой загрузки: локальный сервер с поддержкой частей (Range) и ограничением скорости;
+/// 4 потока, пауза, продолжение, побайтная проверка файла. Папка «Загрузки» пользователя не трогается.
+/// </summary>
+static class DirectDownloadSelfTest
+{
+    public static void Run(string outFile)
+    {
+        var log = new List<string>();
+        void Check(string name, bool ok, string? extra = null) => log.Add((ok ? "OK   " : "FAIL ") + name + (extra != null ? " — " + extra : ""));
+        var root = Path.Combine(Path.GetTempPath(), "LiteDirectDl-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        Downloads.FolderOverride = root;
+        var data = new byte[20 * 1024 * 1024];
+        new Random(42).NextBytes(data);
+        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        int port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+        int rangeRequests = 0;
+        var cts = new CancellationTokenSource();
+        _ = Task.Run(async () =>
+        {
+            while (!cts.IsCancellationRequested)
+            {
+                System.Net.Sockets.TcpClient c;
+                try { c = await listener.AcceptTcpClientAsync(cts.Token); } catch { break; }
+                _ = Task.Run(async () =>
+                {
+                    using var client = c;
+                    try
+                    {
+                        var ns = client.GetStream();
+                        var head = new StringBuilder();
+                        var one = new byte[1];
+                        while (!head.ToString().EndsWith("\r\n\r\n") && await ns.ReadAsync(one) > 0) head.Append((char)one[0]);
+                        long from = 0, to = data.Length - 1; bool partial = false;
+                        var mr = System.Text.RegularExpressions.Regex.Match(head.ToString(), @"Range: bytes=(\d+)-(\d*)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                        if (mr.Success) { partial = true; Interlocked.Increment(ref rangeRequests); from = long.Parse(mr.Groups[1].Value); if (mr.Groups[2].Value.Length > 0) to = long.Parse(mr.Groups[2].Value); }
+                        long len = to - from + 1;
+                        var hdr = (partial ? "HTTP/1.1 206 Partial Content\r\n" : "HTTP/1.1 200 OK\r\n") + "Content-Type: application/octet-stream\r\nAccept-Ranges: bytes\r\n" +
+                                  $"Content-Length: {len}\r\n" + (partial ? $"Content-Range: bytes {from}-{to}/{data.Length}\r\n" : "") + "Connection: close\r\n\r\n";
+                        await ns.WriteAsync(Encoding.ASCII.GetBytes(hdr));
+                        // ~2 МБ/с на поток — чтобы успеть поставить на паузу
+                        for (long p = from; p <= to; p += 65536)
+                        {
+                            int n = (int)Math.Min(65536, to - p + 1);
+                            await ns.WriteAsync(data.AsMemory((int)p, n));
+                            await Task.Delay(30);
+                        }
+                    }
+                    catch { }
+                });
+            }
+        });
+        try
+        {
+            var it = Downloads.StartDirect($"http://127.0.0.1:{port}/big.bin", null, null, "big.bin");
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            while (it.Received < 3_000_000 && sw.Elapsed.TotalSeconds < 20 && it.State == DlState.InProgress) Thread.Sleep(50);
+            Check("4 потока для большого файла", it.Threads == Downloads.MaxThreads && it.CanPause, $"потоков {it.Threads}, получено {it.Received / 1024} КБ");
+            it.Pause();
+            Thread.Sleep(800);
+            long atPause = it.Received;
+            Thread.Sleep(1200);
+            Check("пауза останавливает загрузку", it.Paused && it.Received == atPause && it.State == DlState.InProgress, $"{atPause / 1024} КБ");
+            int beforeResume = rangeRequests;
+            it.Resume();
+            sw.Restart();
+            while (it.State == DlState.InProgress && sw.Elapsed.TotalSeconds < 60) Thread.Sleep(100);
+            Check("продолжение после паузы — докачка частями", it.State == DlState.Completed && rangeRequests > beforeResume, $"{it.State}, запросов частей после паузы {rangeRequests - beforeResume}");
+            var got = File.Exists(it.Path) ? File.ReadAllBytes(it.Path) : Array.Empty<byte>();
+            Check("файл совпадает побайтно", got.AsSpan().SequenceEqual(data), $"{got.Length / 1024} КБ из {data.Length / 1024}");
+        }
+        catch (Exception ex) { log.Add("FAIL исключение: " + ex); }
+        finally
+        {
+            cts.Cancel(); listener.Stop();
+            File.WriteAllLines(outFile, log);
+            try { Directory.Delete(root, true); } catch { }
+        }
     }
 }
 

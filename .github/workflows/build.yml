@@ -1,4 +1,4 @@
-name: Сборка и самотесты
+﻿name: РЎР±РѕСЂРєР° Рё СЃР°РјРѕС‚РµСЃС‚С‹
 
 on:
   push:
@@ -21,10 +21,10 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      - name: Сборка
+      - name: РЎР±РѕСЂРєР°
         run: dotnet build -c Release -nologo
 
-      - name: Публикация (small и full)
+      - name: РџСѓР±Р»РёРєР°С†РёСЏ (small Рё full)
         shell: pwsh
         run: |
           dotnet publish -c Release -o out/small -nologo
@@ -35,7 +35,7 @@ jobs:
           Copy-Item out/full/LiteBrowser.exe "dist/LiteBrowser-$v-full.exe"
           "VERSION=$v" | Out-File -Append $env:GITHUB_ENV
 
-      - name: WebView2 Runtime (если нет на сборщике)
+      - name: WebView2 Runtime (РµСЃР»Рё РЅРµС‚ РЅР° СЃР±РѕСЂС‰РёРєРµ)
         shell: pwsh
         run: |
           $key = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
@@ -43,7 +43,7 @@ jobs:
           Invoke-WebRequest https://go.microsoft.com/fwlink/p/?LinkId=2124703 -OutFile "$env:RUNNER_TEMP\wv2.exe"
           Start-Process "$env:RUNNER_TEMP\wv2.exe" -ArgumentList '/silent','/install' -Wait
 
-      - name: Самотесты
+      - name: РЎР°РјРѕС‚РµСЃС‚С‹
         shell: pwsh
         run: |
           $env:LITEBROWSER_DATA = "$env:RUNNER_TEMP\lb-data"
@@ -53,14 +53,15 @@ jobs:
             @{ name = 'vault';    args = '--vault-selftest' },
             @{ name = 'adblock';  args = '--adblock-selftest' },
             @{ name = 'devtools'; args = '--devtools-selftest' },
-            @{ name = 'record';   args = '--record-selftest' }
+            @{ name = 'record';   args = '--record-selftest' },
+            @{ name = 'downloads'; args = '--dl-selftest' }
           )
           $failed = 0
           foreach ($t in $tests) {
             $out = "$env:RUNNER_TEMP\$($t.name).txt"
             $p = Start-Process -FilePath $exe -ArgumentList $t.args, $out -PassThru
-            if (-not $p.WaitForExit(300000)) { $p.Kill(); Write-Host "::error::$($t.name): завис"; $failed++; continue }
-            if (-not (Test-Path $out)) { Write-Host "::error::$($t.name): нет отчёта"; $failed++; continue }
+            if (-not $p.WaitForExit(300000)) { $p.Kill(); Write-Host "::error::$($t.name): Р·Р°РІРёСЃ"; $failed++; continue }
+            if (-not (Test-Path $out)) { Write-Host "::error::$($t.name): РЅРµС‚ РѕС‚С‡С‘С‚Р°"; $failed++; continue }
             $lines = Get-Content $out -Encoding UTF8
             $lines | ForEach-Object { Write-Host $_ }
             $bad = @($lines | Where-Object { $_ -like 'FAIL*' })
@@ -74,11 +75,11 @@ jobs:
           name: LiteBrowser-${{ env.VERSION }}
           path: dist/*.exe
 
-      # Для тега v* — черновик релиза с файлами (публикует человек, нажав «Publish»)
-      - name: Черновик релиза
+      # Р”Р»СЏ С‚РµРіР° v* вЂ” С‡РµСЂРЅРѕРІРёРє СЂРµР»РёР·Р° СЃ С„Р°Р№Р»Р°РјРё (РїСѓР±Р»РёРєСѓРµС‚ С‡РµР»РѕРІРµРє, РЅР°Р¶Р°РІ В«PublishВ»)
+      - name: Р§РµСЂРЅРѕРІРёРє СЂРµР»РёР·Р°
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          gh release create $env:GITHUB_REF_NAME dist/*.exe --draft --title "LiteBrowser $env:VERSION" --notes "Черновик, собранный автоматически. Проверьте и опубликуйте."
+          gh release create $env:GITHUB_REF_NAME dist/*.exe --draft --title "LiteBrowser $env:VERSION" --notes "Р§РµСЂРЅРѕРІРёРє, СЃРѕР±СЂР°РЅРЅС‹Р№ Р°РІС‚РѕРјР°С‚РёС‡РµСЃРєРё. РџСЂРѕРІРµСЂСЊС‚Рµ Рё РѕРїСѓР±Р»РёРєСѓР№С‚Рµ."

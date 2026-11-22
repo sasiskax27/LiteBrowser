@@ -50,7 +50,7 @@ function render() {
     if (done && !it.exists) name.classList.add('gone');
     let host = ''; try { host = new URL(it.url).hostname; } catch (e) { }
     meta.textContent = active
-      ? `${size(it.received)}${it.total ? ' из ' + size(it.total) : ''}${it.speed ? ' · ' + size(it.speed) + '/с' : ''} · ${host}`
+      ? `${it.paused ? 'Пауза · ' : ''}${size(it.received)}${it.total ? ' из ' + size(it.total) : ''}${it.speed && !it.paused ? ' · ' + size(it.speed) + '/с' : ''}${it.threads > 1 ? ' · ' + it.threads + ' потока' : ''} · ${host}`
       : done ? `${size(Math.max(it.total, it.received))} · ${host} · ${d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}${it.exists ? '' : ' · файл удалён'}`
       : it.canceled ? `Отменено · ${host}` : `Ошибка загрузки · ${host}`;
     if (!active && !done && !it.canceled) meta.classList.add('bad');
@@ -64,6 +64,8 @@ function render() {
     }
     if (active) row.querySelector('.prog div').style.width = (it.total ? it.received / it.total * 100 : 30) + '%';
     const btn = (g, title, fn) => { const b = document.createElement('button'); b.className = 'act icon'; b.innerHTML = g; b.title = title; b.onclick = e => { e.stopPropagation(); fn(); }; acts.appendChild(b); };
+    if (active && it.paused) btn('&#xE768;', 'Продолжить', () => send({ type: 'dl:resume', id: it.id }));
+    else if (active && it.canPause) btn('&#xE769;', 'Пауза', () => send({ type: 'dl:pause', id: it.id }));
     if (active) btn('&#xE711;', 'Отменить', () => send({ type: 'dl:cancel', id: it.id }));
     else {
       if (done && it.exists) { btn('&#xE8E5;', 'Открыть', () => send({ type: 'dl:open', id: it.id })); btn('&#xE838;', 'Показать в папке', () => send({ type: 'dl:folder', id: it.id })); btn('&#xE72E;', 'Контрольная сумма SHA-256 (сравните с указанной на сайте)', () => { hashes[it.id] = 'Считаю SHA-256…'; render(); send({ type: 'dl:hash', id: it.id }); }); }

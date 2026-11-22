@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Drawing.Drawing2D;
 using System.Net;
 using System.Text.Json;
@@ -23,6 +23,15 @@ sealed class DownloadItem
     [JsonIgnore] public double Speed { get; set; }
     [JsonIgnore] public CoreWebView2DownloadOperation? Op { get; set; }
     [JsonIgnore] public CancellationTokenSource? Cts { get; set; }
+    [JsonIgnore] public bool Paused { get; set; }
+    // Прямая загрузка: части файла (начало, конец, сколько скачано) — для нескольких потоков и продолжения после паузы
+    [JsonIgnore] internal List<long[]>? Segments { get; set; }
+    [JsonIgnore] internal bool RangeOk { get; set; }
+    [JsonIgnore] internal string? Referer { get; set; }
+    [JsonIgnore] internal string? Cookies { get; set; }
+    [JsonIgnore] public int Threads => Segments?.Count ?? 1;
+    /// <summary>Можно ли поставить на паузу: загрузки движка — всегда, прямые — если сервер отдаёт части файла.</summary>
+    [JsonIgnore] public bool CanPause => State == DlState.InProgress && (Op != null || RangeOk);
     long lastBytes;
     DateTime lastTime = DateTime.Now;
 
@@ -30,8 +39,32 @@ sealed class DownloadItem
 
     public void Cancel()
     {
+        Paused = false;
         if (Op != null) Op.Cancel();
         Cts?.Cancel();
+        // Прямая загрузка на паузе — потоков уже нет, убираем недокачанный файл сами
+        if (Op == null && State == DlState.InProgress && Cts is { IsCancellationRequested: true } && Segments != null)
+        {
+            State = DlState.Interrupted; Canceled = true;
+            try { File.Delete(Path); } catch { }
+        }
+    }
+
+    public void Pause()
+    {
+        if (!CanPause || Paused) return;
+        Paused = true;
+        Speed = 0;
+        if (Op != null) { try { Op.Pause(); } catch { } }
+        else Cts?.Cancel();
+    }
+
+    public void Resume()
+    {
+        if (!Paused) return;
+        Paused = false;
+        if (Op != null) { try { if (Op.CanResume) Op.Resume(); } catch { } }
+        else Downloads.ResumeDirect(this);
     }
 
     public void UpdateFromOp()
@@ -68,7 +101,9 @@ static class Downloads
     public static event Action? Changed;
     static bool loaded;
     static string FilePath => System.IO.Path.Combine(AppEnv.DataDir, "downloads.json");
-    public static string DefaultFolder => System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+    public static string DefaultFolder => FolderOverride ?? System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads");
+    /// <summary>Для самотеста: не трогаем папку «Загрузки» пользователя.</summary>
+    internal static string? FolderOverride;
 
     public static void Load()
     {
@@ -153,47 +188,124 @@ static class Downloads
         var name = MakeName(url, suggestedName);
         Directory.CreateDirectory(DefaultFolder);
         var path = Unique(System.IO.Path.Combine(DefaultFolder, name));
-        var it = new DownloadItem { Url = url, Path = path, State = DlState.InProgress, Cts = new CancellationTokenSource() };
+        var it = new DownloadItem { Url = url, Path = path, State = DlState.InProgress, Referer = referer, Cookies = cookies };
         Items.Insert(0, it);
         Raise();
-        _ = Task.Run(async () =>
+        _ = Task.Run(() => RunDirect(it));
+        return it;
+    }
+
+    internal static void ResumeDirect(DownloadItem it)
+    {
+        if (it.State != DlState.InProgress) return;
+        _ = Task.Run(() => RunDirect(it));
+    }
+
+    /// <summary>Больше этого — качаем в несколько потоков (если сервер отдаёт части файла).</summary>
+    internal const long MultiThreadMin = 8 * 1024 * 1024;
+    internal const int MaxThreads = 4;
+
+    static HttpClient MakeClient()
+    {
+        var s = AppEnv.Settings;
+        var handler = new HttpClientHandler { AutomaticDecompression = DecompressionMethods.None };
+        if (s.ProxyMode == "all") handler.Proxy = new WebProxy($"{(s.ProxyType == "http" ? "http" : "socks5")}://{s.ProxyHost}:{s.ProxyPort}");
+        return new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
+    }
+
+    static HttpRequestMessage Req(DownloadItem it, long? from = null, long? to = null)
+    {
+        var req = new HttpRequestMessage(HttpMethod.Get, it.Url);
+        req.Headers.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0 Safari/537.36");
+        if (it.Referer != null) req.Headers.Referrer = new Uri(it.Referer);
+        if (!string.IsNullOrEmpty(it.Cookies)) req.Headers.TryAddWithoutValidation("Cookie", it.Cookies);
+        if (from != null) req.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(from, to);
+        return req;
+    }
+
+    /// <summary>
+    /// Прямая загрузка: узнаём размер и поддержку частей (Range), большие файлы делим на 4 части и качаем параллельно
+    /// в один файл; после паузы докачиваем только недостающее.
+    /// </summary>
+    static async Task RunDirect(DownloadItem it)
+    {
+        it.Cts = new CancellationTokenSource();
+        var ct = it.Cts.Token;
+        try
         {
-            try
+            using var http = MakeClient();
+            if (it.Segments == null)
             {
-                var s = AppEnv.Settings;
-                var handler = new HttpClientHandler { AutomaticDecompression = DecompressionMethods.All };
-                if (s.ProxyMode == "all") handler.Proxy = new WebProxy($"{(s.ProxyType == "http" ? "http" : "socks5")}://{s.ProxyHost}:{s.ProxyPort}");
-                using var http = new HttpClient(handler) { Timeout = Timeout.InfiniteTimeSpan };
-                using var req = new HttpRequestMessage(HttpMethod.Get, url);
-                req.Headers.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0 Safari/537.36");
-                if (referer != null) req.Headers.Referrer = new Uri(referer);
-                if (!string.IsNullOrEmpty(cookies)) req.Headers.TryAddWithoutValidation("Cookie", cookies);
-                using var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, it.Cts.Token);
-                resp.EnsureSuccessStatusCode();
-                it.Total = resp.Content.Headers.ContentLength ?? 0;
-                await using var src = await resp.Content.ReadAsStreamAsync(it.Cts.Token);
-                await using var dst = File.Create(path);
-                var buf = new byte[131072];
-                int n;
-                var lastUi = DateTime.Now;
-                while ((n = await src.ReadAsync(buf, it.Cts.Token)) > 0)
+                // Пробный запрос первого байта: есть ли части и какой размер
+                using var probe = await http.SendAsync(Req(it, 0, 0), HttpCompletionOption.ResponseHeadersRead, ct);
+                long total = 0;
+                if (probe.StatusCode == HttpStatusCode.PartialContent && probe.Content.Headers.ContentRange?.Length is long len)
+                { it.RangeOk = true; total = len; }
+                else if (probe.IsSuccessStatusCode) total = probe.Content.Headers.ContentLength ?? 0;
+                else probe.EnsureSuccessStatusCode();
+                it.Total = total;
+                int parts = it.RangeOk && total >= MultiThreadMin ? MaxThreads : 1;
+                it.Segments = new();
+                if (it.RangeOk && total > 0)
                 {
-                    await dst.WriteAsync(buf.AsMemory(0, n), it.Cts.Token);
-                    it.Received += n;
+                    long chunk = total / parts;
+                    for (int i = 0; i < parts; i++)
+                    {
+                        long start = i * chunk, end = i == parts - 1 ? total - 1 : (i + 1) * chunk - 1;
+                        it.Segments.Add(new[] { start, end, 0L });
+                    }
+                }
+                else it.Segments.Add(new[] { 0L, -1L, 0L });
+            }
+
+            using (var handle = File.OpenHandle(it.Path, FileMode.OpenOrCreate, FileAccess.Write, FileShare.Read))
+            {
+                var lastUi = DateTime.Now;
+                void Progress()
+                {
+                    it.Received = it.Segments!.Sum(x => x[2]);
                     if ((DateTime.Now - lastUi).TotalMilliseconds > 250) { lastUi = DateTime.Now; it.Tick(); Ui(() => Raise()); }
                 }
-                it.State = DlState.Completed;
-                DownloadGuard.MarkOfTheWeb(path, url);
+                async Task Part(long[] seg)
+                {
+                    bool ranged = it.RangeOk;
+                    long from = seg[0] + seg[2];
+                    if (seg[1] >= 0 && from > seg[1]) return; // эта часть уже скачана
+                    using var req = ranged ? Req(it, from, seg[1] >= 0 ? seg[1] : null) : Req(it);
+                    using var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+                    resp.EnsureSuccessStatusCode();
+                    if (ranged && resp.StatusCode != HttpStatusCode.PartialContent) throw new IOException("сервер перестал отдавать части файла");
+                    if (!ranged) { seg[2] = 0; }
+                    await using var src = await resp.Content.ReadAsStreamAsync(ct);
+                    var buf = new byte[131072];
+                    int n;
+                    while ((n = await src.ReadAsync(buf, ct)) > 0)
+                    {
+                        long pos = seg[0] + seg[2];
+                        if (seg[1] >= 0) n = (int)Math.Min(n, seg[1] - pos + 1);
+                        if (n <= 0) break;
+                        await RandomAccess.WriteAsync(handle, buf.AsMemory(0, n), pos, ct);
+                        seg[2] += n;
+                        Progress();
+                    }
+                }
+                await Task.WhenAll(it.Segments!.Select(Part));
+                it.Received = it.Segments!.Sum(x => x[2]);
+                if (it.Total > 0 && it.Received < it.Total) throw new IOException("файл скачан не полностью");
+                RandomAccess.SetLength(handle, it.Received);
             }
-            catch (Exception)
-            {
-                it.State = DlState.Interrupted;
-                it.Canceled = it.Cts!.IsCancellationRequested;
-                try { File.Delete(path); } catch { }
-            }
-            Ui(() => Raise(save: true));
-        });
-        return it;
+            it.State = DlState.Completed;
+            it.Speed = 0;
+            DownloadGuard.MarkOfTheWeb(it.Path, it.Url);
+        }
+        catch (Exception)
+        {
+            if (it.Paused) { Ui(() => Raise()); return; } // пауза: файл и прогресс остаются, продолжим с того же места
+            it.State = DlState.Interrupted;
+            it.Canceled = it.Cts!.IsCancellationRequested;
+            try { File.Delete(it.Path); } catch { }
+        }
+        Ui(() => Raise(save: true));
     }
 
     static void Ui(Action a)

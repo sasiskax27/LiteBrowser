@@ -460,6 +460,7 @@ sealed partial class MainForm
                     {
                         id = i.Id, name = i.Name, url = i.Url, path = i.Path, received = i.Received, total = i.Total,
                         state = i.State.ToString(), canceled = i.Canceled, time = i.Time, speed = (long)i.Speed,
+                        paused = i.Paused, canPause = i.CanPause, threads = i.Threads,
                         exists = i.State == DlState.Completed && File.Exists(i.Path),
                         risk = DownloadGuard.Risk(i.Path), riskText = DownloadGuard.RiskText(DownloadGuard.Risk(i.Path)),
                     }),
@@ -470,6 +471,12 @@ sealed partial class MainForm
                 break;
             case "dl:folder":
                 Downloads.ShowInFolder(Downloads.Get(Str("id")));
+                break;
+            case "dl:pause":
+                Downloads.Get(Str("id"))?.Pause();
+                break;
+            case "dl:resume":
+                Downloads.Get(Str("id"))?.Resume();
                 break;
             case "dl:cancel":
                 Downloads.Get(Str("id"))?.Cancel();

@@ -995,5 +995,9 @@
 "Пауза / продолжить": "Pause / resume",
 "Перейти к вкладке": "Go to tab",
 "Выключить звук везде, кроме текущей": "Mute everything except the current tab",
-"Сейчас играет": "Now playing"
+"Сейчас играет": "Now playing",
+"Пауза · ": "Paused · ",
+" потока": " threads",
+"Продолжить": "Resume",
+"Пауза": "Pause"
 }

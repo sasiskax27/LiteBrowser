@@ -187,6 +187,11 @@ static class Program
             return;
         }
 
+        if (args.Length == 2 && args[0] == "--dl-selftest")
+        {
+            DirectDownloadSelfTest.Run(args[1]);
+            return;
+        }
         if (args.Length == 2 && args[0] == "--record-selftest")
         {
             ApplicationConfiguration.Initialize();
