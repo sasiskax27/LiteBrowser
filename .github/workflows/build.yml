@@ -1,0 +1,83 @@
+name: Сборка и самотесты
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Сборка
+        run: dotnet build -c Release -nologo
+
+      - name: Публикация (small и full)
+        shell: pwsh
+        run: |
+          dotnet publish -c Release -o out/small -nologo
+          dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o out/full -nologo
+          $v = ([xml](Get-Content LiteBrowser.csproj)).Project.PropertyGroup.Version | Where-Object { $_ } | Select-Object -First 1
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item out/small/LiteBrowser.exe "dist/LiteBrowser-$v-small.exe"
+          Copy-Item out/full/LiteBrowser.exe "dist/LiteBrowser-$v-full.exe"
+          "VERSION=$v" | Out-File -Append $env:GITHUB_ENV
+
+      - name: WebView2 Runtime (если нет на сборщике)
+        shell: pwsh
+        run: |
+          $key = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          if (Test-Path $key) { Write-Host "WebView2: $((Get-ItemProperty $key).pv)"; exit 0 }
+          Invoke-WebRequest https://go.microsoft.com/fwlink/p/?LinkId=2124703 -OutFile "$env:RUNNER_TEMP\wv2.exe"
+          Start-Process "$env:RUNNER_TEMP\wv2.exe" -ArgumentList '/silent','/install' -Wait
+
+      - name: Самотесты
+        shell: pwsh
+        run: |
+          $env:LITEBROWSER_DATA = "$env:RUNNER_TEMP\lb-data"
+          New-Item -ItemType Directory -Force $env:LITEBROWSER_DATA | Out-Null
+          $exe = (Resolve-Path "dist/LiteBrowser-$env:VERSION-full.exe").Path
+          $tests = @(
+            @{ name = 'vault';    args = '--vault-selftest' },
+            @{ name = 'adblock';  args = '--adblock-selftest' },
+            @{ name = 'devtools'; args = '--devtools-selftest' }
+          )
+          $failed = 0
+          foreach ($t in $tests) {
+            $out = "$env:RUNNER_TEMP\$($t.name).txt"
+            $p = Start-Process -FilePath $exe -ArgumentList $t.args, $out -PassThru
+            if (-not $p.WaitForExit(300000)) { $p.Kill(); Write-Host "::error::$($t.name): завис"; $failed++; continue }
+            if (-not (Test-Path $out)) { Write-Host "::error::$($t.name): нет отчёта"; $failed++; continue }
+            $lines = Get-Content $out -Encoding UTF8
+            $lines | ForEach-Object { Write-Host $_ }
+            $bad = @($lines | Where-Object { $_ -like 'FAIL*' })
+            Write-Host "== $($t.name): OK $(@($lines | Where-Object { $_ -like 'OK*' }).Count), FAIL $($bad.Count)"
+            if ($bad.Count -gt 0) { $failed++ }
+          }
+          if ($failed -gt 0) { exit 1 }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LiteBrowser-${{ env.VERSION }}
+          path: dist/*.exe
+
+      # Для тега v* — черновик релиза с файлами (публикует человек, нажав «Publish»)
+      - name: Черновик релиза
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          gh release create $env:GITHUB_REF_NAME dist/*.exe --draft --title "LiteBrowser $env:VERSION" --notes "Черновик, собранный автоматически. Проверьте и опубликуйте."

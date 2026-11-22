@@ -1,5 +1,7 @@
 # LiteBrowser
 
+[![Сборка и самотесты](https://github.com/sasiskax27/LiteBrowser/actions/workflows/build.yml/badge.svg)](https://github.com/sasiskax27/LiteBrowser/actions/workflows/build.yml)
+
 Лёгкий и безопасный браузер для Windows на C# и WebView2 (движок Chromium, встроенный в Windows 10/11).
 Программа — один exe примерно на 7,5 МБ (или 73 МБ со всем необходимым внутри). **Любую функцию можно включить или выключить в настройках.**
 
