@@ -907,5 +907,14 @@
 "Аврора": "Aurora",
 "Звёзды": "Stars",
 "Волны": "Waves",
-"Установлено своё видео": "Your video is set"
+"Установлено своё видео": "Your video is set",
+"Запись вкладки": "Tab recording",
+"Запись остановлена — достигнут предел длины. ": "Recording stopped at the length limit. ",
+"Идёт запись этой вкладки (без звука). Можно переключаться — запишется, когда вернётесь": "Recording this tab (no sound). You can switch tabs; it records again when you come back",
+"Не удалось начать запись: ": "Couldn't start recording: ",
+"Запись пустая — страница не менялась": "The recording is empty: the page didn't change",
+"Видео сохранено: ": "Video saved: ",
+"Остановить запись видео": "Stop video recording",
+"Записать видео вкладки": "Record tab video",
+"Записать видео вкладки / остановить": "Record tab video / stop"
 }

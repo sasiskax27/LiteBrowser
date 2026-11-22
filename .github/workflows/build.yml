@@ -52,7 +52,8 @@ jobs:
           $tests = @(
             @{ name = 'vault';    args = '--vault-selftest' },
             @{ name = 'adblock';  args = '--adblock-selftest' },
-            @{ name = 'devtools'; args = '--devtools-selftest' }
+            @{ name = 'devtools'; args = '--devtools-selftest' },
+            @{ name = 'record';   args = '--record-selftest' }
           )
           $failed = 0
           foreach ($t in $tests) {

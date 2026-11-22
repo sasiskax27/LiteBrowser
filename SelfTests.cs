@@ -442,3 +442,63 @@ static class TorSelfTest
         finally { TorService.Stop(); File.WriteAllLines(outFile, log); }
     }
 }
+
+/// <summary>Самотест записи вкладки: 3 секунды анимации → AVI; проверяем заголовок, число кадров и что кадры — JPEG.</summary>
+static class RecordSelfTest
+{
+    public static void Run(string outFile)
+    {
+        var log = new List<string>();
+        void Check(string name, bool ok, string? extra = null) => log.Add((ok ? "OK   " : "FAIL ") + name + (extra != null ? " — " + extra : ""));
+        var root = Path.Combine(Path.GetTempPath(), "LiteRecTest-" + Guid.NewGuid().ToString("N"));
+        var form = new Form { Width = 900, Height = 600, ShowInTaskbar = false, StartPosition = FormStartPosition.Manual, Location = new Point(-3000, -3000) };
+        var view = new WebView2 { Dock = DockStyle.Fill };
+        form.Controls.Add(view);
+        form.Shown += async (_, _) =>
+        {
+            try
+            {
+                var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(root, "data"));
+                await view.EnsureCoreWebView2Async(env);
+                var loaded = new TaskCompletionSource<bool>();
+                view.CoreWebView2.NavigationCompleted += (_, e) => loaded.TrySetResult(e.IsSuccess);
+                view.CoreWebView2.NavigateToString("<html><body style='margin:0;background:#123'><div id=b style='width:120px;height:120px;background:#7c9cff;position:absolute'></div>" +
+                    "<script>let t=0;setInterval(()=>{t+=8;b.style.left=(t%700)+'px';b.style.top=(100+Math.sin(t/50)*80)+'px'},30)</script></body></html>");
+                await Task.WhenAny(loaded.Task, Task.Delay(15_000));
+                var rec = await TabRecorder.StartAsync(view.CoreWebView2, root);
+                await Task.Delay(3000);
+                var path = await rec.StopAsync();
+                int frames = rec.Frames;
+                rec.Dispose();
+                Check("кадры записаны", frames >= 25, $"{frames} кадров за 3 с");
+                var b = File.ReadAllBytes(path);
+                Check("заголовок RIFF AVI", System.Text.Encoding.ASCII.GetString(b, 0, 4) == "RIFF" && System.Text.Encoding.ASCII.GetString(b, 8, 4) == "AVI ");
+                Check("размер RIFF совпадает", BitConverter.ToInt32(b, 4) == b.Length - 8, $"{b.Length / 1024} КБ");
+                int idx = IndexOf(b, "idx1"u8.ToArray());
+                Check("есть индекс кадров", idx > 0 && BitConverter.ToInt32(b, idx + 4) == frames * 16);
+                int movi = IndexOf(b, "movi"u8.ToArray());
+                int first = movi + BitConverter.ToInt32(b, idx + 8 + 8);
+                Check("первый кадр — JPEG", b[first] == '0' && b[first + 8] == 0xFF && b[first + 9] == 0xD8);
+                int w = BitConverter.ToInt32(b, 64), h = BitConverter.ToInt32(b, 68);
+                Check("размер кадра записан", w > 100 && h > 100, $"{w}×{h}");
+                File.Delete(path);
+            }
+            catch (Exception ex) { log.Add("FAIL исключение: " + ex); }
+            finally { File.WriteAllLines(outFile, log); form.Close(); }
+        };
+        Application.Run(form);
+        try { Directory.Delete(root, true); } catch { }
+    }
+
+    static int IndexOf(byte[] b, byte[] pat)
+    {
+        for (int i = 0; i + pat.Length <= b.Length; i++)
+        {
+            int j = 0;
+            while (j < pat.Length && b[i + j] == pat[j]) j++;
+            if (j == pat.Length) return i;
+        }
+        return -1;
+    }
+}
+

@@ -177,6 +177,12 @@ static class Program
             return;
         }
 
+        if (args.Length == 2 && args[0] == "--record-selftest")
+        {
+            ApplicationConfiguration.Initialize();
+            RecordSelfTest.Run(args[1]);
+            return;
+        }
         if (args.Length == 3 && args[0] == "--video-selftest")
         {
             ApplicationConfiguration.Initialize();

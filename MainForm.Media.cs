@@ -96,6 +96,47 @@ sealed partial class MainForm
         catch (Exception ex) { MessageBox.Show(this, "Не удалось сделать скриншот: " + ex.Message, "Скриншот"); }
     }
 
+    // ================= Запись видео вкладки =================
+    TabRecorder? recorder;
+    BrowserTab? recordingTab;
+
+    /// <summary>Начать или остановить запись видео текущей вкладки.</summary>
+    async Task ToggleRecording()
+    {
+        if (recorder != null) { await StopRecording(); return; }
+        var tab = active;
+        if (tab?.Core == null) return;
+        try
+        {
+            recorder = await TabRecorder.StartAsync(tab.Core);
+            recordingTab = tab;
+            recorder.AutoStopped += _ => BeginInvoke(async () => await StopRecording(L.T("Запись остановлена — достигнут предел длины. ")));
+            infoBar.ShowBar("rec", "\uE7C8", L.T("Идёт запись этой вкладки (без звука). Можно переключаться — запишется, когда вернётесь"),
+                (L.T("Остановить"), () => _ = StopRecording(), true));
+        }
+        catch (Exception ex)
+        {
+            recorder = null; recordingTab = null;
+            MessageBox.Show(this, L.T("Не удалось начать запись: ") + ex.Message, L.T("Запись вкладки"));
+        }
+    }
+
+    async Task StopRecording(string prefix = "")
+    {
+        var r = recorder;
+        if (r == null) return;
+        recorder = null; recordingTab = null;
+        var path = await r.StopAsync();
+        var time = r.Elapsed;
+        int frames = r.Frames;
+        r.Dispose();
+        if (IsDisposed) return;
+        if (frames == 0) { infoBar.ShowBar("rec", "\uE7C8", L.T("Запись пустая — страница не менялась")); return; }
+        infoBar.ShowBar("rec", "\uE7C8", prefix + L.T("Видео сохранено: ") + $"{Path.GetFileName(path)} ({(int)time.TotalMinutes}:{time.Seconds:00})",
+            (L.T("Открыть"), () => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }), true),
+            (L.T("Показать в папке"), () => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true }), false));
+    }
+
     async Task ToggleReader()
     {
         var core = active?.Core;

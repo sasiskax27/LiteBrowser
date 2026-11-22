@@ -225,6 +225,8 @@ sealed partial class MainForm : Form
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
         BrowserApp.Instance.OnWindowClosing(this);
+        // Идёт запись — дописываем файл, чтобы видео не пропало
+        if (recorder != null) { var r = recorder; recorder = null; r.Dispose(); }
         base.OnFormClosing(e);
     }
 
@@ -385,6 +387,7 @@ sealed partial class MainForm : Form
 
     void CloseTab(BrowserTab tab)
     {
+        if (tab == recordingTab) _ = StopRecording();
         var url = tab.Core?.Source ?? tab.PendingUrl;
         if (url != null && !url.StartsWith(LitePages.Home)) { closedTabs.Push(url); RememberClosed(tab, url); }
         if (tabs.Count == 1) { Close(); return; }
@@ -1065,6 +1068,7 @@ sealed partial class MainForm : Form
         pageMenu.DropDownItems.Add(Theme.Item("Сохранить для чтения без интернета", () => _ = SaveOffline(), "Ctrl+Shift+Y", "\uE78B"));
         pageMenu.DropDownItems.Add(Theme.Item("Скриншот видимой части", () => _ = TakeScreenshot(false), "Ctrl+Shift+S", "\uE722"));
         pageMenu.DropDownItems.Add(Theme.Item("Скриншот всей страницы", () => _ = TakeScreenshot(true), null, "\uE722"));
+        pageMenu.DropDownItems.Add(Theme.Item(recorder != null ? "Остановить запись видео" : "Записать видео вкладки", () => _ = ToggleRecording(), "Alt+Shift+R", "\uE7C8"));
         pageMenu.DropDownItems.Add(Theme.Item("QR-код страницы", ShowQr, null, "\uED14"));
         if (active?.PageHost is { Length: > 0 } ph && ph != LitePages.Host)
             pageMenu.DropDownItems.Add(Theme.Item((DarkFor(ph) ? "✓  " : "") + "Тёмная тема для этого сайта", ToggleDarkForSite, null, "\uE708"));
@@ -1378,6 +1382,7 @@ sealed partial class MainForm : Form
             case Keys.Control | Keys.Alt | Keys.R: _ = ToggleReader(); return true;
             case Keys.Control | Keys.Shift | Keys.V: _ = PictureInPicture(); return true;
             case Keys.Control | Keys.Shift | Keys.S: _ = TakeScreenshot(false); return true;
+            case Keys.Alt | Keys.Shift | Keys.R: _ = ToggleRecording(); return true;
             case Keys.Control | Keys.H: OpenLitePage(LitePages.History); return true;
             case Keys.Control | Keys.Shift | Keys.P: OpenLitePage(LitePages.Passwords); return true;
             case Keys.Control | Keys.Shift | Keys.E: OpenLitePage(LitePages.ExtensionsPage); return true;
