@@ -1,4 +1,4 @@
-using System.Drawing.Drawing2D;
+﻿using System.Drawing.Drawing2D;
 using System.Drawing.Text;
 using System.Runtime.InteropServices;
 
@@ -184,9 +184,29 @@ static class Theme
         openMenus.Clear();
     }
 
-    public static ToolStripMenuItem Item(string text, Action click, string? keys = null)
+    static readonly Dictionary<(string, int), Bitmap> glyphCache = new();
+
+    /// <summary>Значок из шрифта Segoe Fluent Icons как картинка для пункта меню.</summary>
+    public static Bitmap Glyph(string glyph, Color? color = null)
     {
-        var item = new ToolStripMenuItem(L.T(text)) { ForeColor = Text, Padding = new Padding(6, 5, 6, 5) };
+        var c = color ?? TextDim;
+        var key = (glyph, c.ToArgb() ^ S(16));
+        if (glyphCache.TryGetValue(key, out var b)) return b;
+        int size = S(16);
+        b = new Bitmap(size, size);
+        using (var g = Graphics.FromImage(b))
+        {
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+            TextRenderer.DrawText(g, glyph, GetFont(IconFont, 10.5f), new Rectangle(0, 0, size, size), c, Center | TextFormatFlags.NoPadding);
+        }
+        glyphCache[key] = b;
+        return b;
+    }
+
+    public static ToolStripMenuItem Item(string text, Action click, string? keys = null, string? glyph = null)
+    {
+        var item = new ToolStripMenuItem(L.T(text)) { ForeColor = Text, Padding = new Padding(4, 4, 6, 4) };
+        if (glyph != null) item.Image = Glyph(glyph);
         if (keys != null) item.ShortcutKeyDisplayString = keys;
         item.Click += (_, _) => click();
         return item;
@@ -246,6 +266,9 @@ sealed class DarkMenuRenderer : ToolStripProfessionalRenderer
         e.TextColor = e.Item.Enabled ? Theme.Text : Theme.TextDim;
         base.OnRenderItemText(e);
     }
+
+    // Поле под значками — того же цвета, что и меню
+    protected override void OnRenderImageMargin(ToolStripRenderEventArgs e) { }
 
     protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e)
     {

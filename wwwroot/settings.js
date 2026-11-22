@@ -1,4 +1,4 @@
-if (window.top !== window) document.documentElement.innerHTML = '';
+﻿if (window.top !== window) document.documentElement.innerHTML = '';
 
 const $ = id => document.getElementById(id);
 const wv = window.chrome && window.chrome.webview;
@@ -297,3 +297,114 @@ if (wv) {
   wv.postMessage({ type: 'get' });
   wv.postMessage({ type: 'importScan' });
 }
+
+
+// ===================== Боковое меню, разделы и поиск =====================
+const NAV = [
+  ['Основные', [
+    ['search', '&#xE721;', 'Поиск', 'Поисковая система и подсказки'],
+    ['look', '&#xE790;', 'Внешний вид', 'Тема, цвет, язык, обои и масштаб'],
+    ['tabs', '&#xE737;', 'Вкладки', 'Восстановление вкладок и экономия памяти'],
+    ['bookmarks', '&#xE734;', 'Закладки и история', 'Панель закладок, история и загрузки'],
+  ]],
+  ['Приватность и защита', [
+    ['security', '&#xEA18;', 'Безопасность', 'HTTPS и защита от опасных сайтов'],
+    ['adblock', '&#xE8F8;', 'Блокировка рекламы', 'Фильтры, YouTube и всплывающие окна'],
+    ['passwords', '&#xE8D7;', 'Пароли', 'Менеджер паролей и автоблокировка'],
+    ['sites', '&#xE72E;', 'Сайты и разрешения', 'Доверенные и ненадёжные сайты'],
+    ['parental', '&#xE716;', 'Родительский контроль', 'Безопасный интернет для детей'],
+    ['proxy', '&#xE774;', 'Обход блокировок', 'Прокси, VPN-клиенты и Tor'],
+  ]],
+  ['Возможности', [
+    ['ai', '&#xE99A;', 'Lite AI', 'Встроенный ИИ-помощник'],
+    ['tools', '&#xE90F;', 'Инструменты', 'Перевод, жесты мышью, экономия трафика'],
+    ['@extensions.html', '&#xEA86;', 'Расширения', ''],
+  ]],
+  ['Система', [
+    ['import', '&#xE8DE;', 'Перенос', 'Закладки и история из других браузеров'],
+    ['sync', '&#xE895;', 'Синхронизация', 'Между компьютерами через облачный диск'],
+    ['updates', '&#xE896;', 'Обновления', 'Проверка новых версий'],
+    ['system', '&#xE7F8;', 'Система', 'Ярлыки и браузер по умолчанию'],
+    ['data', '&#xE74D;', 'Данные', 'Очистка истории, cookies и кэша'],
+    ['about-sec', '&#xE946;', 'О браузере', 'Версия и движок'],
+  ]],
+];
+const NAV_FLAT = NAV.flatMap(g => g[1]).filter(i => !i[0].startsWith('@'));
+
+function buildNav() {
+  const list = $('navList');
+  for (const [group, items] of NAV) {
+    const g = document.createElement('div');
+    g.className = 'navgroup';
+    g.textContent = group;
+    list.appendChild(g);
+    for (const [id, icon, title] of items) {
+      const a = document.createElement(id.startsWith('@') ? 'a' : 'button');
+      a.className = 'navitem';
+      a.innerHTML = `<span class="icon">${icon}</span><span></span>`;
+      a.querySelector('span:last-child').textContent = title;
+      if (id.startsWith('@')) { a.href = id.slice(1); a.insertAdjacentHTML('beforeend', '<span class="ext icon">&#xE8A7;</span>'); }
+      else { a.dataset.sec = id; a.onclick = () => { $('settingsFind').value = ''; runSearch(); location.hash = id; }; }
+      list.appendChild(a);
+    }
+  }
+}
+
+function showSection(id) {
+  const item = NAV_FLAT.find(i => i[0] === id) || NAV_FLAT[0];
+  document.querySelectorAll('main > section').forEach(s => s.classList.toggle('active', s.id === item[0]));
+  document.querySelectorAll('.navitem[data-sec]').forEach(a => a.classList.toggle('on', a.dataset.sec === item[0]));
+  $('secIcon').innerHTML = item[1];
+  $('secTitle').textContent = item[2];
+  $('secSub').textContent = item[3];
+  const on = document.querySelector('.navitem.on');
+  if (on) on.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  window.scrollTo(0, 0);
+}
+
+// Подсветка найденного текста
+function unmark(root) {
+  root.querySelectorAll('mark').forEach(m => m.replaceWith(document.createTextNode(m.textContent)));
+  root.normalize();
+}
+function markText(el, q) {
+  const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  const hits = [];
+  let n;
+  while ((n = w.nextNode())) { const i = n.nodeValue.toLowerCase().indexOf(q); if (i >= 0) hits.push([n, i]); }
+  for (const [node, i] of hits) {
+    const r = document.createRange();
+    r.setStart(node, i); r.setEnd(node, i + q.length);
+    const m = document.createElement('mark');
+    try { r.surroundContents(m); } catch (e) { }
+  }
+}
+
+function runSearch() {
+  const q = $('settingsFind').value.trim().toLowerCase();
+  const main = document.querySelector('main');
+  unmark(main);
+  document.body.classList.toggle('searching', q.length > 0);
+  if (!q) { document.body.classList.remove('nothing'); showSection(location.hash.slice(1)); return; }
+  let any = false;
+  document.querySelectorAll('main > section').forEach(sec => {
+    const head = (sec.querySelector('h2') || {}).textContent || '';
+    const secHit = head.toLowerCase().includes(q);
+    let rowsHit = 0;
+    sec.querySelectorAll('.row').forEach(r => {
+      const hit = secHit || r.textContent.toLowerCase().includes(q);
+      r.classList.toggle('nomatch', !hit);
+      if (hit) { rowsHit++; markText(r, q); }
+    });
+    const hit = secHit || rowsHit > 0 || sec.textContent.toLowerCase().includes(q);
+    sec.classList.toggle('nomatch', !hit);
+    if (hit) any = true;
+  });
+  document.body.classList.toggle('nothing', !any);
+}
+
+buildNav();
+$('settingsFind').addEventListener('input', runSearch);
+$('settingsFind').addEventListener('keydown', e => { if (e.key === 'Escape') { e.target.value = ''; runSearch(); } });
+window.addEventListener('hashchange', () => { if (!document.body.classList.contains('searching')) showSection(location.hash.slice(1)); });
+showSection(location.hash.slice(1));

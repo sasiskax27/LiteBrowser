@@ -974,90 +974,63 @@ sealed partial class MainForm : Form
     void ShowMainMenu()
     {
         var menu = Theme.NewMenu();
-        menu.Items.Add(Theme.Item("Новая вкладка", () => _ = AddTab(homeUrl), "Ctrl+T"));
-        menu.Items.Add(Theme.Item("Новое окно", () => BrowserApp.Instance.OpenWindow(false), "Ctrl+N"));
-        menu.Items.Add(Theme.Item("Окно инкогнито", () => BrowserApp.Instance.OpenWindow(true), "Ctrl+Shift+N"));
-        if (WorkspacesHere) menu.Items.Add(WorkspacesMenu());
-        var prof = new ToolStripMenuItem(L.T("Профили") + (Profiles.Current.Length > 0 ? $" ({Profiles.Current})" : "")) { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
-        prof.DropDownItems.Add(Theme.Item((Profiles.Current.Length == 0 ? "●  " : "○  ") + L.T("Основной"), () => { if (Profiles.Current.Length > 0) Profiles.Open(null); }));
-        foreach (var p in Profiles.List())
-        {
-            var pp = p;
-            prof.DropDownItems.Add(Theme.Item((Profiles.Current == p.Name ? "●  " : "○  ") + p.Name, () => { if (Profiles.Current != pp.Name) Profiles.Open(pp); }));
-        }
-        prof.DropDownItems.Add(new ToolStripSeparator());
-        prof.DropDownItems.Add(Theme.Item("Новый профиль…", () =>
-        {
-            var name = InputDialog.Ask(this, "Название профиля (например, «Работа»)", "");
-            if (string.IsNullOrWhiteSpace(name)) return;
-            try { Profiles.Open(Profiles.Create(name)); } catch (Exception ex) { MessageBox.Show(this, ex.Message, "Профили"); }
-        }));
-        if (Profiles.List().Any(p => p.Name != Profiles.Current))
-        {
-            var del = new ToolStripMenuItem(L.T("Удалить профиль")) { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
-            foreach (var p in Profiles.List().Where(p => p.Name != Profiles.Current))
-            {
-                var pp = p;
-                del.DropDownItems.Add(Theme.Item(p.Name, () =>
-                {
-                    if (MessageBox.Show(this, $"Удалить профиль «{pp.Name}» вместе с его закладками, паролями и историей? Это нельзя отменить.\n\nЕсли окно этого профиля открыто — сначала закройте его.",
-                        "Удалить профиль", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes)
-                        Profiles.Delete(pp.Id);
-                }));
-            }
-            prof.DropDownItems.Add(del);
-        }
-        menu.Items.Add(prof);
+        menu.ShowImageMargin = true;
+        menu.Items.Add(Theme.Item("Новая вкладка", () => _ = AddTab(homeUrl), "Ctrl+T", "\uE710"));
+        menu.Items.Add(Theme.Item("Новое окно", () => BrowserApp.Instance.OpenWindow(false), "Ctrl+N", "\uE7C4"));
+        menu.Items.Add(Theme.Item("Окно инкогнито", () => BrowserApp.Instance.OpenWindow(true), "Ctrl+Shift+N", "\uE727"));
+        if (WorkspacesHere) { var ws = WorkspacesMenu(); ws.Image = Theme.Glyph("\uE74C"); menu.Items.Add(ws); }
+        menu.Items.Add(ProfilesMenu());
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(Theme.Item("История", () => OpenLitePage(LitePages.History), "Ctrl+H"));
-        menu.Items.Add(Theme.Item("Закладки", () => OpenLitePage(LitePages.BookmarksPage), "Ctrl+Shift+O"));
-        menu.Items.Add(Theme.Item("Загрузки", () => OpenLitePage(LitePages.DownloadsPage), "Ctrl+J"));
-        menu.Items.Add(Theme.Item("Пароли", () => OpenLitePage(LitePages.Passwords), "Ctrl+Shift+P"));
-        menu.Items.Add(Theme.Item("Расширения", () => OpenLitePage(LitePages.ExtensionsPage), "Ctrl+Shift+E"));
+        menu.Items.Add(Theme.Item("История", () => OpenLitePage(LitePages.History), "Ctrl+H", "\uE81C"));
+        menu.Items.Add(Theme.Item("Закладки", () => OpenLitePage(LitePages.BookmarksPage), "Ctrl+Shift+O", "\uE728"));
+        menu.Items.Add(Theme.Item("Загрузки", () => OpenLitePage(LitePages.DownloadsPage), "Ctrl+J", "\uE896"));
+        menu.Items.Add(Theme.Item("Пароли", () => OpenLitePage(LitePages.Passwords), "Ctrl+Shift+P", "\uE8D7"));
+        menu.Items.Add(Theme.Item("Расширения", () => OpenLitePage(LitePages.ExtensionsPage), "Ctrl+Shift+E", "\uEA86"));
         menu.Items.Add(new ToolStripSeparator());
-        if (Cfg.AiEnabled) menu.Items.Add(Theme.Item("✦ ИИ-помощник Lite AI", () => OpenAi(), "Ctrl+Shift+A"));
-        menu.Items.Add(Theme.Item("Команды и быстрый поиск", ShowPalette, "Ctrl+K"));
-        menu.Items.Add(Theme.Item("Найти на странице", ShowFind, "Ctrl+F"));
-        menu.Items.Add(Theme.Item(SplitPartner != null ? "Убрать разделение экрана" : "Разделить экран", ToggleSplit, "Ctrl+\\"));
-        menu.Items.Add(Theme.Item(sidePanel.Visible ? "Скрыть боковую панель" : "Боковая панель", () => ToggleSidePanel(!sidePanel.Visible), "Ctrl+B"));
+        if (Cfg.AiEnabled) menu.Items.Add(Theme.Item("ИИ-помощник Lite AI", () => OpenAi(), "Ctrl+Shift+A", "\uE99A"));
+        menu.Items.Add(Theme.Item("Команды и быстрый поиск", ShowPalette, "Ctrl+K", "\uE8FD"));
+        menu.Items.Add(Theme.Item("Найти на странице", ShowFind, "Ctrl+F", "\uE721"));
+        menu.Items.Add(Theme.Item(SplitPartner != null ? "Убрать разделение экрана" : "Разделить экран", ToggleSplit, "Ctrl+\\", "\uE736"));
 
         // Действия со страницей
-        var pageMenu = SubMenu("Эта страница");
-        pageMenu.DropDownItems.Add(Theme.Item("Режим чтения", () => _ = ToggleReader(), "Ctrl+Alt+R"));
-        pageMenu.DropDownItems.Add(Theme.Item("Перевести страницу", TranslatePage));
-        pageMenu.DropDownItems.Add(Theme.Item("Читать вслух", () => _ = ReadAloud(), "Ctrl+Shift+U"));
-        pageMenu.DropDownItems.Add(Theme.Item("Сохранить для чтения без интернета", () => _ = SaveOffline(), "Ctrl+Shift+Y"));
-        pageMenu.DropDownItems.Add(Theme.Item("Скриншот видимой части", () => _ = TakeScreenshot(false), "Ctrl+Shift+S"));
-        pageMenu.DropDownItems.Add(Theme.Item("Скриншот всей страницы", () => _ = TakeScreenshot(true)));
-        pageMenu.DropDownItems.Add(Theme.Item("QR-код страницы", ShowQr));
+        var pageMenu = SubMenu("Эта страница", "\uE8A5");
+        pageMenu.DropDownItems.Add(Theme.Item("Режим чтения", () => _ = ToggleReader(), "Ctrl+Alt+R", "\uE8F1"));
+        pageMenu.DropDownItems.Add(Theme.Item("Перевести страницу", TranslatePage, null, "\uE774"));
+        pageMenu.DropDownItems.Add(Theme.Item("Читать вслух", () => _ = ReadAloud(), "Ctrl+Shift+U", "\uE767"));
+        pageMenu.DropDownItems.Add(Theme.Item("Сохранить для чтения без интернета", () => _ = SaveOffline(), "Ctrl+Shift+Y", "\uE78B"));
+        pageMenu.DropDownItems.Add(Theme.Item("Скриншот видимой части", () => _ = TakeScreenshot(false), "Ctrl+Shift+S", "\uE722"));
+        pageMenu.DropDownItems.Add(Theme.Item("Скриншот всей страницы", () => _ = TakeScreenshot(true), null, "\uE722"));
+        pageMenu.DropDownItems.Add(Theme.Item("QR-код страницы", ShowQr, null, "\uED14"));
         pageMenu.DropDownItems.Add(new ToolStripSeparator());
-        pageMenu.DropDownItems.Add(Theme.Item("Картинка в картинке", () => _ = PictureInPicture(), "Ctrl+Shift+V"));
-        var speed = SubMenu("Скорость видео");
+        pageMenu.DropDownItems.Add(Theme.Item("Картинка в картинке", () => _ = PictureInPicture(), "Ctrl+Shift+V", "\uE8B9"));
+        var speed = SubMenu("Скорость видео", "\uE768");
         foreach (var r in new[] { 0.5, 1, 1.25, 1.5, 2, 3 })
         {
             var rate = r;
             speed.DropDownItems.Add(Theme.Item($"×{rate:0.##}", () => _ = SetSpeed(rate)));
         }
         pageMenu.DropDownItems.Add(speed);
-        pageMenu.DropDownItems.Add(Theme.Item("Скачать видео или аудио", () => _ = DownloadMedia()));
+        pageMenu.DropDownItems.Add(Theme.Item("Скачать видео или аудио", () => _ = DownloadMedia(), null, "\uE714"));
         menu.Items.Add(pageMenu);
 
         // Инструменты
-        var tools = SubMenu("Инструменты");
-        tools.DropDownItems.Add(Theme.Item("Голосовой ввод", () => _ = VoiceInput(), "Ctrl+Shift+M"));
-        tools.DropDownItems.Add(Theme.Item("Заметки и выделения", () => OpenLitePage(LitePages.Notes)));
-        tools.DropDownItems.Add(Theme.Item("Сохранённые страницы", () => OpenLitePage(LitePages.OfflinePage)));
-        tools.DropDownItems.Add(Theme.Item("Центр безопасности", () => OpenLitePage(LitePages.Security)));
-        tools.DropDownItems.Add(Theme.Item("Инструменты разработчика", OpenDevTools, "Ctrl+Shift+I"));
+        var tools = SubMenu("Инструменты", "\uEC7A");
+        tools.DropDownItems.Add(Theme.Item(sidePanel.Visible ? "Скрыть боковую панель" : "Боковая панель", () => ToggleSidePanel(!sidePanel.Visible), "Ctrl+B", "\uE8A0"));
+        tools.DropDownItems.Add(Theme.Item(Cfg.ShowBookmarksBar ? "Скрыть панель закладок" : "Показать панель закладок", ToggleBookmarksBar, "Ctrl+Shift+B", "\uE728"));
+        tools.DropDownItems.Add(Theme.Item("Открыть закрытую вкладку", ReopenClosedTab, "Ctrl+Shift+T", "\uE81C"));
         tools.DropDownItems.Add(new ToolStripSeparator());
-        tools.DropDownItems.Add(Theme.Item((Cfg.DataSaver ? "✓  " : "") + "Экономия трафика (без картинок)", () => { bool v = !Cfg.DataSaver; CopyAndSave(x => x.DataSaver = v); active?.Core?.Reload(); }));
-        tools.DropDownItems.Add(Theme.Item(Cfg.ShowBookmarksBar ? "Скрыть панель закладок" : "Показать панель закладок", ToggleBookmarksBar, "Ctrl+Shift+B"));
-        tools.DropDownItems.Add(Theme.Item("Открыть закрытую вкладку", ReopenClosedTab, "Ctrl+Shift+T"));
+        tools.DropDownItems.Add(Theme.Item("Заметки и выделения", () => OpenLitePage(LitePages.Notes), null, "\uE8EC"));
+        tools.DropDownItems.Add(Theme.Item("Сохранённые страницы", () => OpenLitePage(LitePages.OfflinePage), null, "\uE8B7"));
+        tools.DropDownItems.Add(Theme.Item("Голосовой ввод", () => _ = VoiceInput(), "Ctrl+Shift+M", "\uE720"));
+        tools.DropDownItems.Add(Theme.Item((Cfg.DataSaver ? "✓  " : "") + "Экономия трафика (без картинок)", () => { bool v = !Cfg.DataSaver; CopyAndSave(x => x.DataSaver = v); active?.Core?.Reload(); }, null, "\uEB9F"));
+        tools.DropDownItems.Add(new ToolStripSeparator());
+        tools.DropDownItems.Add(Theme.Item("Центр безопасности", () => OpenLitePage(LitePages.Security), null, "\uE83D"));
+        tools.DropDownItems.Add(Theme.Item("Обход блокировок", () => OpenLitePage(LitePages.Settings, "#proxy"), null, "\uE909"));
+        tools.DropDownItems.Add(Theme.Item("Инструменты разработчика", OpenDevTools, "Ctrl+Shift+I", "\uE9D9"));
+        tools.DropDownItems.Add(Theme.Item("Очистить историю и данные", () => OpenLitePage(LitePages.Settings, "#data"), null, "\uE74D"));
         menu.Items.Add(tools);
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(Theme.Item("Обход блокировок", () => OpenLitePage(LitePages.Settings, "#proxy")));
-        menu.Items.Add(Theme.Item("Очистить историю и данные", () => OpenLitePage(LitePages.Settings, "#data")));
-        menu.Items.Add(Theme.Item("Настройки", () => OpenLitePage(LitePages.Settings), "Ctrl+,"));
+        menu.Items.Add(Theme.Item("Настройки", () => OpenLitePage(LitePages.Settings), "Ctrl+,", "\uE713"));
         // Меню у правого края окна — подменю открываем влево, иначе они уходят за экран
         OpenSubmenusLeft(menu.Items);
         menu.Show(menuBtn, new Point(menuBtn.Width - menu.PreferredSize.Width, menuBtn.Height + Theme.S(4)));
@@ -1073,8 +1046,46 @@ sealed partial class MainForm : Form
             }
     }
 
-    static ToolStripMenuItem SubMenu(string text) =>
-        new(L.T(text)) { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
+    static ToolStripMenuItem SubMenu(string text, string? glyph = null)
+    {
+        var dd = Theme.NewMenu();
+        dd.ShowImageMargin = true;
+        return new(L.T(text)) { ForeColor = Theme.Text, Padding = new Padding(4, 4, 6, 4), DropDown = dd, Image = glyph != null ? Theme.Glyph(glyph) : null };
+    }
+
+    ToolStripMenuItem ProfilesMenu()
+    {
+        var prof = SubMenu(L.T("Профили") + (Profiles.Current.Length > 0 ? $" ({Profiles.Current})" : ""), "\uE77B");
+        prof.DropDownItems.Add(Theme.Item((Profiles.Current.Length == 0 ? "●  " : "○  ") + L.T("Основной"), () => { if (Profiles.Current.Length > 0) Profiles.Open(null); }));
+        foreach (var p in Profiles.List())
+        {
+            var pp = p;
+            prof.DropDownItems.Add(Theme.Item((Profiles.Current == p.Name ? "●  " : "○  ") + p.Name, () => { if (Profiles.Current != pp.Name) Profiles.Open(pp); }));
+        }
+        prof.DropDownItems.Add(new ToolStripSeparator());
+        prof.DropDownItems.Add(Theme.Item("Новый профиль…", () =>
+        {
+            var name = InputDialog.Ask(this, L.T("Название профиля (например, «Работа»)"), "");
+            if (string.IsNullOrWhiteSpace(name)) return;
+            try { Profiles.Open(Profiles.Create(name)); } catch (Exception ex) { MessageBox.Show(this, ex.Message, L.T("Профили")); }
+        }, null, "\uE710"));
+        if (Profiles.List().Any(p => p.Name != Profiles.Current))
+        {
+            var del = SubMenu("Удалить профиль", "\uE74D");
+            foreach (var p in Profiles.List().Where(p => p.Name != Profiles.Current))
+            {
+                var pp = p;
+                del.DropDownItems.Add(Theme.Item(p.Name, () =>
+                {
+                    if (MessageBox.Show(this, $"Удалить профиль «{pp.Name}» вместе с его закладками, паролями и историей? Это нельзя отменить.\n\nЕсли окно этого профиля открыто — сначала закройте его.",
+                        "Удалить профиль", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes)
+                        Profiles.Delete(pp.Id);
+                }));
+            }
+            prof.DropDownItems.Add(del);
+        }
+        return prof;
+    }
 
     void ToggleBookmarksBar()
     {

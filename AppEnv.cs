@@ -1,19 +1,19 @@
-using System.Net.Sockets;
+﻿using System.Net.Sockets;
 using System.Text;
 using Microsoft.Web.WebView2.Core;
 
 namespace LiteBrowser;
 
-/// <summary>Общие для всех окон: папка данных, настройки и движок WebView2.</summary>
+/// <summary>РћР±С‰РёРµ РґР»СЏ РІСЃРµС… РѕРєРѕРЅ: РїР°РїРєР° РґР°РЅРЅС‹С…, РЅР°СЃС‚СЂРѕР№РєРё Рё РґРІРёР¶РѕРє WebView2.</summary>
 static class AppEnv
 {
-    public const string Version = "3.4.0";
-    /// <summary>Папка данных. LITEBROWSER_DATA — отдельная папка для тестов (тогда и отдельный экземпляр браузера).</summary>
+    public const string Version = "3.4.1";
+    /// <summary>РџР°РїРєР° РґР°РЅРЅС‹С…. LITEBROWSER_DATA вЂ” РѕС‚РґРµР»СЊРЅР°СЏ РїР°РїРєР° РґР»СЏ С‚РµСЃС‚РѕРІ (С‚РѕРіРґР° Рё РѕС‚РґРµР»СЊРЅС‹Р№ СЌРєР·РµРјРїР»СЏСЂ Р±СЂР°СѓР·РµСЂР°).</summary>
     public static readonly string DataDir = Environment.GetEnvironmentVariable("LITEBROWSER_DATA") is { Length: > 0 } d ? d
         : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LiteBrowser");
     public static string InstanceName => "LiteBrowser-" + Environment.UserName + (Environment.GetEnvironmentVariable("LITEBROWSER_DATA") is { Length: > 0 } d2 ? "-" + Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(Encoding.UTF8.GetBytes(d2)))[..8] : "");
 
-    /// <summary>Журнал для отладки — пишется только если задана переменная LITEBROWSER_DEBUG.</summary>
+    /// <summary>Р–СѓСЂРЅР°Р» РґР»СЏ РѕС‚Р»Р°РґРєРё вЂ” РїРёС€РµС‚СЃСЏ С‚РѕР»СЊРєРѕ РµСЃР»Рё Р·Р°РґР°РЅР° РїРµСЂРµРјРµРЅРЅР°СЏ LITEBROWSER_DEBUG.</summary>
     public static void Log(string s)
     {
         if (Environment.GetEnvironmentVariable("LITEBROWSER_DEBUG") is not { Length: > 0 }) return;
@@ -21,7 +21,7 @@ static class AppEnv
     }
 
     public static AppSettings Settings { get; private set; } = new();
-    /// <summary>С какими настройками прокси реально запущен движок.</summary>
+    /// <summary>РЎ РєР°РєРёРјРё РЅР°СЃС‚СЂРѕР№РєР°РјРё РїСЂРѕРєСЃРё СЂРµР°Р»СЊРЅРѕ Р·Р°РїСѓС‰РµРЅ РґРІРёР¶РѕРє.</summary>
     public static string RunningSignature { get; private set; } = "off";
     public static bool RestartNeeded => Settings.EngineSignature() != RunningSignature;
     public static event Action? SettingsChanged;
@@ -54,7 +54,7 @@ static class AppEnv
             AreBrowserExtensionsEnabled = true,
             AdditionalBrowserArguments = BrowserArguments(s),
         };
-        // После перезапуска старый процесс движка может ещё закрываться — пробуем несколько раз.
+        // РџРѕСЃР»Рµ РїРµСЂРµР·Р°РїСѓСЃРєР° СЃС‚Р°СЂС‹Р№ РїСЂРѕС†РµСЃСЃ РґРІРёР¶РєР° РјРѕР¶РµС‚ РµС‰С‘ Р·Р°РєСЂС‹РІР°С‚СЊСЃСЏ вЂ” РїСЂРѕР±СѓРµРј РЅРµСЃРєРѕР»СЊРєРѕ СЂР°Р·.
         for (int attempt = 0; ; attempt++)
         {
             try
@@ -81,7 +81,7 @@ static class AppEnv
         }
         else
         {
-            // Только выбранные сайты — через PAC-скрипт, остальные напрямую
+            // РўРѕР»СЊРєРѕ РІС‹Р±СЂР°РЅРЅС‹Рµ СЃР°Р№С‚С‹ вЂ” С‡РµСЂРµР· PAC-СЃРєСЂРёРїС‚, РѕСЃС‚Р°Р»СЊРЅС‹Рµ РЅР°РїСЂСЏРјСѓСЋ
             string target = (s.ProxyType == "http" ? "PROXY " : "SOCKS5 ") + hostPort;
             string list = string.Join(",", s.ProxySites.Select(d => "\"" + d + "\""));
             string pac =
@@ -92,7 +92,7 @@ static class AppEnv
             sb.Append("--proxy-pac-url=data:application/x-ns-proxy-autoconfig;base64,")
               .Append(Convert.ToBase64String(Encoding.UTF8.GetBytes(pac)));
         }
-        // Не даём WebRTC раскрыть настоящий IP в обход прокси
+        // РќРµ РґР°С‘Рј WebRTC СЂР°СЃРєСЂС‹С‚СЊ РЅР°СЃС‚РѕСЏС‰РёР№ IP РІ РѕР±С…РѕРґ РїСЂРѕРєСЃРё
         sb.Append(" --force-webrtc-ip-handling-policy=disable_non_proxied_udp");
         return sb.ToString();
     }
