@@ -57,7 +57,7 @@ sealed partial class MainForm
         var title = doc.RootElement.TryGetProperty("title", out var tt) ? tt.GetString() ?? "" : "";
         var page = core.Source;
         var menu = Theme.NewMenu();
-        menu.Items.Add(new ToolStripMenuItem("Что скачать?") { Enabled = false });
+        menu.Items.Add(new ToolStripMenuItem(L.T("Что скачать?")) { Enabled = false });
         int n = 0;
         foreach (var m in items)
         {
@@ -120,7 +120,7 @@ sealed partial class MainForm
             var items = e.MenuItems;
             CoreWebView2ContextMenuItem Item(string label, Action act)
             {
-                var it = env.CreateContextMenuItem(label, null, CoreWebView2ContextMenuItemKind.Command);
+                var it = env.CreateContextMenuItem(L.T(label), null, CoreWebView2ContextMenuItemKind.Command);
                 it.CustomItemSelected += (_, _) => BeginInvoke(act);
                 return it;
             }

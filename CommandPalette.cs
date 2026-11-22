@@ -30,7 +30,7 @@ sealed class CommandPalette : Form
         box.BackColor = Theme.Menu;
         box.ForeColor = Theme.Text;
         box.Font = Theme.GetFont("Segoe UI", 12.5f);
-        box.PlaceholderText = "Команда, вкладка, настройка, закладка или адрес…";
+        box.PlaceholderText = L.T("Команда, вкладка, настройка, закладка или адрес…");
         Controls.Add(box);
         box.TextChanged += (_, _) => Refresh(box.Text);
         box.KeyDown += OnBoxKey;
@@ -123,7 +123,7 @@ sealed class CommandPalette : Form
         var small = Theme.GetFont("Segoe UI", 8.5f);
         if (items.Count == 0)
         {
-            TextRenderer.DrawText(g, "Ничего не найдено", small, new Rectangle(0, Top0, Width, S(30)), Theme.TextDim, Theme.Center);
+            TextRenderer.DrawText(g, L.T("Ничего не найдено"), small, new Rectangle(0, Top0, Width, S(30)), Theme.TextDim, Theme.Center);
             return;
         }
         for (int v = 0; v < MaxRows && scroll + v < items.Count; v++)
@@ -142,16 +142,18 @@ sealed class CommandPalette : Form
             int tx = r.X + S(44);
             int right = r.Right - S(10);
             // Справа: сочетание клавиш или тип
-            var tag = it.Keys.Length > 0 ? it.Keys : KindName(it.Kind);
+            var tag = it.Keys.Length > 0 ? L.T(it.Keys) : L.T(KindName(it.Kind));
+            var titleText = L.T(it.Title);
+            var detailText = L.T(it.Detail);
             int tagW = TextRenderer.MeasureText(tag, small).Width;
             TextRenderer.DrawText(g, tag, small, new Rectangle(right - tagW, r.Y, tagW, r.Height), Theme.TextDim,
                 TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
             int avail = right - tagW - S(14) - tx;
-            int titleW = Math.Min(TextRenderer.MeasureText(it.Title, title).Width, it.Detail.Length > 0 ? avail * 2 / 3 : avail);
-            TextRenderer.DrawText(g, it.Title, title, new Rectangle(tx, r.Y, titleW, r.Height), Theme.Text,
+            int titleW = Math.Min(TextRenderer.MeasureText(titleText, title).Width, detailText.Length > 0 ? avail * 2 / 3 : avail);
+            TextRenderer.DrawText(g, titleText, title, new Rectangle(tx, r.Y, titleW, r.Height), Theme.Text,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
-            if (it.Detail.Length > 0)
-                TextRenderer.DrawText(g, it.Detail, small, new Rectangle(tx + titleW + S(10), r.Y, avail - titleW - S(10), r.Height), Theme.TextDim,
+            if (detailText.Length > 0)
+                TextRenderer.DrawText(g, detailText, small, new Rectangle(tx + titleW + S(10), r.Y, avail - titleW - S(10), r.Height), Theme.TextDim,
                     TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
         }
         if (items.Count > MaxRows)

@@ -186,7 +186,7 @@ static class Theme
 
     public static ToolStripMenuItem Item(string text, Action click, string? keys = null)
     {
-        var item = new ToolStripMenuItem(text) { ForeColor = Text, Padding = new Padding(6, 5, 6, 5) };
+        var item = new ToolStripMenuItem(L.T(text)) { ForeColor = Text, Padding = new Padding(6, 5, 6, 5) };
         if (keys != null) item.ShortcutKeyDisplayString = keys;
         item.Click += (_, _) => click();
         return item;

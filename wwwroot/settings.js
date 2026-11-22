@@ -210,8 +210,11 @@ $('checkUpd').onclick = () => { toast('Проверяю…'); wv.postMessage({ t
 // Переключатели
 document.querySelectorAll('input[data-key]').forEach(i => i.onchange = () => { state[i.dataset.key] = i.checked; save(); });
 document.querySelectorAll('.seg[data-seg]').forEach(seg => seg.querySelectorAll('button').forEach(b => b.onclick = () => {
+  const before = state[seg.dataset.seg];
   state[seg.dataset.seg] = seg.dataset.num ? Number(b.dataset.v) : b.dataset.v;
   render(); save();
+  // Новый язык — перезагружаем страницу, чтобы она открылась на нём
+  if (seg.dataset.seg === 'language' && before !== state.language) setTimeout(() => location.reload(), 500);
 }));
 
 // Прокси

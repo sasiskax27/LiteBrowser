@@ -398,7 +398,7 @@ sealed partial class MainForm : Form
         if (Groups.Any()) menu.Items.Add(Theme.Item("Убрать все группы", UngroupAll));
         if (Groups.Any())
         {
-            var sub = new ToolStripMenuItem("Добавить в группу") { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
+            var sub = new ToolStripMenuItem(L.T("Добавить в группу")) { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
             foreach (var g in Groups.ToList())
             {
                 var grp = g;
@@ -477,7 +477,7 @@ sealed partial class MainForm : Form
         var menu = Theme.NewMenu();
         menu.Items.Add(Theme.Item(g.Collapsed ? "Развернуть группу" : "Свернуть группу", () => { g.Collapsed = !g.Collapsed; strip.Invalidate(); }));
         menu.Items.Add(Theme.Item("Переименовать…", () => { var n = InputDialog.Ask(this, "Название группы", g.Name); if (n != null) { g.Name = n; strip.Invalidate(); } }));
-        var colors = new ToolStripMenuItem("Цвет") { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
+        var colors = new ToolStripMenuItem(L.T("Цвет")) { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
         string[] names = { "Синий", "Красный", "Жёлтый", "Зелёный", "Розовый", "Фиолетовый", "Бирюзовый", "Оранжевый" };
         for (int i = 0; i < TabGroup.Palette.Length; i++)
         {
@@ -929,7 +929,7 @@ sealed partial class MainForm : Form
         menu.Items.Add(new ToolStripControlHost(row) { AutoSize = false, Size = row.Size, Margin = Padding.Empty, Padding = Padding.Empty });
         menu.Items.Add(Theme.Item("Сделать масштабом по умолчанию для всех сайтов", () => { int z = CurrentZoom; CopyAndSave(x => x.PageZoom = z); }));
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(new ToolStripMenuItem("Размер интерфейса (вкладки, кнопки)") { Enabled = false, Padding = new Padding(6, 5, 6, 2) });
+        menu.Items.Add(new ToolStripMenuItem(L.T("Размер интерфейса (вкладки, кнопки)")) { Enabled = false, Padding = new Padding(6, 5, 6, 2) });
         foreach (var v in AppSettings.UiScales)
         {
             int value = v;
@@ -978,8 +978,8 @@ sealed partial class MainForm : Form
         menu.Items.Add(Theme.Item("Новое окно", () => BrowserApp.Instance.OpenWindow(false), "Ctrl+N"));
         menu.Items.Add(Theme.Item("Окно инкогнито", () => BrowserApp.Instance.OpenWindow(true), "Ctrl+Shift+N"));
         if (WorkspacesHere) menu.Items.Add(WorkspacesMenu());
-        var prof = new ToolStripMenuItem("Профили" + (Profiles.Current.Length > 0 ? $" ({Profiles.Current})" : "")) { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
-        prof.DropDownItems.Add(Theme.Item((Profiles.Current.Length == 0 ? "●  " : "○  ") + "Основной", () => { if (Profiles.Current.Length > 0) Profiles.Open(null); }));
+        var prof = new ToolStripMenuItem(L.T("Профили") + (Profiles.Current.Length > 0 ? $" ({Profiles.Current})" : "")) { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
+        prof.DropDownItems.Add(Theme.Item((Profiles.Current.Length == 0 ? "●  " : "○  ") + L.T("Основной"), () => { if (Profiles.Current.Length > 0) Profiles.Open(null); }));
         foreach (var p in Profiles.List())
         {
             var pp = p;
@@ -994,7 +994,7 @@ sealed partial class MainForm : Form
         }));
         if (Profiles.List().Any(p => p.Name != Profiles.Current))
         {
-            var del = new ToolStripMenuItem("Удалить профиль") { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
+            var del = new ToolStripMenuItem(L.T("Удалить профиль")) { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
             foreach (var p in Profiles.List().Where(p => p.Name != Profiles.Current))
             {
                 var pp = p;
@@ -1074,7 +1074,7 @@ sealed partial class MainForm : Form
     }
 
     static ToolStripMenuItem SubMenu(string text) =>
-        new(text) { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
+        new(L.T(text)) { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
 
     void ToggleBookmarksBar()
     {

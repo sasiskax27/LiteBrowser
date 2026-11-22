@@ -90,6 +90,7 @@ sealed class AppSettings
     public bool SaveHistory { get; set; } = true;
     public bool BuiltInDownloads { get; set; } = true;
     // Внешний вид
+    public string Language { get; set; } = "auto";      // auto | ru | en
     public string SiteTheme { get; set; } = "auto";     // auto | dark | light
     // Менеджер паролей
     public bool PasswordManager { get; set; } = true;
@@ -145,6 +146,7 @@ sealed class AppSettings
     {
         Engine = SearchEngines.Get(Engine).Id;
         if (SiteTheme is not ("auto" or "dark" or "light")) SiteTheme = "auto";
+        if (Language is not ("auto" or "ru" or "en")) Language = "auto";
         if (ProxyMode is not ("off" or "all" or "list")) ProxyMode = "off";
         if (ProxyType is not ("socks5" or "http")) ProxyType = "socks5";
         ProxyHost = (ProxyHost ?? "").Trim().ToLowerInvariant();

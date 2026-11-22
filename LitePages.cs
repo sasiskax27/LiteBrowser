@@ -46,6 +46,13 @@ static class LitePages
         if (s == null) return env.CreateWebResourceResponse(null, 404, "Not Found", "");
         var ms = new MemoryStream();
         s.CopyTo(ms);
+        if (path.EndsWith(".html") && L.En)
+        {
+            // Английский интерфейс: подключаем переводчик страниц (внешний скрипт — CSP запрещает встроенные)
+            var html = System.Text.Encoding.UTF8.GetString(ms.ToArray());
+            html = html.Replace("</body>", "<script src=\"i18n.js?lang=en\"></script></body>");
+            ms = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(html));
+        }
         if (path == "common.css")
         {
             // Цвет акцента и светлая тема — дописываем переменные к общему CSS

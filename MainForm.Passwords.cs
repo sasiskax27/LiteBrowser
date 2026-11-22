@@ -140,9 +140,9 @@ sealed partial class MainForm
         var list = Vault.ForOrigin(origin);
 
         var menu = Theme.NewMenu();
-        menu.Items.Add(new ToolStripMenuItem("Пароли для " + PasswordTools.Host(origin)) { Enabled = false, Padding = new Padding(6, 5, 6, 3) });
+        menu.Items.Add(new ToolStripMenuItem(L.T("Пароли для " + PasswordTools.Host(origin))) { Enabled = false, Padding = new Padding(6, 5, 6, 3) });
         if (list.Count == 0)
-            menu.Items.Add(new ToolStripMenuItem("Сохранённых паролей нет") { Enabled = false, Padding = new Padding(6, 4, 6, 4) });
+            menu.Items.Add(new ToolStripMenuItem(L.T("Сохранённых паролей нет")) { Enabled = false, Padding = new Padding(6, 4, 6, 4) });
         foreach (var e in list)
         {
             var entry = e;

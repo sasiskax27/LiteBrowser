@@ -57,7 +57,7 @@ sealed class IconButton : Control
         Font = new Font(Theme.IconFont, 11f);
         BackColor = Theme.Toolbar;
         Cursor = Cursors.Hand;
-        tips.SetToolTip(this, tip);
+        tips.SetToolTip(this, L.T(tip));
     }
 
     public string Glyph { get => glyph; set { if (glyph != value) { glyph = value; Invalidate(); } } }
@@ -685,13 +685,13 @@ sealed class InfoBar : Panel
         text.Font = Theme.GetFont("Segoe UI", 9.5f);
         close.Font = Theme.GetFont(Theme.IconFont, 8f);
         icon.Text = glyph;
-        text.Text = message;
+        text.Text = L.T(message);
         buttons.Controls.Clear();
         foreach (var (label, act, primary) in actions.Reverse())
         {
             var b = new Button
             {
-                Text = label, AutoSize = true, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+                Text = L.T(label), AutoSize = true, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
                 Font = Theme.GetFont("Segoe UI", 9f, primary ? FontStyle.Bold : FontStyle.Regular),
                 BackColor = primary ? Theme.Accent : Theme.Hover, ForeColor = primary ? Color.FromArgb(13, 16, 32) : Theme.Text,
                 Margin = new Padding(Theme.S(4), Theme.S(7), 0, 0), Padding = new Padding(Theme.S(8), 0, Theme.S(8), 0), Height = Theme.S(30),
@@ -708,7 +708,7 @@ sealed class InfoBar : Panel
         DoLayout();
     }
 
-    public void SetText(string message) => text.Text = message;
+    public void SetText(string message) => text.Text = L.T(message);
 
     public void HideBar() { Visible = false; Key = null; }
 
@@ -798,7 +798,7 @@ sealed class BookmarksBar : Control
 
         if (Store.Bookmarks.Count == 0)
         {
-            TextRenderer.DrawText(g, "Чтобы добавить закладку, нажмите ☆ в адресной строке или Ctrl+D", font,
+            TextRenderer.DrawText(g, L.T("Чтобы добавить закладку, нажмите ☆ в адресной строке или Ctrl+D"), font,
                 new Rectangle(Theme.S(14), 0, Width, Height - Theme.S(2)), Color.FromArgb(110, 115, 132),
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
             return;

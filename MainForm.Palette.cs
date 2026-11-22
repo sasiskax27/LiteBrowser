@@ -93,7 +93,8 @@ sealed partial class MainForm
         var scored = new List<(int score, int group, CommandPalette.Entry e)>();
         void Add(int group, CommandPalette.Entry e, params string[] texts)
         {
-            int s = texts.Max(t => CommandPalette.Score(t, q));
+            // В английском интерфейсе ищем и по переводу, и по-русски
+            int s = texts.Max(t => Math.Max(CommandPalette.Score(t, q), L.En ? CommandPalette.Score(L.T(t), q) : 0));
             if (s > 0) scored.Add((s, group, e));
         }
 

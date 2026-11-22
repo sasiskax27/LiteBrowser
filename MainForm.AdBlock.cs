@@ -46,7 +46,7 @@ sealed partial class MainForm
         { Enabled = false, Padding = new Padding(6, 0, 6, 4) });
         menu.Items.Add(new ToolStripSeparator());
 
-        menu.Items.Add(new ToolStripMenuItem("Уровень доверия") { Enabled = false, Padding = new Padding(6, 4, 6, 2) });
+        menu.Items.Add(new ToolStripMenuItem(L.T("Уровень доверия")) { Enabled = false, Padding = new Padding(6, 4, 6, 2) });
         int level = Trusted(host) ? 1 : Untrusted(host) ? -1 : 0;
         void SetLevel(int l)
         {
@@ -64,10 +64,10 @@ sealed partial class MainForm
         menu.Items.Add(Theme.Item((level == -1 ? "●  " : "○  ") + "Ненадёжный — без JavaScript, окон и разрешений", () => SetLevel(-1)));
         menu.Items.Add(new ToolStripSeparator());
 
-        menu.Items.Add(new ToolStripMenuItem("Разрешения") { Enabled = false, Padding = new Padding(6, 4, 6, 2) });
+        menu.Items.Add(new ToolStripMenuItem(L.T("Разрешения")) { Enabled = false, Padding = new Padding(6, 4, 6, 2) });
         Cfg.SitePermissions.TryGetValue(key, out var perms);
         if (perms == null || perms.Count == 0)
-            menu.Items.Add(new ToolStripMenuItem("   Сайт ничего не запрашивал") { Enabled = false });
+            menu.Items.Add(new ToolStripMenuItem(L.T("   Сайт ничего не запрашивал")) { Enabled = false });
         else
             foreach (var (kind, name) in PermissionNames)
             {

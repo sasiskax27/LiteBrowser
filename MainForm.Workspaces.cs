@@ -53,13 +53,13 @@ sealed partial class MainForm
 
     ToolStripMenuItem WorkspacesMenu()
     {
-        var root = new ToolStripMenuItem("Рабочие пространства") { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
+        var root = new ToolStripMenuItem(L.T("Рабочие пространства")) { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
         var cur = Workspaces.Current;
         foreach (var w in Workspaces.All)
         {
             var ws = w;
             var count = w == cur ? tabs.Count : w.Session.Tabs.Count;
-            var it = Theme.Item((w == cur ? "✓  " : "     ") + w.Name + $"  ·  {count} вкл.", () => SwitchWorkspace(ws));
+            var it = Theme.Item((w == cur ? "✓  " : "     ") + L.T(w.Name) + $"  ·  {count} " + (L.En ? "tabs" : "вкл."), () => SwitchWorkspace(ws));
             try { it.ForeColor = ColorTranslator.FromHtml(w.Color); } catch { }
             root.DropDownItems.Add(it);
         }
@@ -69,14 +69,14 @@ sealed partial class MainForm
         var others = Workspaces.All.Where(w => w != cur).ToList();
         if (others.Count > 0)
         {
-            var del = new ToolStripMenuItem("Удалить") { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
+            var del = new ToolStripMenuItem(L.T("Удалить")) { ForeColor = Theme.Text, Padding = new Padding(6, 5, 6, 5), DropDown = Theme.NewMenu() };
             foreach (var w in others) { var ws = w; del.DropDownItems.Add(Theme.Item(w.Name, () => DeleteWorkspace(ws))); }
             root.DropDownItems.Add(del);
         }
         return root;
     }
 
-    string WorkspaceSuffix => WorkspacesHere && Workspaces.InUse ? " — " + Workspaces.Current.Name : "";
+    string WorkspaceSuffix => WorkspacesHere && Workspaces.InUse ? " — " + L.T(Workspaces.Current.Name) : "";
 }
 
 /// <summary>Автогруппировка вкладок по темам.</summary>
