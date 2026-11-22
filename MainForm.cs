@@ -400,6 +400,7 @@ sealed partial class MainForm : Form
     void CloseTab(BrowserTab tab)
     {
         if (tab == recordingTab) _ = StopRecording();
+        if (tab == speakingTab) StopReading();
         var url = tab.Core?.Source ?? tab.PendingUrl;
         if (url != null && !url.StartsWith(LitePages.Home)) { closedTabs.Push(url); RememberClosed(tab, url); }
         if (tabs.Count == 1) { Close(); return; }
@@ -823,6 +824,7 @@ sealed partial class MainForm : Form
         {
             // Клик по странице: в разделённом экране делает эту половину активной
             if (e.WebMessageAsJson == "{\"type\":\"lite-focus\"}") { OnViewFocused(tab); return; }
+            if (e.WebMessageAsJson == "{\"type\":\"speak:done\"}") { OnSpeakDone(tab); return; }
             if (!e.Source.StartsWith(LitePages.Prefix, StringComparison.Ordinal))
             {
                 // Сообщения обычных сайтов — только от скрипта паролей, и только про их собственный адрес
@@ -1399,7 +1401,7 @@ sealed partial class MainForm : Form
             case Keys.Control | Keys.F: case Keys.F3: ShowFind(); return true;
             case Keys.Control | Keys.B: ToggleSidePanel(!sidePanel.Visible); return true;
             case Keys.Control | Keys.Shift | Keys.A: if (Cfg.AiEnabled) OpenAi(); return true;
-            case Keys.Control | Keys.Shift | Keys.U: _ = ReadAloud(); return true;
+            case Keys.Control | Keys.Shift | Keys.U: if (speakingTab != null) StopReading(); else _ = ReadAloud(); return true;
             case Keys.Control | Keys.Shift | Keys.M: _ = VoiceInput(); return true;
             case Keys.Control | Keys.Alt | Keys.R: _ = ToggleReader(); return true;
             case Keys.Control | Keys.Shift | Keys.V: _ = PictureInPicture(); return true;

@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 
@@ -186,37 +186,6 @@ static class PageTools
     public static string TranslateUrl(string service, string url) => service == "yandex"
         ? "https://translate.yandex.ru/translate?url=" + Uri.EscapeDataString(url) + "&lang=auto-ru"
         : "https://translate.google.com/translate?sl=auto&tl=ru&u=" + Uri.EscapeDataString(url);
-
-    /// <summary>Чтение вслух голосом Windows: выделенный текст или основной текст статьи. Повторный вызов — остановка.</summary>
-    public const string ReadAloud = """
-(() => {
-  const s = window.speechSynthesis;
-  if (!s) return 'unsupported';
-  if (s.speaking || s.pending) { s.cancel(); return 'stopped'; }
-  let text = (window.getSelection() || '').toString().trim();
-  if (!text) {
-    const score = el => [...el.querySelectorAll('p')].reduce((n, p) => n + (p.innerText || '').trim().length, 0);
-    let best = document.querySelector('article'), max = best ? score(best) : 0;
-    if (max < 500) document.querySelectorAll('main, [role=main], article, section, div').forEach(el => { const v = score(el); if (v > max) { max = v; best = el; } });
-    text = best && max > 200 ? [...best.querySelectorAll('h1, h2, h3, p, li')].map(e => e.innerText.trim()).filter(t => t.length > 1).join('\n') : (document.body.innerText || '');
-  }
-  text = text.slice(0, 60000);
-  if (!text) return 'nothing';
-  const lang = (document.documentElement.lang || (/[а-яё]/i.test(text) ? 'ru' : 'en')).slice(0, 2);
-  const voices = s.getVoices();
-  const voice = voices.find(v => v.lang.toLowerCase().startsWith(lang)) || null;
-  const parts = text.match(/[^.!?\n]{1,220}[.!?\n]*/g) || [text];
-  for (const p of parts) {
-    if (!p.trim()) continue;
-    const u = new SpeechSynthesisUtterance(p.trim());
-    if (voice) u.voice = voice;
-    u.lang = voice ? voice.lang : lang;
-    u.rate = 1.0;
-    s.speak(u);
-  }
-  return 'started';
-})()
-""";
 
     /// <summary>Скриншот: видимая часть или вся страница целиком (через протокол DevTools).</summary>
     public static async Task<string> Screenshot(CoreWebView2 core, bool fullPage)

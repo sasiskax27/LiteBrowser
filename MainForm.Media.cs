@@ -218,6 +218,7 @@ sealed partial class MainForm
                         items.Insert(pos++, Item("✦ Объяснить с помощью ИИ", () => OpenAi("explain")));
                         items.Insert(pos++, Item("✦ Перевести с помощью ИИ", () => OpenAi("translate")));
                     }
+                    items.Insert(pos++, Item("🔊 Прочитать вслух", () => _ = ReadAloud()));
                     if (!Incognito)
                         items.Insert(pos++, Item("🖍 Выделить маркером", () =>
                         {
@@ -230,6 +231,7 @@ sealed partial class MainForm
             else if (!target.HasLinkUri)
             {
                 if (Cfg.AiEnabled) items.Insert(pos++, Item("✦ Пересказать страницу (ИИ)", () => OpenAi("summarize")));
+                items.Insert(pos++, Item("🔊 Читать страницу вслух", () => _ = ReadAloud()));
                 if (!Incognito)
                     items.Insert(pos++, Item("📝 Заметка к странице…", () =>
                     {
@@ -319,17 +321,5 @@ sealed partial class MainForm
         keybd_event(LWIN, 0, 2, UIntPtr.Zero);
     }
 
-    async Task ReadAloud()
-    {
-        var core = active?.Core;
-        if (core == null) return;
-        var r = (await core.ExecuteScriptAsync(PageTools.ReadAloud)).Trim('"');
-        if (r == "started")
-            infoBar.ShowBar("tts", "", "Читаю страницу вслух…",
-                ("Остановить", () => { _ = core.ExecuteScriptAsync("speechSynthesis.cancel()"); infoBar.HideBar(); }, true));
-        else if (r == "stopped") infoBar.HideBar();
-        else if (r == "nothing") MessageBox.Show(this, "На странице нет текста для чтения.", "Чтение вслух");
-        else if (r == "unsupported") MessageBox.Show(this, "Чтение вслух недоступно: в Windows не установлены голоса.", "Чтение вслух");
-    }
 
 }

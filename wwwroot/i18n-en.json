@@ -1017,5 +1017,13 @@
 "Включить для сайтов из списка": "Turn on for listed sites",
 "Выключить прокси": "Turn off the proxy",
 "Настройки обхода блокировок": "Unblocking settings",
-"Прокси изменится после перезапуска браузера — вкладки вернутся": "The proxy changes after a browser restart — your tabs will come back"
+"Прокси изменится после перезапуска браузера — вкладки вернутся": "The proxy changes after a browser restart — your tabs will come back",
+"На странице нет текста для чтения": "There's no text to read on this page",
+"Чтение вслух недоступно": "Read aloud isn't available",
+"Чтение на паузе": "Reading paused",
+"Читаю вслух…": "Reading aloud…",
+"Стоп": "Stop",
+"🔊 Прочитать вслух": "🔊 Read aloud",
+"🔊 Читать страницу вслух": "🔊 Read the page aloud",
+"Читать страницу вслух": "Read the page aloud"
 }
