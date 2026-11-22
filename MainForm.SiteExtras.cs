@@ -233,4 +233,22 @@ sealed partial class MainForm
         }
         catch { }
     }
+
+    // ================= Автосворачивание групп =================
+
+    /// <summary>Группа, в которую давно не заходили (и где не играет звук), сворачивается — меньше беспорядка на полосе.</summary>
+    void CollapseIdleGroups()
+    {
+        int min = Cfg.AutoCollapseGroupsMinutes;
+        if (min <= 0) return;
+        bool changed = false;
+        foreach (var g in Groups.ToList())
+        {
+            if (g.Collapsed) continue;
+            var members = tabs.Where(t => t.Group == g).ToList();
+            if (members.Count < 2 || members.Contains(active!) || members.Any(t => t.Audio || t.Pinned)) continue;
+            if (members.All(t => (DateTime.Now - t.LastActive).TotalMinutes >= min)) { g.Collapsed = true; changed = true; }
+        }
+        if (changed) strip.Invalidate();
+    }
 }

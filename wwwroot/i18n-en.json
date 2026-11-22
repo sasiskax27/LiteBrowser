@@ -862,5 +862,7 @@
 "Снегопад": "Snowfall",
 "Гроза": "Thunderstorm",
 "Видео в маленьком окне при переключении вкладок": "Video in a small window when switching tabs",
-"Ушли с вкладки, где играет видео, — оно продолжит играть в «картинке в картинке». Вернулись — окно закроется": "Leave a tab with a playing video and it keeps playing picture-in-picture. Come back and the window closes"
+"Ушли с вкладки, где играет видео, — оно продолжит играть в «картинке в картинке». Вернулись — окно закроется": "Leave a tab with a playing video and it keeps playing picture-in-picture. Come back and the window closes",
+"Сворачивать неиспользуемые группы вкладок": "Collapse unused tab groups",
+"Группа, в которую давно не заходили, сворачивается в цветную метку. Клик по метке — развернуть": "A group you haven't visited for a while collapses into a colored label. Click the label to expand"
 }

@@ -518,6 +518,7 @@ sealed partial class MainForm : Form
 
     async Task FreezeIdleTabs()
     {
+        CollapseIdleGroups();
         int min = Cfg.FreezeMinutes;
         if (min <= 0) return;
         foreach (var t in tabs.ToList())
