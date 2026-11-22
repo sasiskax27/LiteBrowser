@@ -173,7 +173,7 @@ sealed class AppSettings
         if (FreezeMinutes is not (0 or 5 or 15 or 30 or 60)) FreezeMinutes = 15;
         if (!UiScales.Contains(UiScale)) UiScale = 100;
         SidePanelWidth = Math.Clamp(SidePanelWidth, 260, 1000);
-        if (UiTheme is not ("dark" or "light" or "auto")) UiTheme = "dark";
+        if (UiTheme is not ("dark" or "light" or "auto") && !Theme.ExtraThemes.Contains(UiTheme)) UiTheme = "dark";
         if (TranslateService is not ("google" or "yandex")) TranslateService = "google";
         if (AiProvider is not ("local" or "ollama" or "openai")) AiProvider = "local";
         if (LocalAi.Find(AiLocalModel ?? "") == null) AiLocalModel = LocalAi.Models[0].Id;

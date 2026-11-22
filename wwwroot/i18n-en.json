@@ -889,5 +889,11 @@
 "Гость": "Guest",
 "Гостевое окно": "Guest window",
 "В гостевом окне эта страница недоступна": "This page isn't available in a guest window",
-"👤 Гостевой режим: ваши закладки, история и пароли не видны. Всё, что здесь откроют, удалится при закрытии окна": "👤 Guest mode: your bookmarks, history and passwords are hidden. Everything opened here is deleted when the window closes"
+"👤 Гостевой режим: ваши закладки, история и пароли не видны. Всё, что здесь откроют, удалится при закрытии окна": "👤 Guest mode: your bookmarks, history and passwords are hidden. Everything opened here is deleted when the window closes",
+"Другие цветовые схемы": "More color schemes",
+"Чёрная — для OLED-экранов, тёплая — мягче для глаз вечером": "Black suits OLED screens, Warm is easier on the eyes at night",
+"Чёрная": "Black",
+"Полночь": "Midnight",
+"Лес": "Forest",
+"Тёплая": "Warm"
 }

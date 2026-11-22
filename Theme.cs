@@ -33,7 +33,28 @@ static class Theme
         ["orange"] = (Color.FromArgb(255, 159, 74), Color.FromArgb(255, 107, 107), "Оранжевый"),
         ["pink"] = (Color.FromArgb(255, 111, 181), Color.FromArgb(176, 124, 255), "Розовый"),
         ["red"] = (Color.FromArgb(255, 107, 107), Color.FromArgb(255, 159, 74), "Красный"),
+        ["system"] = SystemAccent(),
     };
+
+    /// <summary>Цвет акцента Windows (Параметры → Персонализация → Цвета).</summary>
+    static (Color, Color, string) SystemAccent()
+    {
+        var c = Color.FromArgb(0, 120, 215);
+        try
+        {
+            using var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\DWM");
+            if (k?.GetValue("AccentColor") is int v) c = Color.FromArgb(v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF); // в реестре ABGR
+        }
+        catch { }
+        // Слишком тёмный акцент на тёмном фоне не виден — осветляем
+        if (c.GetBrightness() < 0.45f) c = Color.FromArgb((c.R + 255) / 2, (c.G + 255) / 2, (c.B + 255) / 2);
+        var b = Color.FromArgb(Math.Min(255, c.R + 50), Math.Max(0, c.G - 20), Math.Min(255, c.B + 40));
+        return (c, b, "Как в Windows");
+    }
+
+    /// <summary>Цветовые схемы помимо стандартных тёмной и светлой.</summary>
+    public static readonly string[] ExtraThemes = { "black", "nord", "forest", "sepia" };
+    static string pageBg = "";
 
     static Color Darken(Color c, float k) => Color.FromArgb((int)(c.R * (1 - k)), (int)(c.G * (1 - k)), (int)(c.B * (1 - k)));
 
@@ -50,7 +71,8 @@ static class Theme
     /// <summary>Переключить палитру: тёмная/светлая/как в Windows + цвет акцента.</summary>
     public static void ApplyPalette(string ui, string accent)
     {
-        IsLight = ui == "light" || (ui == "auto" && WindowsUsesLight());
+        IsLight = ui == "light" || ui == "sepia" || (ui == "auto" && WindowsUsesLight());
+        pageBg = "";
         var (a, b, _) = Accents.TryGetValue(accent, out var x) ? x : Accents["blue"];
         if (IsLight)
         {
@@ -60,6 +82,15 @@ static class Theme
             Menu = Color.FromArgb(250, 250, 253);
             Accent = Darken(a, 0.22f); Accent2 = Darken(b, 0.22f);
             Secure = Color.FromArgb(30, 150, 80); Danger = Color.FromArgb(210, 50, 50);
+            if (ui == "sepia")
+            {
+                // Тёплая: бумажные тона, мягче для глаз вечером
+                Frame = Color.FromArgb(228, 218, 198); Toolbar = Color.FromArgb(246, 240, 227); Field = Color.FromArgb(236, 228, 212);
+                TabHover = Color.FromArgb(218, 207, 186); Hover = Color.FromArgb(230, 220, 200); Pressed = Color.FromArgb(214, 202, 180);
+                Line = Color.FromArgb(214, 202, 180); Text = Color.FromArgb(54, 44, 32); TextDim = Color.FromArgb(120, 104, 84);
+                Menu = Color.FromArgb(250, 245, 235);
+                pageBg = ":root{--bg:#f4ecdc;--card:rgba(255,252,245,.75);--text:#362c20;--dim:#78684f;--line:rgba(80,60,30,.14)}body{background:#f4ecdc}";
+            }
         }
         else
         {
@@ -69,6 +100,29 @@ static class Theme
             Menu = Color.FromArgb(32, 34, 41);
             Accent = a; Accent2 = b;
             Secure = Color.FromArgb(110, 207, 150); Danger = Color.FromArgb(255, 120, 120);
+            switch (ui)
+            {
+                case "black": // чёрная — для OLED-экранов
+                    Frame = Color.FromArgb(0, 0, 0); Toolbar = Color.FromArgb(16, 16, 18); Field = Color.FromArgb(8, 8, 10);
+                    TabHover = Color.FromArgb(12, 12, 14); Hover = Color.FromArgb(34, 34, 38); Pressed = Color.FromArgb(48, 48, 54);
+                    Line = Color.FromArgb(30, 30, 34); Menu = Color.FromArgb(14, 14, 16);
+                    pageBg = ":root{--bg:#000;--card:rgba(255,255,255,.05)}";
+                    break;
+                case "nord": // полночь — холодные сине-серые тона
+                    Frame = Color.FromArgb(36, 41, 51); Toolbar = Color.FromArgb(46, 52, 64); Field = Color.FromArgb(38, 43, 54);
+                    TabHover = Color.FromArgb(42, 48, 59); Hover = Color.FromArgb(59, 66, 82); Pressed = Color.FromArgb(67, 76, 94);
+                    Line = Color.FromArgb(59, 66, 82); Menu = Color.FromArgb(46, 52, 64);
+                    Text = Color.FromArgb(236, 239, 244); TextDim = Color.FromArgb(160, 170, 190);
+                    pageBg = ":root{--bg:#242933;--card:rgba(236,239,244,.05);--text:#eceff4;--dim:#a0aabe}";
+                    break;
+                case "forest": // лес — тёмно-зелёная
+                    Frame = Color.FromArgb(18, 26, 22); Toolbar = Color.FromArgb(28, 40, 34); Field = Color.FromArgb(20, 30, 25);
+                    TabHover = Color.FromArgb(24, 35, 29); Hover = Color.FromArgb(44, 60, 52); Pressed = Color.FromArgb(56, 76, 66);
+                    Line = Color.FromArgb(40, 56, 48); Menu = Color.FromArgb(26, 38, 32);
+                    Text = Color.FromArgb(228, 238, 232); TextDim = Color.FromArgb(146, 166, 155);
+                    pageBg = ":root{--bg:#121a16;--card:rgba(220,255,235,.045);--text:#e4eee8;--dim:#92a69b}";
+                    break;
+            }
         }
     }
 
@@ -84,7 +138,7 @@ static class Theme
                    "input.text,textarea.text{background:rgba(0,0,0,.035)!important}.slider{background:#c9ccd6}" +
                    ".time{background:linear-gradient(180deg,#1c1e24,#4a5070)!important;-webkit-background-clip:text!important}" +
                    ".search{background:rgba(255,255,255,.8)!important}.engine,.chip,.store,.seg,.filters{background:rgba(0,0,0,.04)}\n";
-        return css;
+        return css + pageBg;
     }
 
     /// <summary>Масштаб экрана Windows.</summary>
