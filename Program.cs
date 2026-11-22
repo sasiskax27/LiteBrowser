@@ -394,6 +394,9 @@ sealed class BrowserApp : ApplicationContext
 
     public bool IsMainWindow(MainForm f) => windows.FirstOrDefault(w => !w.Incognito) == f;
 
+    /// <summary>Где-то начался или кончился звук — обновить кнопку «Сейчас играет» во всех окнах.</summary>
+    public void NotifyAudio() { foreach (var w in windows.ToList()) w.UpdateMediaButton(); }
+
     /// <summary>Все вкладки всех окон — для диспетчера задач.</summary>
     public IEnumerable<(MainForm form, BrowserTab tab)> AllTabs() =>
         windows.Where(w => !w.IsDisposed).SelectMany(w => w.Tabs.Select(t => (w, t)));

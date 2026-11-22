@@ -166,9 +166,11 @@ sealed partial class MainForm : Form
         focusBtn.Click += (_, _) => ShowFocusButtonMenu();
         extBtn = new IconButton("", "Расширения", tips);
         extBtn.Click += (_, _) => ShowExtPanel();
+        mediaBtn = new IconButton("\uEC4F", L.T("Сейчас играет"), tips) { GlyphColor = Theme.Accent };
+        mediaBtn.Click += (_, _) => ShowMediaMenu();
         sideBtn = new IconButton("", "Боковая панель (Ctrl+B)", tips);
         sideBtn.Click += (_, _) => ToggleSidePanel(!sidePanel!.Visible);
-        toolbar.Controls.AddRange(new Control[] { back, forward, reload, home, address, installBtn, zoomBtn, proxyBtn, focusBtn, downloadsBtn, extBtn, sideBtn, menuBtn });
+        toolbar.Controls.AddRange(new Control[] { back, forward, reload, home, address, installBtn, zoomBtn, proxyBtn, focusBtn, mediaBtn, downloadsBtn, extBtn, sideBtn, menuBtn });
         toolbar.Resize += (_, _) => LayoutToolbar();
         toolbar.Paint += PaintProgress;
 
@@ -236,10 +238,10 @@ sealed partial class MainForm : Form
         int s = Theme.S(36), y = (toolbar.Height - s) / 2, x = Theme.S(10);
         foreach (var b in new[] { back, forward, reload, home }) { b.SetBounds(x, y, s, s); x += s + Theme.S(2); }
         int right = toolbar.Width - Theme.S(10);
-        foreach (var b in new[] { menuBtn, sideBtn, extBtn, downloadsBtn, focusBtn, proxyBtn, zoomBtn, installBtn })
+        foreach (var b in new[] { menuBtn, sideBtn, extBtn, downloadsBtn, mediaBtn, focusBtn, proxyBtn, zoomBtn, installBtn })
         {
             // Visible до показа окна всегда false, поэтому храним желаемое состояние отдельно
-            bool want = b == downloadsBtn ? showDownloads : b == proxyBtn ? showProxy : b == installBtn ? showInstall : b == extBtn ? !Incognito : b == focusBtn ? showFocus : b == sideBtn ? !Guest : true;
+            bool want = b == downloadsBtn ? showDownloads : b == proxyBtn ? showProxy : b == installBtn ? showInstall : b == extBtn ? !Incognito : b == focusBtn ? showFocus : b == sideBtn ? !Guest : b == mediaBtn ? showMedia : true;
             b.Visible = want;
             if (!want) continue;
             int w = b == zoomBtn ? Theme.S(58) : b == installBtn ? Theme.S(200) : b == focusBtn ? Theme.S(84) : s;
@@ -430,6 +432,7 @@ sealed partial class MainForm : Form
         menu.Items.Add(Theme.Item("Дублировать", () => { var u = tab.Core?.Source ?? tab.PendingUrl; if (u != null) _ = AddTab(u); }));
         if (tab.Core != null)
             menu.Items.Add(Theme.Item(tab.Core.IsMuted ? "Включить звук" : "Выключить звук", () => tab.Core.IsMuted = !tab.Core.IsMuted));
+        if (tab.Core != null) menu.Items.Add(VolumeMenu(tab));
         if (tab.SplitWith != null) menu.Items.Add(Theme.Item("Убрать разделение экрана", () => { SelectTab(tab); Unsplit(); }));
         else if (active != null && tab != active) menu.Items.Add(Theme.Item("Открыть рядом с текущей вкладкой", () => SplitWith(active, tab)));
         else menu.Items.Add(Theme.Item("Разделить экран", ToggleSplit, "Ctrl+\\"));
@@ -712,6 +715,7 @@ sealed partial class MainForm : Form
         core.NavigationCompleted += (_, e) =>
         {
             tab.Loading = false;
+            ReapplyVolume(tab);
             // Текст страницы — для поиска по истории «по содержимому»
             if (e.IsSuccess && !Incognito && Cfg.SaveHistory && Cfg.FullTextHistory && core.Source.StartsWith("http") && !core.Source.StartsWith(LitePages.Prefix))
                 _ = PageIndex.CaptureAsync(core, core.Source);
@@ -868,7 +872,7 @@ sealed partial class MainForm : Form
 
         core.Find.MatchCountChanged += (_, _) => { if (tab == active) findBar.SetCount(core.Find.ActiveMatchIndex + 1, core.Find.MatchCount); };
         core.Find.ActiveMatchIndexChanged += (_, _) => { if (tab == active) findBar.SetCount(core.Find.ActiveMatchIndex + 1, core.Find.MatchCount); };
-        core.IsDocumentPlayingAudioChanged += (_, _) => { tab.Audio = core.IsDocumentPlayingAudio; strip.Invalidate(); };
+        core.IsDocumentPlayingAudioChanged += (_, _) => { tab.Audio = core.IsDocumentPlayingAudio; strip.Invalidate(); BrowserApp.Instance.NotifyAudio(); };
         core.IsMutedChanged += (_, _) => { tab.Muted = core.IsMuted; strip.Invalidate(); };
         core.HistoryChanged += (_, _) => { if (tab == active) UpdateUi(); };
         core.WindowCloseRequested += (_, _) => CloseTab(tab);

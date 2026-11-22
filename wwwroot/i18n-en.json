@@ -989,5 +989,11 @@
 "Подходящих браузеров не найдено — используйте CSV ниже": "No supported browsers found — use CSV below",
 "Переношу…": "Moving…",
 "Искать в истории по тексту страниц": "Search history by page text",
-"Запоминает начало текста посещённых страниц (только на этом компьютере), чтобы находить их по содержимому. Страницы с паролями и картами не запоминаются": "Remembers the start of each visited page's text (on this computer only) so you can find pages by content. Pages with password or card fields are skipped"
+"Запоминает начало текста посещённых страниц (только на этом компьютере), чтобы находить их по содержимому. Страницы с паролями и картами не запоминаются": "Remembers the start of each visited page's text (on this computer only) so you can find pages by content. Pages with password or card fields are skipped",
+"Громкость": "Volume",
+"Сейчас ничего не играет": "Nothing is playing",
+"Пауза / продолжить": "Pause / resume",
+"Перейти к вкладке": "Go to tab",
+"Выключить звук везде, кроме текущей": "Mute everything except the current tab",
+"Сейчас играет": "Now playing"
 }

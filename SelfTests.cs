@@ -255,6 +255,11 @@ static class DevToolsSelfTest
                 var issue = CrashReport.IssueUrl(report);
                 Check("сбой: отчёт без личных данных", report.Contains("%USERPROFILE%") && !report.Contains(Environment.UserName, StringComparison.OrdinalIgnoreCase) && report.Contains("InvalidOperationException"));
                 Check("сбой: ссылка на обращение", issue.StartsWith("https://github.com/") && issue.Contains("InvalidOperationException") && issue.Length < 32000, $"{issue.Length} символов");
+                // Громкость вкладки: ставится существующим и новым видео/аудио
+                await core.ExecuteScriptAsync("var a1=document.createElement('audio');document.body.appendChild(a1);");
+                await core.ExecuteScriptAsync(MainForm.VolumeJs(40));
+                var vols = await core.ExecuteScriptAsync("var a2=document.createElement('audio');document.body.appendChild(a2);a2.dispatchEvent(new Event('loadedmetadata'));[a1.volume,a2.volume].join(',')");
+                Check("громкость вкладки: 40% у старых и новых элементов", vols.Trim('"') == "0.4,0.4", vols);
                 // Поиск по тексту страниц: все слова, отрывок вокруг найденного
                 PageIndex.Add("https://test.local/gpu", "Обзор железа", "Вступление. " + new string('x', 300) + " Новые видеокарты RTX стали дешевле, а процессоры — нет. " + new string('y', 300));
                 PageIndex.Add("https://test.local/other", "Про котиков", "Котики спят двадцать часов в сутки.");
