@@ -219,7 +219,7 @@ sealed partial class MainForm : Form
 
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
-        if (!Incognito && Cfg.RestoreSession) Store.SaveSession(GetSession());
+        BrowserApp.Instance.OnWindowClosing(this);
         base.OnFormClosing(e);
     }
 
@@ -458,6 +458,7 @@ sealed partial class MainForm : Form
             GroupCollapsed = t.Group?.Collapsed ?? false,
         }).ToList(),
         Active = active == null ? 0 : Math.Max(0, tabs.IndexOf(active)),
+        Window = WindowState == FormWindowState.Minimized ? null : new[] { RestoreBounds.X, RestoreBounds.Y, RestoreBounds.Width, RestoreBounds.Height, WindowState == FormWindowState.Maximized ? 1 : 0 },
     };
 
     public Session? StartSession { get; init; }
@@ -1085,6 +1086,7 @@ sealed partial class MainForm : Form
         menu.Items.Add(tools);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(Theme.Item("Настройки", () => OpenLitePage(LitePages.Settings), "Ctrl+,", "\uE713"));
+        menu.Items.Add(Theme.Item("Выход (запомнить все окна)", BrowserApp.Instance.ExitAll, "Ctrl+Shift+Q", "\uE7E8"));
         // Меню у правого края окна — подменю открываем влево, иначе они уходят за экран
         OpenSubmenusLeft(menu.Items);
         menu.Show(menuBtn, new Point(menuBtn.Width - menu.PreferredSize.Width, menuBtn.Height + Theme.S(4)));
@@ -1370,6 +1372,7 @@ sealed partial class MainForm : Form
             case Keys.Control | Keys.K: ShowPalette(); return true;
             case Keys.Control | Keys.Shift | Keys.Y: _ = SaveOffline(); return true;
             case Keys.Control | Keys.Shift | Keys.L: AddToReadLater(); return true;
+            case Keys.Control | Keys.Shift | Keys.Q: BrowserApp.Instance.ExitAll(); return true;
             case Keys.Control | Keys.OemPipe: case Keys.Control | Keys.OemBackslash: ToggleSplit(); return true;
             case Keys.Control | Keys.Shift | Keys.B: ToggleBookmarksBar(); return true;
             case Keys.Control | Keys.Oemcomma: OpenLitePage(LitePages.Settings); return true;

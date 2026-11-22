@@ -40,6 +40,8 @@ sealed class Session
     public List<string> Tabs { get; set; } = new();
     public List<SessionTab>? Info { get; set; }
     public int Active { get; set; }
+    /// <summary>Положение окна: x, y, ширина, высота, развёрнуто (1/0).</summary>
+    public int[]? Window { get; set; }
 }
 
 /// <summary>Закладки, история и сессия. Пишется на диск с задержкой, чтобы не тормозить.</summary>
@@ -177,6 +179,20 @@ static class Store
     public static void SaveSession(Session s) => Write("session.json", s);
     public static Session? LoadSession() => Read<Session>("session.json");
 
+    /// <summary>Все окна сразу (у каждого — свои вкладки). Старый файл session.json — запасной вариант.</summary>
+    public static void SaveWindows(List<Session> windows)
+    {
+        Write("windows.json", windows);
+        if (windows.Count > 0) Write("session.json", windows[0]);
+    }
+
+    public static List<Session> LoadWindows()
+    {
+        var list = Read<List<Session>>("windows.json")?.Where(s => s.Tabs.Count > 0).ToList();
+        if (list is { Count: > 0 }) return list;
+        return LoadSession() is { Tabs.Count: > 0 } s ? new() { s } : new();
+    }
+
     // ---- Выделения и заметки на страницах ----
     static List<Highlight>? highlights;
     public static List<Highlight> Highlights => highlights ??= Read<List<Highlight>>("highlights.json") ?? new();
@@ -229,6 +245,13 @@ static class Store
     public static void MarkClosed() { try { File.Delete(Marker); } catch { } }
     public static void SaveCrashSession(Session s) => Write("session-crash.json", s);
     public static Session? LoadCrashSession() => Read<Session>("session-crash.json");
+    public static void SaveCrashWindows(List<Session> windows) => Write("windows-crash.json", windows);
+    public static List<Session> LoadCrashWindows()
+    {
+        var list = Read<List<Session>>("windows-crash.json")?.Where(s => s.Tabs.Count > 0).ToList();
+        if (list is { Count: > 0 }) return list;
+        return LoadCrashSession() is { Tabs.Count: > 0 } s ? new() { s } : new();
+    }
 
     // ---- Счётчик заблокированного за всё время ----
     static long blockedTotal = -1;

@@ -31,9 +31,11 @@ sealed partial class MainForm
     }
 
     /// <summary>После неожиданного закрытия — предложить вернуть вкладки.</summary>
-    public void OfferCrashRestore(Session s)
+    public void OfferCrashRestore(List<Session> all)
     {
-        BeginInvoke(() => infoBar.ShowBar("crash", "", $"LiteBrowser был закрыт неожиданно. Вернуть вкладки ({s.Tabs.Count})?",
+        var s = all[0];
+        int total = all.Sum(x => x.Tabs.Count);
+        BeginInvoke(() => infoBar.ShowBar("crash", "", $"LiteBrowser был закрыт неожиданно. Вернуть вкладки ({total})?",
             ("Восстановить", () =>
             {
                 infoBar.HideBar();
@@ -46,6 +48,8 @@ sealed partial class MainForm
                 // Пустую стартовую вкладку убираем, если она одна и ничего не открыто
                 if (first is { IsHome: true } && tabs.Count > 1) CloseTab(first);
                 SelectTab(tabs[Math.Clamp(s.Active, 0, tabs.Count - 1)]);
+                // Остальные окна — отдельными окнами, как были
+                foreach (var w in all.Skip(1)) BrowserApp.Instance.OpenWindow(false, null, w.Tabs, w.Active, w);
             }, true),
             ("Не нужно", () => infoBar.HideBar(), false)));
     }

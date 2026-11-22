@@ -300,8 +300,8 @@ sealed class BrowserApp : ApplicationContext
         {
             Store.Flush();
             // Каждые 15 секунд запоминаем вкладки — на случай, если браузер закроется неожиданно
-            if (++ticks % 5 == 0 && windows.FirstOrDefault(w => !w.Incognito) is { } mw)
-                try { Store.SaveCrashSession(mw.GetSession()); } catch { }
+            if (++ticks % 5 == 0 && windows.Any(w => !w.Incognito))
+                try { Store.SaveCrashWindows(OpenSessions()); } catch { }
             // Автоблокировка менеджера паролей
             int min = AppEnv.Settings.AutoLockMinutes;
             if (min > 0 && Vault.Unlocked && (DateTime.Now - Vault.LastUsed).TotalMinutes >= min) Vault.Lock();
@@ -318,13 +318,16 @@ sealed class BrowserApp : ApplicationContext
         List<string>? tabs = null;
         int active = 0;
         Session? session = null;
+        var extra = new List<Session>();
         if (url == null && !incognito && (restore || AppEnv.Settings.RestoreSession))
         {
-            var s = Store.LoadSession();
-            if (s is { Tabs.Count: > 0 }) { tabs = s.Tabs; active = s.Active; session = s; }
+            // Восстанавливаем все окна, а не только первое
+            var saved = Store.LoadWindows();
+            if (saved.Count > 0) { var s = saved[0]; tabs = s.Tabs; active = s.Active; session = s; extra = saved.Skip(1).ToList(); }
         }
         var first = OpenWindow(incognito, url, tabs, active, session);
-        if (crashed && tabs == null && !incognito && Store.LoadCrashSession() is { Tabs.Count: > 0 } cs) first.OfferCrashRestore(cs);
+        foreach (var s in extra) OpenWindow(false, null, s.Tabs, s.Active, s);
+        if (crashed && tabs == null && !incognito && Store.LoadCrashWindows() is { Count: > 0 } cs) first.OfferCrashRestore(cs);
         else _ = first.RunStartupChecks();
         _ = first.RunStartupSync();
 
@@ -359,12 +362,36 @@ sealed class BrowserApp : ApplicationContext
         bool inc = parts[0] == "incognito";
         string? url = parts.Length > 1 && parts[1].Length > 0 ? parts[1] : null;
         if (inc) { OpenWindow(true, url); return; }
+        // Повторный запуск без ссылки (ярлык, значок на панели задач) — новое окно, как в Chrome.
+        // Ссылка из другой программы — вкладкой в последнее окно.
+        if (url == null) { OpenWindow(false); return; }
         var target = lastActive is { IsDisposed: false, Incognito: false } ? lastActive : windows.FirstOrDefault(w => !w.Incognito);
         if (target != null) target.OpenFromOutside(url);
         else OpenWindow(false, url);
     }
 
     public bool IsMainWindow(MainForm f) => windows.FirstOrDefault(w => !w.Incognito) == f;
+
+    /// <summary>Вкладки всех обычных окон (окно, которое сейчас активно, — первым).</summary>
+    public List<Session> OpenSessions() =>
+        windows.Where(w => !w.Incognito && !w.IsDisposed).OrderByDescending(w => w == lastActive).Select(w => w.GetSession()).Where(s => s.Tabs.Count > 0).ToList();
+
+    bool exitingAll;
+
+    /// <summary>Окно закрывается: если это последнее обычное окно — запоминаем его вкладки (при «Выходе» — уже сохранены все окна).</summary>
+    public void OnWindowClosing(MainForm f)
+    {
+        if (exitingAll || f.Incognito || !AppEnv.Settings.RestoreSession) return;
+        if (windows.Count(w => !w.Incognito && !w.IsDisposed) <= 1) Store.SaveWindows(new() { f.GetSession() });
+    }
+
+    /// <summary>«Выход»: закрыть все окна, запомнив вкладки каждого — при следующем запуске окна вернутся.</summary>
+    public void ExitAll()
+    {
+        Store.SaveWindows(OpenSessions());
+        exitingAll = true;
+        foreach (var w in windows.ToList()) w.Close();
+    }
 
     public MainForm OpenWindow(bool incognito, string? url = null, List<string>? tabs = null, int active = 0, Session? session = null)
     {
@@ -389,8 +416,7 @@ sealed class BrowserApp : ApplicationContext
     /// <summary>Перезапуск с сохранением вкладок (нужен после смены прокси).</summary>
     public void Restart()
     {
-        var main = windows.FirstOrDefault(w => !w.Incognito);
-        if (main != null) Store.SaveSession(main.GetSession());
+        Store.SaveWindows(OpenSessions());
         Store.Flush();
         Store.MarkClosed();
         Process.Start(new ProcessStartInfo(Environment.ProcessPath!, "--restore") { UseShellExecute = false });

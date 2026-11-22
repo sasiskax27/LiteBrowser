@@ -48,6 +48,16 @@ sealed partial class MainForm
             if (strip.WindowMaximized != max) { strip.WindowMaximized = max; strip.Invalidate(); }
         };
         HandleCreated += (_, _) => BeginInvoke(RefreshFrame);
+        // Окно из прошлого сеанса — на своё место и своего размера (если тот экран ещё подключён)
+        Load += (_, _) =>
+        {
+            if (StartSession?.Window is not { Length: 5 } w || Environment.GetEnvironmentVariable("LITEBROWSER_OFFSCREEN") != null) return;
+            var r = new Rectangle(w[0], w[1], Math.Max(400, w[2]), Math.Max(300, w[3]));
+            if (!Screen.AllScreens.Any(sc => sc.WorkingArea.IntersectsWith(r))) return;
+            StartPosition = FormStartPosition.Manual;
+            Bounds = r;
+            if (w[4] == 1) WindowState = FormWindowState.Maximized;
+        };
         // Для проверок: окно за пределами экрана, не мешает пользователю (снимок делается PrintWindow)
         if (Environment.GetEnvironmentVariable("LITEBROWSER_OFFSCREEN") != null)
         {

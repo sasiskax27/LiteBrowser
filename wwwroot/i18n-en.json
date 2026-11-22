@@ -884,5 +884,6 @@
 "Текущий PIN": "Current PIN",
 "Новый PIN (от 4 символов)": "New PIN (4+ characters)",
 "Сменить PIN": "Change PIN",
-"PIN-код при запуске и после блокировки Windows (Win+L). Забыли PIN — удалите файл настроек; данные сайтов останутся": "A PIN at startup and after locking Windows (Win+L). Forgot it? Delete the settings file; site data stays"
+"PIN-код при запуске и после блокировки Windows (Win+L). Забыли PIN — удалите файл настроек; данные сайтов останутся": "A PIN at startup and after locking Windows (Win+L). Forgot it? Delete the settings file; site data stays",
+"Выход (запомнить все окна)": "Exit (remember all windows)"
 }
