@@ -15,6 +15,16 @@ sealed class SyncBundle
     public DateTime SettingsModified { get; set; }
     public string? Vault { get; set; }          // vault.json как есть — он уже зашифрован мастер-паролем
     public DateTime VaultModified { get; set; }
+    public List<Workspace>? Workspaces { get; set; }
+    public List<Highlight>? Highlights { get; set; }
+    public List<SyncOfflinePage>? Offline { get; set; }
+}
+
+/// <summary>Сохранённая страница внутри пакета синхронизации (сам MHTML — в base64).</summary>
+sealed class SyncOfflinePage
+{
+    public OfflinePage Info { get; set; } = new();
+    public string Data { get; set; } = "";
 }
 
 sealed class SyncEnvelope
@@ -126,6 +136,7 @@ static class Sync
             var file = FileIn(s.SyncFolder);
             int added = 0;
             bool settingsApplied = false, vaultApplied = false;
+            int offlineAdded = 0, notesAdded = 0;
             if (pull)
             {
                 var remote = await Task.Run(() => ReadRemote(file, pw));
@@ -155,6 +166,9 @@ static class Sync
                         File.SetLastWriteTimeUtc(VaultFile, remote.VaultModified);
                         vaultApplied = true;
                     }
+                    if (remote.Workspaces != null) Workspaces.Merge(remote.Workspaces);
+                    if (remote.Highlights != null) notesAdded = Store.MergeHighlights(remote.Highlights);
+                    if (remote.Offline != null) offlineAdded = Offline.Import(remote.Offline);
                 }
             }
             if (push)
@@ -170,6 +184,9 @@ static class Sync
                     SettingsModified = File.Exists(SettingsFile) ? File.GetLastWriteTimeUtc(SettingsFile) : DateTime.UtcNow,
                     Vault = File.Exists(VaultFile) ? File.ReadAllText(VaultFile) : null,
                     VaultModified = File.Exists(VaultFile) ? File.GetLastWriteTimeUtc(VaultFile) : DateTime.MinValue,
+                    Workspaces = Workspaces.All.ToList(),
+                    Highlights = Store.Highlights.ToList(),
+                    Offline = Offline.Export(),
                 };
                 await Task.Run(() => WriteRemote(file, pw, bundle));
             }
@@ -177,6 +194,8 @@ static class Sync
             if (added > 0) parts.Add($"новых закладок: {added}");
             if (settingsApplied) parts.Add("настройки обновлены");
             if (vaultApplied) parts.Add("пароли обновлены");
+            if (notesAdded > 0) parts.Add($"новых заметок: {notesAdded}");
+            if (offlineAdded > 0) parts.Add($"сохранённых страниц: {offlineAdded}");
             Status = string.Join(" · ", parts);
             var last = DateTime.Now.ToString("dd.MM.yyyy HH:mm");
             var copy = JsonSerializer.Deserialize<AppSettings>(JsonSerializer.Serialize(AppEnv.Settings, AppSettings.Json), AppSettings.Json)!;

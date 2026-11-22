@@ -196,6 +196,20 @@ static class Store
         HighlightsChanged?.Invoke();
     }
 
+    /// <summary>Синхронизация: добавить заметки с другого компьютера, которых здесь нет.</summary>
+    public static int MergeHighlights(List<Highlight> remote)
+    {
+        var ids = Highlights.Select(h => h.Id).ToHashSet();
+        var fresh = remote.Where(h => !string.IsNullOrEmpty(h.Id) && !ids.Contains(h.Id)).ToList();
+        if (fresh.Count == 0) return 0;
+        Highlights.AddRange(fresh);
+        Highlights.Sort((a, b) => a.Time.CompareTo(b.Time));
+        while (Highlights.Count > 5000) Highlights.RemoveAt(0);
+        Write("highlights.json", Highlights);
+        HighlightsChanged?.Invoke();
+        return fresh.Count;
+    }
+
     public static void RemoveHighlight(string id)
     {
         if (Highlights.RemoveAll(h => h.Id == id) == 0) return;

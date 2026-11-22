@@ -7,6 +7,7 @@ sealed class Workspace
     public string Name { get; set; } = "";
     public string Color { get; set; } = "#7c9cff";
     public Session Session { get; set; } = new();
+    public DateTime Modified { get; set; } = DateTime.UtcNow;
 }
 
 sealed class WorkspaceFile
@@ -79,6 +80,24 @@ static class Workspaces
         Save();
     }
 
+    /// <summary>Синхронизация: новые пространства добавляем, у существующих берём более свежие вкладки (кроме открытого сейчас).</summary>
+    public static void Merge(List<Workspace> remote)
+    {
+        bool changed = false;
+        foreach (var r in remote)
+        {
+            if (string.IsNullOrWhiteSpace(r.Name)) continue;
+            var local = Data.Items.FirstOrDefault(w => w.Name.Equals(r.Name, StringComparison.OrdinalIgnoreCase));
+            if (local == null) { Data.Items.Add(r); changed = true; }
+            else if (local.Name != Data.Current && r.Modified > local.Modified.AddSeconds(5))
+            {
+                local.Session = r.Session; local.Color = r.Color; local.Modified = r.Modified;
+                changed = true;
+            }
+        }
+        if (changed) Save();
+    }
+
     public static void Delete(Workspace w)
     {
         if (Data.Items.Count <= 1 || Data.Current == w.Name) return;
@@ -90,6 +109,7 @@ static class Workspaces
     public static void SwitchTo(Workspace target, Session currentTabs)
     {
         Current.Session = currentTabs;
+        Current.Modified = DateTime.UtcNow;
         Data.Current = target.Name;
         Save();
     }

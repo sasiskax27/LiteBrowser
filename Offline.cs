@@ -84,4 +84,44 @@ static class Offline
     }
 
     public static long TotalSize => All.Sum(p => p.Size);
+
+    const long SyncMaxPage = 3 << 20, SyncMaxTotal = 40 << 20;
+
+    /// <summary>Для синхронизации: свежие страницы до 3 МБ каждая, всего до 40 МБ.</summary>
+    public static List<SyncOfflinePage> Export()
+    {
+        var res = new List<SyncOfflinePage>();
+        long total = 0;
+        foreach (var p in All.OrderByDescending(p => p.Time))
+        {
+            if (p.Size > SyncMaxPage || total + p.Size > SyncMaxTotal) continue;
+            try { res.Add(new SyncOfflinePage { Info = p, Data = Convert.ToBase64String(File.ReadAllBytes(PathOf(p))) }); total += p.Size; }
+            catch { }
+        }
+        return res;
+    }
+
+    /// <summary>Добавить страницы с другого компьютера (новые адреса или более свежие снимки).</summary>
+    public static int Import(List<SyncOfflinePage> remote)
+    {
+        int added = 0;
+        foreach (var r in remote)
+        {
+            if (string.IsNullOrEmpty(r.Data) || !r.Info.Url.StartsWith("http")) continue;
+            var local = ByUrl(r.Info.Url);
+            if (local != null && local.Time >= r.Info.Time) continue;
+            try
+            {
+                var p = local ?? new OfflinePage { Url = r.Info.Url };
+                p.Title = r.Info.Title; p.Time = r.Info.Time;
+                Directory.CreateDirectory(Dir);
+                File.WriteAllBytes(PathOf(p), Convert.FromBase64String(r.Data));
+                p.Size = new FileInfo(PathOf(p)).Length;
+                if (local == null) { All.Insert(0, p); added++; }
+            }
+            catch { }
+        }
+        if (added > 0 || remote.Count > 0) SaveIndex();
+        return added;
+    }
 }

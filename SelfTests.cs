@@ -230,6 +230,29 @@ static class DevToolsSelfTest
                 Check("группы: раскладка", plan.GetValueOrDefault(0) == "Видео" && plan.GetValueOrDefault(1) == "Видео" && !plan.ContainsKey(2)
                     && plan.GetValueOrDefault(3) == "site.org" && plan.GetValueOrDefault(4) == "site.org" && !plan.ContainsKey(5), string.Join(", ", plan.Select(p => p.Key + "=" + p.Value)));
 
+                // Синхронизация: пакет туда-обратно (зашифрован), слияние пространств и сохранённых страниц
+                var remoteFile = Path.Combine(root, "sync.bin");
+                var mhtml = Path.Combine(root, "page.mhtml");
+                File.WriteAllText(mhtml, "MIME-Version: 1.0\r\nContent-Type: text/html\r\n\r\n<html><body>hello</body></html>");
+                var bundle = new SyncBundle
+                {
+                    Workspaces = new() { new Workspace { Name = "Учёба-тест", Session = new Session { Tabs = new() { "https://example.com/" } } } },
+                    Offline = new() { new SyncOfflinePage { Info = new OfflinePage { Url = "https://example.net/a", Title = "A", Time = DateTime.Now }, Data = Convert.ToBase64String(File.ReadAllBytes(mhtml)) } },
+                    Highlights = new() { new Highlight { Url = "https://example.com/", Text = "тест" } },
+                };
+                Sync.WriteRemote(remoteFile, "пароль-синхронизации", bundle);
+                var back = Sync.ReadRemote(remoteFile, "пароль-синхронизации");
+                Check("синхронизация: пакет расшифрован", back?.Workspaces?.Count == 1 && back.Offline?.Count == 1 && back.Highlights?.Count == 1);
+                Check("синхронизация: файл зашифрован", !File.ReadAllText(remoteFile).Contains("Учёба-тест"));
+                Workspaces.Merge(back!.Workspaces!);
+                Check("синхронизация: пространство добавлено", Workspaces.All.Any(w => w.Name == "Учёба-тест" && w.Session.Tabs.Count == 1));
+                Workspaces.Merge(back.Workspaces!);
+                Check("синхронизация: без дублей пространств", Workspaces.All.Count(w => w.Name == "Учёба-тест") == 1);
+                Offline.UseDir(Path.Combine(root, "offline-sync"));
+                Check("синхронизация: страница добавлена", Offline.Import(back.Offline!) == 1 && Offline.All.Count == 1);
+                Check("синхронизация: без дублей страниц", Offline.Import(back.Offline!) == 0 && Offline.All.Count == 1);
+                Check("синхронизация: страница уходит в пакет", Offline.Export().Count == 1);
+
                 // Поиск по истории
                 var stems = MainForm.HistoryStems("статья про видеокарты на прошлой неделе");
                 Check("история: основы слов", stems.SequenceEqual(new[] { "видео" }), string.Join(",", stems));
