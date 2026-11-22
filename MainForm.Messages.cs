@@ -29,6 +29,7 @@ sealed partial class MainForm
         version = AppEnv.Version,
         browserVersion = AppEnv.GetEnvironment().IsCompletedSuccessfully ? AppEnv.GetEnvironment().Result.BrowserVersionString : "",
         incognito = Incognito,
+        startupMs = AppEnv.StartupMs,
         isDefault = SystemIntegration.IsDefaultBrowser(),
         sync = new
         {

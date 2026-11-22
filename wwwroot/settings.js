@@ -64,6 +64,7 @@ function render() {
     'Версия LiteBrowser: ' + info.version,
     'Движок: Chromium (Microsoft WebView2) ' + info.browserVersion + '. Обновляется автоматически вместе с Windows',
     'Данные браузера хранятся только на этом компьютере',
+    ...(info.startupMs > 0 ? ['Запуск до первой страницы: ' + (info.startupMs / 1000).toFixed(1) + ' с. Память по вкладкам — Shift+Esc'] : []),
   ]) { const d = document.createElement('div'); d.textContent = line; $('about').appendChild(d); }
 }
 

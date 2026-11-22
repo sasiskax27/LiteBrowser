@@ -238,6 +238,7 @@ static class Program
 
         ApplicationConfiguration.Initialize();
         AppEnv.Init();
+        CrashReport.Install();
         if (SystemIntegration.IsInstalled) Installer.RegisterUninstall();
         Theme.ApplyPalette(AppEnv.Settings.UiTheme, AppEnv.Settings.Accent);
         Application.Run(new BrowserApp(url, incognito, restore, guest));
@@ -335,6 +336,9 @@ sealed class BrowserApp : ApplicationContext
         var first = OpenWindow(incognito, url, tabs, active, session, guest);
         foreach (var s in extra) OpenWindow(false, null, s.Tabs, s.Active, s);
         if (crashed && tabs == null && !incognito && Store.LoadCrashWindows() is { Count: > 0 } cs) first.OfferCrashRestore(cs);
+        // Прошлый раз браузер закрылся из-за ошибки — предлагаем отчёт (один раз)
+        if (CrashReport.TakeUnseenFatal() is { } fatal)
+            first.Shown += (_, _) => first.BeginInvoke(() => CrashReport.Ask(fatal, L.T("В прошлый раз LiteBrowser закрылся из-за ошибки.")));
         else _ = first.RunStartupChecks();
         _ = first.RunStartupSync();
 
@@ -379,6 +383,10 @@ sealed class BrowserApp : ApplicationContext
     }
 
     public bool IsMainWindow(MainForm f) => windows.FirstOrDefault(w => !w.Incognito) == f;
+
+    /// <summary>Все вкладки всех окон — для диспетчера задач.</summary>
+    public IEnumerable<(MainForm form, BrowserTab tab)> AllTabs() =>
+        windows.Where(w => !w.IsDisposed).SelectMany(w => w.Tabs.Select(t => (w, t)));
 
     /// <summary>Вкладки всех обычных окон (окно, которое сейчас активно, — первым).</summary>
     public List<Session> OpenSessions() =>

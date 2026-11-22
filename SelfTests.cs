@@ -247,6 +247,19 @@ static class DevToolsSelfTest
                 Check("цены: товар найден на странице", prod.Contains("Test X 128") && prod.Contains("19990") && prod.Contains("RUB"), prod);
                 var cleaned = new[] { MainForm.CleanProductName("Купить Наушники Sony WH-1000XM5 по выгодной цене — интернет-магазин"), MainForm.CleanProductName("Apple iPhone 15 128 ГБ | Ozon") };
                 Check("цены: название без «купить» и магазина", cleaned[0] == "Наушники Sony WH-1000XM5" && cleaned[1] == "Apple iPhone 15 128 ГБ", string.Join(" / ", cleaned));
+                // Отчёт о сбое: без пути к профилю и имени пользователя, ссылка на обращение не слишком длинная
+                Exception boom;
+                try { throw new InvalidOperationException("файл " + Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "x.txt") + " пользователя " + Environment.UserName); }
+                catch (Exception ex) { boom = ex; }
+                var report = CrashReport.Build(boom, "test");
+                var issue = CrashReport.IssueUrl(report);
+                Check("сбой: отчёт без личных данных", report.Contains("%USERPROFILE%") && !report.Contains(Environment.UserName, StringComparison.OrdinalIgnoreCase) && report.Contains("InvalidOperationException"));
+                Check("сбой: ссылка на обращение", issue.StartsWith("https://github.com/") && issue.Contains("InvalidOperationException") && issue.Length < 32000, $"{issue.Length} символов");
+                // Диспетчер задач: процесс страницы находится по главному фрейму вкладки
+                var procs = await env.GetProcessExtendedInfosAsync();
+                var mine = procs.FirstOrDefault(p => p.AssociatedFrameInfos.Any(f => f.ParentFrameInfo == null && f.FrameId == core.FrameId));
+                Check("диспетчер задач: процесс вкладки найден", mine?.ProcessInfo.Kind == CoreWebView2ProcessKind.Renderer,
+                      $"процессов движка {procs.Count}, вкладка → pid {mine?.ProcessInfo.ProcessId}");
                 // Чтение без интернета: снимок MHTML и открытие из файла
                 Offline.UseDir(Path.Combine(root, "offline"));
                 var origText = System.Text.Json.JsonSerializer.Deserialize<string>(await core.ExecuteScriptAsync("document.body.innerText.slice(0, 60)")) ?? "";

@@ -50,6 +50,7 @@ sealed partial class MainForm : Form
     bool showInstall;
 
     public bool Incognito { get; }
+    internal IReadOnlyList<BrowserTab> Tabs => tabs;
     /// <summary>Гостевое окно: приватное и без ваших данных — закладок, истории, паролей, настроек, боковой панели.</summary>
     public bool Guest { get; }
 
@@ -385,6 +386,14 @@ sealed partial class MainForm : Form
         UpdateUi(force: true);
     }
 
+    internal void CloseTabFromManager(BrowserTab tab) { if (tabs.Contains(tab)) CloseTab(tab); }
+    internal void ShowTabFromManager(BrowserTab tab) { if (!tabs.Contains(tab)) return; Activate(); SelectTab(tab); }
+    internal async Task FreezeTabFromManager(BrowserTab tab)
+    {
+        if (tab == active || tab.Frozen || tab.Core == null) return; // активную вкладку не замораживаем — её сейчас смотрят
+        try { if (await tab.Core.TrySuspendAsync()) { tab.Frozen = true; strip.Invalidate(); } } catch { }
+    }
+
     void CloseTab(BrowserTab tab)
     {
         if (tab == recordingTab) _ = StopRecording();
@@ -699,9 +708,11 @@ sealed partial class MainForm : Form
             strip.Invalidate();
         };
 
+        core.ProcessFailed += (_, e) => OnProcessFailed(tab, e);
         core.NavigationCompleted += (_, e) =>
         {
             tab.Loading = false;
+            if (AppEnv.StartupMs == 0) try { AppEnv.StartupMs = (long)(DateTime.Now - System.Diagnostics.Process.GetCurrentProcess().StartTime).TotalMilliseconds; } catch { }
             if (tab == active) UpdateUi();
             strip.Invalidate();
             if (e.IsSuccess && !Incognito) _ = OfferTranslate(tab);
@@ -1090,6 +1101,7 @@ sealed partial class MainForm : Form
         tools.DropDownItems.Add(Theme.Item(sidePanel.Visible ? "Скрыть боковую панель" : "Боковая панель", () => ToggleSidePanel(!sidePanel.Visible), "Ctrl+B", "\uE8A0"));
         tools.DropDownItems.Add(Theme.Item(Cfg.ShowBookmarksBar ? "Скрыть панель закладок" : "Показать панель закладок", ToggleBookmarksBar, "Ctrl+Shift+B", "\uE728"));
         tools.DropDownItems.Add(RecentlyClosedMenu());
+        tools.DropDownItems.Add(Theme.Item("Диспетчер задач браузера", () => TaskManagerForm.ShowFor(this), "Shift+Esc", "\uE9D9"));
         tools.DropDownItems.Add(FocusMenu());
         tools.DropDownItems.Add(SnoozedListMenu());
         tools.DropDownItems.Add(Theme.Item(Cfg.VerticalTabs ? "Вкладки сверху" : "Вертикальные вкладки", ToggleVerticalTabs, null, "\uE8A9"));
@@ -1384,6 +1396,7 @@ sealed partial class MainForm : Form
             case Keys.Control | Keys.Shift | Keys.V: _ = PictureInPicture(); return true;
             case Keys.Control | Keys.Shift | Keys.S: _ = TakeScreenshot(false); return true;
             case Keys.Alt | Keys.Shift | Keys.R: _ = ToggleRecording(); return true;
+            case Keys.Shift | Keys.Escape: TaskManagerForm.ShowFor(this); return true;
             case Keys.Control | Keys.H: OpenLitePage(LitePages.History); return true;
             case Keys.Control | Keys.Shift | Keys.P: OpenLitePage(LitePages.Passwords); return true;
             case Keys.Control | Keys.Shift | Keys.E: OpenLitePage(LitePages.ExtensionsPage); return true;

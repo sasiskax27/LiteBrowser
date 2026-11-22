@@ -43,6 +43,7 @@ sealed partial class MainForm
         Cmd("", "Картинка в картинке", () => _ = PictureInPicture(), "Ctrl+Shift+V", "pip видео");
         Cmd("", "Скриншот видимой части", () => _ = TakeScreenshot(false), "Ctrl+Shift+S", "screenshot снимок");
         Cmd("", "Сравнить цены в магазинах", () => _ = ComparePrices(), "", "цена price магазин ozon wildberries маркет товар купить");
+        Cmd("", "Диспетчер задач браузера", () => TaskManagerForm.ShowFor(this), "Shift+Esc", "память memory task manager процессы тормозит");
         Cmd("", "Записать видео вкладки / остановить", () => _ = ToggleRecording(), "Alt+Shift+R", "запись видео record video screencast");
         Cmd("", "Скриншот всей страницы", () => _ = TakeScreenshot(true), "", "screenshot снимок полный");
         Cmd("", "Скачать видео или аудио со страницы", () => _ = DownloadMedia(), "", "download media");

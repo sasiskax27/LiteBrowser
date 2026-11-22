@@ -96,6 +96,45 @@ sealed partial class MainForm
         catch (Exception ex) { MessageBox.Show(this, "Не удалось сделать скриншот: " + ex.Message, "Скриншот"); }
     }
 
+    // ================= Сбои движка =================
+
+    /// <summary>
+    /// Процесс страницы упал или завис — предлагаем перезагрузить вкладку (вместо пустого окна).
+    /// Падение основного процесса движка записываем в отчёт: вкладки этого окна придётся открыть заново.
+    /// </summary>
+    void OnProcessFailed(BrowserTab tab, CoreWebView2ProcessFailedEventArgs e)
+    {
+        var kind = e.ProcessFailedKind;
+        if (kind == CoreWebView2ProcessFailedKind.RenderProcessUnresponsive)
+        {
+            if (tab != active) return;
+            infoBar.ShowBar("hang", "\uE916", L.T("Страница не отвечает"),
+                (L.T("Перезагрузить"), () => { try { tab.Core?.Reload(); } catch { } }, true),
+                (L.T("Подождать"), () => { }, false));
+            return;
+        }
+        if (kind is CoreWebView2ProcessFailedKind.RenderProcessExited or CoreWebView2ProcessFailedKind.FrameRenderProcessExited)
+        {
+            if (kind == CoreWebView2ProcessFailedKind.FrameRenderProcessExited) return; // упал встроенный фрейм — страница жива
+            tab.Title = L.T("Страница упала");
+            strip.Invalidate();
+            if (tab == active)
+                infoBar.ShowBar("crashtab", "\uE7BA", L.T("Страница аварийно закрылась (") + e.Reason + L.T("). Обычно помогает перезагрузка"),
+                    (L.T("Перезагрузить"), () => { try { tab.Core?.Reload(); } catch { } }, true));
+            CrashReport.Write(new Exception($"Render process failed: {e.Reason}, exit code {e.ExitCode}"), "render");
+            return;
+        }
+        if (kind == CoreWebView2ProcessFailedKind.BrowserProcessExited)
+        {
+            var f = CrashReport.Write(new Exception($"Browser process exited: {e.Reason}, exit code {e.ExitCode}"), "engine");
+            if (tab == active && f != null)
+                BeginInvoke(() => CrashReport.Ask(f, L.T("Движок браузера аварийно завершился. Закройте это окно и откройте LiteBrowser снова.")));
+            return;
+        }
+        // Остальное (GPU, служебные процессы) движок перезапускает сам — только запись
+        CrashReport.Write(new Exception($"Engine process failed: {kind}, {e.Reason}, exit code {e.ExitCode}"), "engine-" + kind.ToString().ToLowerInvariant());
+    }
+
     // ================= Запись видео вкладки =================
     TabRecorder? recorder;
     BrowserTab? recordingTab;
