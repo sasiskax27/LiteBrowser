@@ -163,12 +163,14 @@ static class Store
 
     public static void DeleteHistory(string url, DateTime time)
     {
+        PageIndex.Remove(url);
         History.RemoveAll(h => h.Url == url && Math.Abs((h.Time - time).TotalSeconds) < 1);
         historyDirty = true;
     }
 
     public static void ClearHistory()
     {
+        PageIndex.Clear();
         History.Clear();
         historyDirty = true;
         Flush();
@@ -273,5 +275,6 @@ static class Store
         if (statsDirty) { statsDirty = false; Write("stats.json", new Dictionary<string, long> { ["blocked"] = blockedTotal }); }
         if (bookmarksDirty) { bookmarksDirty = false; Write("bookmarks.json", Bookmarks); }
         if (historyDirty) { historyDirty = false; Write("history.json", History); }
+        PageIndex.Flush();
     }
 }

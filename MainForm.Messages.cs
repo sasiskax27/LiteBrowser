@@ -22,6 +22,17 @@ sealed partial class MainForm
         WidgetCity = Cfg.WidgetCity, ImportOffered = true,
     };
 
+    /// <summary>История: совпадения в названии/адресе, а затем — страницы, где запрос встречается в тексте (с отрывком).</summary>
+    static List<object> HistoryWithText(string q)
+    {
+        var items = Store.SearchHistory(q, 600).Select(h => (object)new { title = h.Title, url = h.Url, time = h.Time, snippet = "" }).ToList();
+        if (q.Trim().Length < 2 || !Cfg.FullTextHistory) return items;
+        var seen = new HashSet<string>(Store.SearchHistory(q, 600).Select(h => h.Url));
+        foreach (var (p, snip) in PageIndex.Search(q, 100))
+            if (seen.Add(p.Url)) items.Add(new { title = p.Title, url = p.Url, time = p.Time, snippet = snip });
+        return items;
+    }
+
     void SendSettings(CoreWebView2 core) => Post(core, new
     {
         type = "settings",
@@ -214,7 +225,7 @@ sealed partial class MainForm
                 {
                     type = "history",
                     saving = Cfg.SaveHistory,
-                    items = Store.SearchHistory(Str("q"), 600).Select(h => new { title = h.Title, url = h.Url, time = h.Time }),
+                    items = HistoryWithText(Str("q")),
                 });
                 break;
 

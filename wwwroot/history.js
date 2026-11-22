@@ -40,10 +40,20 @@ function render(items) {
     const a = document.createElement('a');
     a.className = 'item';
     a.href = it.url;
-    a.innerHTML = '<span class="time"></span><span class="txt"><div class="title"></div><div class="url"></div></span><button class="del icon" title="Удалить">&#xE711;</button>';
+    a.innerHTML = '<span class="time"></span><span class="txt"><div class="title"></div><div class="url"></div><div class="snip"></div></span><button class="del icon" title="Удалить">&#xE711;</button>';
     a.querySelector('.time').textContent = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
     a.querySelector('.title').textContent = it.title || it.url;
     a.querySelector('.url').textContent = it.url;
+    // Нашлось в тексте страницы — показываем отрывок с подсвеченными словами
+    if (it.snippet) {
+      const snip = a.querySelector('.snip');
+      const words = $('q').value.trim().split(/\s+/).filter(w => w.length > 1).map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+      const re = words.length ? new RegExp('(' + words.join('|') + ')', 'gi') : null;
+      for (const part of re ? it.snippet.split(re) : [it.snippet]) {
+        if (re && words.some(w => new RegExp('^' + w + '$', 'i').test(part))) { const m = document.createElement('mark'); m.textContent = part; snip.appendChild(m); }
+        else snip.appendChild(document.createTextNode(part));
+      }
+    }
     a.querySelector('.del').onclick = ev => {
       ev.preventDefault(); ev.stopPropagation();
       wv.postMessage({ type: 'historyDelete', url: it.url, time: it.time });

@@ -69,7 +69,8 @@ sealed class AppSettings
     public bool ListRuAdList { get; set; } = true;
     public bool ListCookies { get; set; } = false;
     public bool CosmeticFiltering { get; set; } = true;
-    public bool CookieBanners { get; set; } = true;      // отклонять cookie-баннеры (или прятать, если отказаться нельзя)
+    public bool CookieBanners { get; set; } = true;
+    public bool FullTextHistory { get; set; } = true;   // запоминать текст страниц для поиска по истории (только на этом компьютере)      // отклонять cookie-баннеры (или прятать, если отказаться нельзя)
     public bool YouTubeAds { get; set; } = true;
     public bool BlockPopups { get; set; } = true;
     public List<string> AdblockAllow { get; set; } = new();

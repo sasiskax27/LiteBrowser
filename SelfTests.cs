@@ -255,6 +255,13 @@ static class DevToolsSelfTest
                 var issue = CrashReport.IssueUrl(report);
                 Check("сбой: отчёт без личных данных", report.Contains("%USERPROFILE%") && !report.Contains(Environment.UserName, StringComparison.OrdinalIgnoreCase) && report.Contains("InvalidOperationException"));
                 Check("сбой: ссылка на обращение", issue.StartsWith("https://github.com/") && issue.Contains("InvalidOperationException") && issue.Length < 32000, $"{issue.Length} символов");
+                // Поиск по тексту страниц: все слова, отрывок вокруг найденного
+                PageIndex.Add("https://test.local/gpu", "Обзор железа", "Вступление. " + new string('x', 300) + " Новые видеокарты RTX стали дешевле, а процессоры — нет. " + new string('y', 300));
+                PageIndex.Add("https://test.local/other", "Про котиков", "Котики спят двадцать часов в сутки.");
+                var hits = PageIndex.Search("видеокарты дешевле", 10);
+                Check("история по тексту: найдено по содержимому", hits.Count == 1 && hits[0].page.Url.EndsWith("/gpu") && hits[0].snippet.Contains("видеокарты") && hits[0].snippet.Length < 260,
+                      hits.Count > 0 ? hits[0].snippet : "ничего");
+                PageIndex.Remove("https://test.local/gpu"); PageIndex.Remove("https://test.local/other");
                 // Windows Hello: системный компонент находится без пакета Windows SDK (само окно в тесте не показываем)
                 bool helloOk = WindowsHello.Supported;
                 Check("Windows Hello: проверка доступности не падает", true, helloOk ? "компонент есть" : "компонента нет (сервер/старая Windows)");
