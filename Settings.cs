@@ -94,6 +94,7 @@ sealed class AppSettings
     public Dictionary<string, int> SiteZoom { get; set; } = new();   // сайт → масштаб, %
     public bool ForceDark { get; set; } = false;        // тёмная тема для всех сайтов
     public bool VerticalTabs { get; set; } = false;     // вкладки слева
+    public List<string> FocusSites { get; set; } = new() { "youtube.com", "vk.com", "tiktok.com", "instagram.com", "twitch.tv", "x.com", "twitter.com", "reddit.com", "pikabu.ru", "dzen.ru", "ok.ru", "facebook.com" };
     public bool VerticalTabsCompact { get; set; } = false; // вертикальные вкладки — только значки
     public List<string> DarkSites { get; set; } = new();     // тёмная тема для этих сайтов (если общая выключена)
     public List<string> DarkExclude { get; set; } = new();   // без тёмной темы (если общая включена)

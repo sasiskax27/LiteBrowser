@@ -40,7 +40,8 @@ sealed partial class MainForm : Form
     readonly SuggestPopup suggest = new();
     readonly SidePanel sidePanel;
     readonly Splitter splitter = new() { Dock = DockStyle.Right, Visible = false, MinSize = 200, MinExtra = 300 };
-    readonly IconButton sideBtn, extBtn;
+    readonly IconButton sideBtn, extBtn, focusBtn;
+    bool showFocus;
     ExtensionsPanel? extPanel;
     FindBar findBar = null!;
     CancellationTokenSource? suggestCts;
@@ -154,11 +155,13 @@ sealed partial class MainForm : Form
         address.Box.MouseUp += (_, _) => { if (selectOnClick && address.Box.SelectionLength == 0) address.Box.SelectAll(); selectOnClick = false; };
         address.Box.Leave += (_, _) => selectOnClick = false;
 
+        focusBtn = new IconButton("", "Фокус-режим: отвлекающие сайты закрыты", tips) { TextMode = true, GlyphColor = Theme.Accent };
+        focusBtn.Click += (_, _) => ShowFocusButtonMenu();
         extBtn = new IconButton("", "Расширения", tips);
         extBtn.Click += (_, _) => ShowExtPanel();
         sideBtn = new IconButton("", "Боковая панель (Ctrl+B)", tips);
         sideBtn.Click += (_, _) => ToggleSidePanel(!sidePanel!.Visible);
-        toolbar.Controls.AddRange(new Control[] { back, forward, reload, home, address, installBtn, zoomBtn, proxyBtn, downloadsBtn, extBtn, sideBtn, menuBtn });
+        toolbar.Controls.AddRange(new Control[] { back, forward, reload, home, address, installBtn, zoomBtn, proxyBtn, focusBtn, downloadsBtn, extBtn, sideBtn, menuBtn });
         toolbar.Resize += (_, _) => LayoutToolbar();
         toolbar.Paint += PaintProgress;
 
@@ -220,13 +223,13 @@ sealed partial class MainForm : Form
         int s = Theme.S(36), y = (toolbar.Height - s) / 2, x = Theme.S(10);
         foreach (var b in new[] { back, forward, reload, home }) { b.SetBounds(x, y, s, s); x += s + Theme.S(2); }
         int right = toolbar.Width - Theme.S(10);
-        foreach (var b in new[] { menuBtn, sideBtn, extBtn, downloadsBtn, proxyBtn, zoomBtn, installBtn })
+        foreach (var b in new[] { menuBtn, sideBtn, extBtn, downloadsBtn, focusBtn, proxyBtn, zoomBtn, installBtn })
         {
             // Visible до показа окна всегда false, поэтому храним желаемое состояние отдельно
-            bool want = b == downloadsBtn ? showDownloads : b == proxyBtn ? showProxy : b == installBtn ? showInstall : b == extBtn ? !Incognito : true;
+            bool want = b == downloadsBtn ? showDownloads : b == proxyBtn ? showProxy : b == installBtn ? showInstall : b == extBtn ? !Incognito : b == focusBtn ? showFocus : true;
             b.Visible = want;
             if (!want) continue;
-            int w = b == zoomBtn ? Theme.S(58) : b == installBtn ? Theme.S(200) : s;
+            int w = b == zoomBtn ? Theme.S(58) : b == installBtn ? Theme.S(200) : b == focusBtn ? Theme.S(84) : s;
             right -= w;
             b.SetBounds(right, y, w, s);
             right -= Theme.S(2);
@@ -591,6 +594,7 @@ sealed partial class MainForm : Form
                         BeginInvoke(() => core.Navigate(ToUrl(q)));
                         return;
                     }
+                    if (HandleFocusNavigation(core, u, qs)) { e.Cancel = true; return; }
                     if (u.AbsolutePath == "/allow")
                     {
                         e.Cancel = true;
@@ -612,6 +616,14 @@ sealed partial class MainForm : Form
                         e.Cancel = true;
                         var pp = LitePages.Prefix + "parental.html?host=" + Uri.EscapeDataString(u.Host);
                         BeginInvoke(() => core.Navigate(pp));
+                        return;
+                    }
+                    // Фокус-режим: отвлекающий сайт — экран фокуса
+                    if (FocusBlocks(u.Host))
+                    {
+                        e.Cancel = true;
+                        var fp = FocusPageUrl(e.Uri, u.Host);
+                        BeginInvoke(() => core.Navigate(fp));
                         return;
                     }
                     // Опасный или рекламный сайт — показываем предупреждение
@@ -1035,6 +1047,7 @@ sealed partial class MainForm : Form
         tools.DropDownItems.Add(Theme.Item(sidePanel.Visible ? "Скрыть боковую панель" : "Боковая панель", () => ToggleSidePanel(!sidePanel.Visible), "Ctrl+B", "\uE8A0"));
         tools.DropDownItems.Add(Theme.Item(Cfg.ShowBookmarksBar ? "Скрыть панель закладок" : "Показать панель закладок", ToggleBookmarksBar, "Ctrl+Shift+B", "\uE728"));
         tools.DropDownItems.Add(RecentlyClosedMenu());
+        tools.DropDownItems.Add(FocusMenu());
         tools.DropDownItems.Add(Theme.Item(Cfg.VerticalTabs ? "Вкладки сверху" : "Вертикальные вкладки", ToggleVerticalTabs, null, "\uE8A9"));
         tools.DropDownItems.Add(new ToolStripSeparator());
         tools.DropDownItems.Add(Theme.Item("Заметки и выделения", () => OpenLitePage(LitePages.Notes), null, "\uE8EC"));

@@ -49,6 +49,7 @@ function render() {
   if (document.activeElement !== $('pHost')) $('pHost').value = state.proxyHost;
   if (document.activeElement !== $('pPort')) $('pPort').value = state.proxyPort;
   if (document.activeElement !== $('sites')) $('sites').value = state.proxySites.join('\n');
+  if (document.activeElement !== $('focusSites')) $('focusSites').value = (state.focusSites || []).join('\n');
   renderProxy();
 
   renderAdblock();
@@ -221,6 +222,7 @@ document.querySelectorAll('.seg[data-seg]').forEach(seg => seg.querySelectorAll(
 $('pHost').oninput = () => { state.proxyHost = $('pHost').value.trim(); saveLater(); };
 $('pPort').oninput = () => { const p = parseInt($('pPort').value, 10); if (p > 0 && p < 65536) { state.proxyPort = p; saveLater(); } };
 $('sites').oninput = () => { state.proxySites = $('sites').value.split('\n').map(s => s.trim()).filter(Boolean); saveLater(); };
+$('focusSites').oninput = () => { state.focusSites = $('focusSites').value.split('\n').map(s => s.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '')).filter(Boolean); saveLater(); };
 $('resetSites').onclick = () => { state.proxySites = info.defaultSites.slice(); $('sites').value = state.proxySites.join('\n'); save(); };
 document.querySelectorAll('.chip').forEach(c => c.onclick = () => {
   state.proxyHost = '127.0.0.1'; state.proxyPort = Number(c.dataset.port); state.proxyType = 'socks5';

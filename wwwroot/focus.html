@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<title>Время фокуса</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  html, body { height: 100%; overflow: hidden; }
+  body { display: grid; place-items: center; }
+  .box { text-align: center; max-width: 520px; padding: 20px; }
+  .ring { width: 190px; height: 190px; margin: 0 auto 26px; position: relative; }
+  .ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring circle { fill: none; stroke-width: 9; }
+  .ring .bg { stroke: rgba(255,255,255,.07); }
+  .ring .fg { stroke: url(#grad); stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+  .ring .time { position: absolute; inset: 0; display: grid; place-items: center; font-size: 40px; font-weight: 300; font-variant-numeric: tabular-nums; }
+  .ring .time small { display: block; font-size: 12px; color: var(--dim); margin-top: -2px; text-align: center; }
+  h1 { font-size: 26px; margin-bottom: 8px; }
+  p { color: var(--dim); font-size: 14.5px; line-height: 1.55; margin: 0 0 22px; }
+  .site { color: var(--text); font-weight: 600; }
+  .btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<div class="box">
+  <div class="ring">
+    <svg viewBox="0 0 120 120"><defs><linearGradient id="grad"><stop offset="0" stop-color="#7c9cff"/><stop offset="1" stop-color="#b07cff"/></linearGradient></defs>
+      <circle class="bg" cx="60" cy="60" r="52"/><circle class="fg" id="arc" cx="60" cy="60" r="52" stroke-dasharray="326.7" stroke-dashoffset="0"/></svg>
+    <div class="time"><div><span id="left">--:--</span><small>осталось</small></div></div>
+  </div>
+  <h1>Сейчас время фокуса</h1>
+  <p><span class="site" id="site"></span> подождёт. Вернитесь к делу — сайт откроется, когда фокус закончится.</p>
+  <div class="btns">
+    <button class="btn" id="back">Назад</button>
+    <button class="btn" id="allow">Всё равно открыть на 5 минут</button>
+    <button class="btn danger" id="end">Закончить фокус</button>
+  </div>
+</div>
+<script src="focus.js"></script>
+</body>
+</html>
