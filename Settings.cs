@@ -95,6 +95,10 @@ sealed class AppSettings
     public bool ForceDark { get; set; } = false;        // тёмная тема для всех сайтов
     public bool VerticalTabs { get; set; } = false;     // вкладки слева
     public bool TorEnabled { get; set; } = false;       // весь трафик через встроенный Tor
+    public bool HomeWidgets { get; set; } = true;       // погода, курс, заметка на стартовой
+    public bool AutoPip { get; set; } = true;           // видео в «картинке в картинке» при уходе с вкладки
+    public string WidgetCity { get; set; } = "";        // город для погоды (вводит пользователь)
+    public string HomeNote { get; set; } = "";          // заметка на стартовой странице
     public bool FakeSiteWarning { get; set; } = true;   // предупреждать о сайтах-подделках
     public string TorBridges { get; set; } = "";        // "" | obfs4 | snowflake
     public List<string> FocusSites { get; set; } = new() { "youtube.com", "vk.com", "tiktok.com", "instagram.com", "twitch.tv", "x.com", "twitter.com", "reddit.com", "pikabu.ru", "dzen.ru", "ok.ru", "facebook.com" };

@@ -178,6 +178,16 @@ static class DevToolsSelfTest
                 Check("подделки распознаются", missed.Count == 0, missed.Count > 0 ? "пропущены: " + string.Join(", ", missed) : string.Join(", ", fakes.Select(f => f + "→" + Lookalike.Check(f))));
                 Check("настоящие сайты не трогаются", falseAlarms.Count == 0, string.Join(", ", falseAlarms));
 
+                // Виджеты стартовой страницы
+                try
+                {
+                    var wjson = System.Text.Json.JsonSerializer.Serialize(await Widgets.WeatherAsync("Москва"));
+                    Check("виджет: погода", wjson.Contains("\"temp\""), System.Text.RegularExpressions.Regex.Unescape(wjson));
+                    var cjson = System.Text.Json.JsonSerializer.Serialize(await Widgets.CurrencyAsync());
+                    Check("виджет: курс ЦБ", cjson.Contains("USD") && cjson.Contains("EUR"), cjson);
+                }
+                catch (Exception ex) { Check("виджеты: сервисы доступны", false, ex.Message); }
+
                 // Палитра команд: нечёткий поиск
                 Check("поиск «вкл» находит «Новая вкладка»", CommandPalette.Score("Новая вкладка", "вкл") > 0);
                 Check("«нвк» находит «Новая вкладка» по буквам", CommandPalette.Score("Новая вкладка", "нвк") > 0);

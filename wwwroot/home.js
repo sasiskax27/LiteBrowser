@@ -63,11 +63,49 @@ function renderTiles() {
   }
   $('editTiles').innerHTML = editing ? '<span class="icon">&#xE73E;</span> Готово' : '<span class="icon">&#xE70F;</span> Изменить';
 }
+// ---- Виджеты: погода, курс валют, заметка ----
+function cityForm(box, value) {
+  box.innerHTML = '<div>Погода</div><input id="cityIn" placeholder="Ваш город, например Москва" maxlength="60">';
+  const inp = box.querySelector('input');
+  inp.value = value || '';
+  inp.onkeydown = e => { if (e.key === 'Enter' && inp.value.trim()) { box.innerHTML = '<div class="dim">Загружаю…</div>'; wv.postMessage({ type: 'home:city', city: inp.value.trim() }); } };
+  setTimeout(() => inp.focus(), 0);
+}
+function renderWidgets(m) {
+  $('widgets').classList.toggle('show', !!m.enabled);
+  if (!m.enabled) return;
+  const w = $('wgWeather'), wd = m.weather;
+  if (!m.city) {
+    w.innerHTML = '<div class="big">🌤</div><div class="dim">Погода в вашем городе</div><a id="setCity">Указать город</a>';
+    w.querySelector('#setCity').onclick = () => cityForm(w, '');
+  } else if (!wd || wd.error) {
+    w.innerHTML = '<div class="dim"></div><a id="setCity">Изменить город</a>';
+    w.querySelector('.dim').textContent = (wd && wd.error) || 'Нет данных о погоде';
+    w.querySelector('#setCity').onclick = () => cityForm(w, m.city);
+  } else {
+    w.innerHTML = `<div class="big">${wd.icon} ${wd.temp > 0 ? '+' : ''}${wd.temp}°</div><div class="dim"></div><div class="dim"></div><a class="edit icon" title="Изменить город">&#xE70F;</a>`;
+    const dims = w.querySelectorAll('.dim');
+    dims[0].textContent = wd.city + ' · ' + wd.text;
+    dims[1].textContent = `ощущается ${wd.feels}° · ${wd.min}…${wd.max}° · ветер ${wd.wind} м/с`;
+    w.querySelector('.edit').onclick = () => cityForm(w, m.city);
+  }
+  const c = $('wgMoney');
+  if (m.currency && m.currency.rates) {
+    c.innerHTML = '<div class="dim" style="margin:0 0 4px">Курс ЦБ РФ</div>' + m.currency.rates.map(r =>
+      `<div class="row2"><span>${r.code === 'USD' ? '$' : r.code === 'EUR' ? '€' : '¥'} ${r.code}</span><span>${r.value.toFixed(2)} ₽ <span class="${r.change > 0 ? 'up' : 'down'}">${r.change > 0 ? '▲' : r.change < 0 ? '▼' : ''}${Math.abs(r.change).toFixed(2)}</span></span></div>`).join('');
+  } else c.innerHTML = '<div class="dim">Курс валют недоступен</div>';
+  const n = $('wgNote');
+  if (document.activeElement !== n) n.value = m.note || '';
+}
+let noteTimer = 0;
+$('wgNote').addEventListener('input', () => { clearTimeout(noteTimer); noteTimer = setTimeout(() => wv && wv.postMessage({ type: 'home:note', note: $('wgNote').value }), 600); });
+
 function save() { renderTiles(); wv && wv.postMessage({ type: 'tiles:save', tiles }); }
 $('editTiles').onclick = () => { editing = !editing; renderTiles(); };
 if (wv) {
   wv.addEventListener('message', e => {
     const m = e.data;
+    if (m.type === 'widgets') { renderWidgets(m); return; }
     if (m.type !== 'settings') return;
     const en = m.engines.find(x => x.id === m.settings.engine);
     const name = en ? en.name : 'интернете';
@@ -83,6 +121,7 @@ if (wv) {
       (m.adblock && m.adblock.total ? `<span>🛡 Заблокировано: <b>${m.adblock.total.toLocaleString('ru-RU')}</b></span>` : '');
   });
   wv.postMessage({ type: 'get' });
+  wv.postMessage({ type: 'home:widgets' });
   $('importClose').onclick = () => { $('import').classList.remove('show'); wv.postMessage({ type: 'dismissImport' }); };
 }
 $('q').focus();

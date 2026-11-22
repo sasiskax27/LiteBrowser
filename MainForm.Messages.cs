@@ -364,6 +364,28 @@ sealed partial class MainForm
                 CopyAndSave(x => x.Wallpaper = false);
                 SendSettings(core);
                 break;
+            // ---- Виджеты стартовой страницы ----
+            case "home:widgets":
+                if (!Cfg.HomeWidgets) { Post(core, new { type = "widgets", enabled = false }); break; }
+                object? weather = null, currency = null;
+                try { weather = await Widgets.WeatherAsync(Cfg.WidgetCity); } catch { weather = new { error = L.T("Нет связи с сервисом погоды") }; }
+                try { currency = await Widgets.CurrencyAsync(); } catch { }
+                Post(core, new { type = "widgets", enabled = true, city = Cfg.WidgetCity, note = Cfg.HomeNote, weather, currency });
+                break;
+            case "home:city":
+                var city = Str("city").Trim();
+                if (city.Length > 60) city = city[..60];
+                CopyAndSave(x => x.WidgetCity = city);
+                goto case "home:widgets";
+            case "home:note":
+                var note = Str("note");
+                if (note.Length > 2000) note = note[..2000];
+                if (!Incognito) CopyAndSave(x => x.HomeNote = note);
+                break;
+            case "home:hideWidgets":
+                CopyAndSave(x => x.HomeWidgets = false);
+                break;
+
             case "tiles:save":
                 if (!root.TryGetProperty("tiles", out var tl) || tl.ValueKind != JsonValueKind.Array) break;
                 var newTiles = tl.EnumerateArray().Select(x => new HomeTile

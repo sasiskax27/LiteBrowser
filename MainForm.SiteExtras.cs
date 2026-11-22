@@ -202,4 +202,35 @@ sealed partial class MainForm
         await Task.Delay(1500);
         if (tab == active && !tab.View.IsDisposed) await TabPreview.CaptureAsync(tab);
     }
+
+    // ================= Автоматическая «картинка в картинке» =================
+
+    /// <summary>
+    /// Ушли с вкладки, где играет видео, — оно продолжает играть в маленьком окне; вернулись — окно закрывается.
+    /// Запрос идёт с флагом «действие пользователя» (CDP), иначе браузер не разрешает открыть окно.
+    /// </summary>
+    async Task AutoPip(BrowserTab tab, bool enter)
+    {
+        var core = tab.Core;
+        if (core == null || !Cfg.AutoPip) return;
+        const string enterJs = """
+(async () => {
+  if (document.pictureInPictureElement) return 'already';
+  const v = [...document.querySelectorAll('video')].find(x => !x.paused && !x.ended && x.readyState > 2 && x.duration > 20 && x.offsetWidth > 160 && !x.disablePictureInPicture);
+  if (!v) return 'none';
+  await v.requestPictureInPicture();
+  window.__liteAutoPip = true;
+  return 'ok';
+})()
+""";
+        const string exitJs = "(async () => { if (window.__liteAutoPip && document.pictureInPictureElement) { await document.exitPictureInPicture(); } window.__liteAutoPip = false; return 'ok'; })()";
+        try
+        {
+            await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", JsonSerializer.Serialize(new
+            {
+                expression = enter ? enterJs : exitJs, awaitPromise = true, userGesture = true, returnByValue = true, timeout = 3000,
+            }));
+        }
+        catch { }
+    }
 }

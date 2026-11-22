@@ -354,6 +354,9 @@ sealed partial class MainForm : Form
     void SelectTab(BrowserTab tab)
     {
         if (active != null && active != tab && active.Core != null) _ = TabPreview.CaptureAsync(active);
+        // Видео с уходящей вкладки — в маленькое окно, а на новой — закрываем её окно (если открывали сами)
+        if (active != null && active != tab && active.SplitWith != tab) _ = AutoPip(active, enter: true);
+        if (active != tab) _ = AutoPip(tab, enter: false);
         if (findBar != null && active != tab) CloseFind();
         if (active != null && active != tab) active.LastActive = DateTime.Now;
         active = tab;
