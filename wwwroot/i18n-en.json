@@ -954,5 +954,21 @@
 "Страница упала": "Page crashed",
 "Страница аварийно закрылась (": "The page crashed (",
 "). Обычно помогает перезагрузка": "). Reloading usually helps",
-"Движок браузера аварийно завершился. Закройте это окно и откройте LiteBrowser снова.": "The browser engine crashed. Close this window and open LiteBrowser again."
+"Движок браузера аварийно завершился. Закройте это окно и откройте LiteBrowser снова.": "The browser engine crashed. Close this window and open LiteBrowser again.",
+"Подтверждено": "Verified",
+"Нет устройства Windows Hello (сканера, камеры)": "No Windows Hello device (scanner, camera)",
+"Windows Hello не настроен: Параметры → Учётные записи → Варианты входа": "Windows Hello isn't set up: Settings → Accounts → Sign-in options",
+"Windows Hello отключён администратором": "Windows Hello is disabled by your administrator",
+"Устройство Windows Hello занято": "The Windows Hello device is busy",
+"Слишком много попыток": "Too many attempts",
+"Отменено": "Canceled",
+"Windows Hello недоступен": "Windows Hello isn't available",
+"Откройте LiteBrowser": "Unlock LiteBrowser",
+" — введите PIN": " — enter your PIN",
+"Вход через Windows Hello выключен": "Windows Hello sign-in is off",
+"Сначала включите PIN — он нужен, если Windows Hello не сработает": "Turn on the PIN first — it's needed if Windows Hello fails",
+"Подтвердите, что это вы": "Confirm it's you",
+"Вход через Windows Hello включён": "Windows Hello sign-in is on",
+"Вход через Windows Hello": "Sign in with Windows Hello",
+"Отпечаток пальца, лицо или PIN Windows вместо PIN браузера. Если Hello не сработает — спросим PIN браузера": "Fingerprint, face or Windows PIN instead of the browser PIN. If Hello fails, we'll ask for the browser PIN"
 }

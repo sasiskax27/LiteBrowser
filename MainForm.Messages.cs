@@ -114,7 +114,7 @@ sealed partial class MainForm
                 if (ns == null) return;
                 // Родительский контроль меняется только отдельно и с PIN-кодом
                 ns.ParentalEnabled = Cfg.ParentalEnabled; ns.ParentalPinHash = Cfg.ParentalPinHash;
-                ns.LockPinHash = Cfg.LockPinHash; // пароль на браузер меняется только через lock:set
+                ns.LockPinHash = Cfg.LockPinHash; ns.LockHello = Cfg.LockHello; // пароль на браузер меняется только через lock:*
                 ns.ParentalAdult = Cfg.ParentalAdult; ns.ParentalBlocked = Cfg.ParentalBlocked.ToList();
                 bool wantBlocklist = ns.ExtendedBlocklist && ns.BlockAds && Blocklist.ExtendedCount == 0;
                 bool listsChanged = AdBlock.Lists.Any(l => AdBlock.Enabled(ns, l.Id) != AdBlock.Enabled(Cfg, l.Id));
@@ -387,9 +387,21 @@ sealed partial class MainForm
                 Post(core, new { type = "lockResult", ok = true, enabled = true, text = L.T("Пароль на браузер включён") });
                 break;
             }
+            case "lock:hello":
+            {
+                bool on = root.TryGetProperty("on", out var hv) && hv.ValueKind == JsonValueKind.True;
+                if (!on) { CopyAndSave(x => x.LockHello = false); Post(core, new { type = "lockResult", ok = true, enabled = AppLock.Enabled, hello = false, text = L.T("Вход через Windows Hello выключен") }); break; }
+                if (!AppLock.Enabled) { Post(core, new { type = "lockResult", ok = false, text = L.T("Сначала включите PIN — он нужен, если Windows Hello не сработает") }); break; }
+                // Включаем только после успешной проверки — так видно, что Hello настроен и работает
+                var r = await WindowsHello.VerifyAsync(Handle, L.T("Подтвердите, что это вы"));
+                if (r != WindowsHello.Result.Verified) { Post(core, new { type = "lockResult", ok = false, text = WindowsHello.Describe(r) }); break; }
+                CopyAndSave(x => x.LockHello = true);
+                Post(core, new { type = "lockResult", ok = true, enabled = true, hello = true, text = L.T("Вход через Windows Hello включён") });
+                break;
+            }
             case "lock:clear":
                 if (AppLock.Enabled && !AppLock.Check(Str("old"))) { Post(core, new { type = "lockResult", ok = false, text = L.T("Неверный текущий PIN-код") }); break; }
-                CopyAndSave(x => x.LockPinHash = "");
+                CopyAndSave(x => { x.LockPinHash = ""; x.LockHello = false; });
                 Post(core, new { type = "lockResult", ok = true, enabled = false, text = L.T("Пароль на браузер выключен") });
                 break;
 

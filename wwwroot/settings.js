@@ -231,7 +231,10 @@ function renderLock(on) {
   $('lockOld').classList.toggle('hidden', !on);
   $('lockSet').textContent = on ? 'Сменить PIN' : 'Включить';
   $('lockClear').classList.toggle('hidden', !on);
+  $('helloRow').classList.toggle('hidden', !on);
+  $('helloBtn').textContent = state.lockHello ? 'Выключить' : 'Включить';
 }
+$('helloBtn').onclick = () => wv.postMessage({ type: 'lock:hello', on: !state.lockHello });
 $('lockSet').onclick = () => wv.postMessage({ type: 'lock:set', pin: $('lockNew').value, old: $('lockOld').value });
 $('lockClear').onclick = () => wv.postMessage({ type: 'lock:clear', old: $('lockOld').value });
 
@@ -312,7 +315,7 @@ if (wv) {
   wv.addEventListener('message', e => {
     const m = e.data;
     if (m.type === 'settings') { state = m.settings; info = m; render(); renderLock(!!state.lockPinHash); }
-    else if (m.type === 'lockResult') { toast(m.text); if (m.ok) { $('lockOld').value = ''; $('lockNew').value = ''; renderLock(m.enabled); } }
+    else if (m.type === 'lockResult') { toast(m.text); if (m.hello !== undefined) state.lockHello = m.hello; if (m.ok) { $('lockOld').value = ''; $('lockNew').value = ''; if (m.enabled === false) state.lockHello = false; renderLock(m.enabled); } }
     else if (m.type === 'torStatus') renderTor(m);
     else if (m.type === 'torError') { $('torState').textContent = 'Ошибка: ' + m.text; }
     else if (m.type === 'saved') { if (info) { info.restartNeeded = m.restartNeeded; renderProxy(); } toast('Сохранено'); }

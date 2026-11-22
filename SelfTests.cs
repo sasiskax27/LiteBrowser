@@ -255,6 +255,9 @@ static class DevToolsSelfTest
                 var issue = CrashReport.IssueUrl(report);
                 Check("сбой: отчёт без личных данных", report.Contains("%USERPROFILE%") && !report.Contains(Environment.UserName, StringComparison.OrdinalIgnoreCase) && report.Contains("InvalidOperationException"));
                 Check("сбой: ссылка на обращение", issue.StartsWith("https://github.com/") && issue.Contains("InvalidOperationException") && issue.Length < 32000, $"{issue.Length} символов");
+                // Windows Hello: системный компонент находится без пакета Windows SDK (само окно в тесте не показываем)
+                bool helloOk = WindowsHello.Supported;
+                Check("Windows Hello: проверка доступности не падает", true, helloOk ? "компонент есть" : "компонента нет (сервер/старая Windows)");
                 // Диспетчер задач: процесс страницы находится по главному фрейму вкладки
                 var procs = await env.GetProcessExtendedInfosAsync();
                 var mine = procs.FirstOrDefault(p => p.AssociatedFrameInfos.Any(f => f.ParentFrameInfo == null && f.FrameId == core.FrameId));

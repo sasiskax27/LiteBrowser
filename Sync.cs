@@ -154,7 +154,7 @@ static class Sync
                         r.SyncEnabled = s.SyncEnabled; r.SyncFolder = s.SyncFolder; r.SyncHistory = s.SyncHistory; r.SyncLast = s.SyncLast;
                         r.SidePanelOpen = s.SidePanelOpen; r.SidePanelWidth = s.SidePanelWidth; r.DefaultPromptDismissed = s.DefaultPromptDismissed;
                         r.SkippedUpdate = s.SkippedUpdate; r.ImportOffered = s.ImportOffered;
-                        r.LockPinHash = s.LockPinHash; r.TorEnabled = s.TorEnabled; r.TorBridges = s.TorBridges;
+                        r.LockPinHash = s.LockPinHash; r.LockHello = s.LockHello; r.TorEnabled = s.TorEnabled; r.TorBridges = s.TorBridges;
                         AppEnv.UpdateSettings(r);
                         s = AppEnv.Settings;
                         settingsApplied = true;
