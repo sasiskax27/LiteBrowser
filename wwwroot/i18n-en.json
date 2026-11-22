@@ -776,5 +776,10 @@
 "Переводчик": "Translate",
 "Не удалось перевести — нет связи с переводчиком": "Couldn't translate — no connection to the translator",
 "Перевод выделенного текста": "Translate selected text",
-"Выделите слово или фразу — рядом появится кнопка «Перевести». Текст уходит в Google Переводчик только по клику": "Select a word or phrase and a “Translate” button appears next to it. The text is sent to Google Translate only when you click"
+"Выделите слово или фразу — рядом появится кнопка «Перевести». Текст уходит в Google Переводчик только по клику": "Select a word or phrase and a “Translate” button appears next to it. The text is sent to Google Translate only when you click",
+"📑 Пересказать PDF": "📑 Summarize PDF",
+"Откройте PDF во вкладке": "Open a PDF in a tab",
+"В PDF выделение недоступно — задайте вопрос по документу": "Selection isn't available in PDFs — ask a question about the document",
+"В этом PDF нет текста (скорее всего, это сканы страниц)": "This PDF has no text (probably scanned pages)",
+"Не удалось прочитать PDF: ": "Couldn't read the PDF: "
 }

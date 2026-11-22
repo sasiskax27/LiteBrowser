@@ -138,6 +138,21 @@ sealed partial class MainForm
             (context, title) = action == "tabs" ? await TabsContext(budget) : (HistoryContext(prompt, budget), "История");
             if (context.Length == 0) { Post(page, new { type = "aiError", text = action == "tabs" ? "Нет открытых сайтов" : "В истории ничего похожего не нашлось" }); return; }
         }
+        else if (needsPage && active?.Core is { } pdfCore && (pdfCore.Source.StartsWith("http") || pdfCore.Source.StartsWith("file:")) && await PdfContext.IsPdfAsync(pdfCore))
+        {
+            // PDF во вкладке: текст берём из самого документа
+            bool selAction = action is "explain" or "translate" or "rewrite";
+            if (selAction) { Post(page, new { type = "aiError", text = L.T("В PDF выделение недоступно — задайте вопрос по документу") }); return; }
+            try
+            {
+                int budget = s.AiProvider == "local" ? 9000 : 60000;
+                var (ptitle, ptext, pages) = await PdfContext.ReadAsync(pdfCore.Source, budget);
+                if (ptext.Trim().Length == 0) { Post(page, new { type = "aiError", text = L.T("В этом PDF нет текста (скорее всего, это сканы страниц)") }); return; }
+                title = ptitle.Length > 0 ? ptitle : (active?.Title ?? "PDF");
+                context = $"<page>\nPDF-документ: {title}\nСтраниц: {pages}\nАдрес: {pdfCore.Source}\n\n{ptext}\n</page>";
+            }
+            catch (Exception ex) { Post(page, new { type = "aiError", text = L.T("Не удалось прочитать PDF: ") + ex.Message }); return; }
+        }
         else if (needsPage && active?.Core is { } tabCore && tabCore.Source.StartsWith("http"))
         {
             try

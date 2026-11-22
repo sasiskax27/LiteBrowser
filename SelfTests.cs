@@ -299,6 +299,18 @@ static class DevToolsSelfTest
                 }
                 catch (Exception ex) { Check("перевод: переводчик доступен", false, ex.Message); }
 
+                // PDF для ИИ: создаём документ и читаем текст обратно
+                {
+                    var builder = new UglyToad.PdfPig.Writer.PdfDocumentBuilder();
+                    var font = builder.AddStandard14Font(UglyToad.PdfPig.Fonts.Standard14Fonts.Standard14Font.Helvetica);
+                    var pg = builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
+                    pg.AddText("LiteBrowser PDF test: quarterly revenue grew 42 percent.", 12, new UglyToad.PdfPig.Core.PdfPoint(50, 750), font);
+                    var pg2 = builder.AddPage(UglyToad.PdfPig.Content.PageSize.A4);
+                    pg2.AddText("Conclusion: the plan works.", 12, new UglyToad.PdfPig.Core.PdfPoint(50, 750), font);
+                    var (ptitle, ptext, pcount) = PdfContext.Extract(builder.Build(), 5000);
+                    Check("PDF: текст и страницы прочитаны", pcount == 2 && ptext.Contains("42 percent") && ptext.Contains("[стр. 2]"), ptext.Replace('\n', ' '));
+                }
+
                 dev.OnNavigation("https://example.org/");
                 Check("переход очищает журнал сети", dev.Net.Count == 0);
                 dev.Detach();
