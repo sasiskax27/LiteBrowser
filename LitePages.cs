@@ -26,6 +26,7 @@ static class LitePages
     public const string Security = Prefix + "security.html";
     public const string DevTools = Prefix + "devtools.html";
     public const string OfflinePage = Prefix + "offline.html";
+    public const string ExtPanel = Prefix + "ext-panel.html";
 
     public static CoreWebView2WebResourceResponse Response(CoreWebView2Environment env, string uri)
     {

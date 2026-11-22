@@ -89,7 +89,8 @@ sealed partial class MainForm
         if (msgType.StartsWith("ext:"))
         {
             // Управление расширениями — только со страницы расширений
-            if (core.Source.StartsWith(LitePages.ExtensionsPage, StringComparison.Ordinal)) await HandleExtensionMessage(core, msgType, root);
+            if (core.Source.StartsWith(LitePages.ExtensionsPage, StringComparison.Ordinal) || core.Source.StartsWith(LitePages.ExtPanel, StringComparison.Ordinal))
+                await HandleExtensionMessage(core, msgType, root);
             return;
         }
         switch (msgType)

@@ -465,7 +465,7 @@
 "Генератор паролей": "Password generator",
 "Длина:": "Length:",
 "Спецсимволы (!@#$%…)": "Symbols (!@#$%…)",
-"Ещё": "Another",
+"Ещё": "More",
 "Скопировать": "Copy",
 "Настройки менеджера паролей": "Password manager settings",
 "Перенос паролей из другого браузера": "Import passwords from another browser",
@@ -705,5 +705,15 @@
 "Ярлыки и браузер по умолчанию": "Shortcuts and default browser",
 "Очистка истории, cookies и кэша": "Clearing history, cookies and cache",
 "Версия и движок": "Version and engine",
-"Название профиля (например, «Работа»)": "Profile name (e.g. “Work”)"
+"Название профиля (например, «Работа»)": "Profile name (e.g. “Work”)",
+"Назад к списку": "Back to list",
+"Управление расширениями": "Manage extensions",
+"Найти расширения в Chrome Web Store": "Find extensions in Chrome Web Store",
+"Открыть окно расширения во вкладке": "Open extension window in a tab",
+"Настройки расширения": "Extension settings",
+"Нажмите, чтобы открыть": "Click to open",
+"Работает на страницах": "Works on pages",
+"Включить": "Turn on",
+"Открыть окно расширения": "Open extension window",
+"Значки расширений на панели WebView2 не показывает — поэтому они собраны здесь.": "WebView2 doesn't show extension icons on the toolbar, so they're collected here."
 }

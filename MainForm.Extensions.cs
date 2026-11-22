@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Text.Json;
@@ -136,8 +136,8 @@ sealed partial class MainForm
         {
             await Extensions.Install(profile, info);
             Status($"«{info.Name}» установлено");
-            if (page == null)
-                MessageBox.Show(this, $"«{info.Name}» установлено.\n\nОткрыть окно и настройки расширения можно в меню ⋯ → «Расширения».", "Расширения");
+            // Показываем новое расширение в окошке под кнопкой-пазлом
+            if (page == null) BeginInvoke(ShowExtPanel);
             if (page != null) await SendExtensions(page);
         }
         catch (Exception ex)
@@ -145,6 +145,18 @@ sealed partial class MainForm
             Status(ex.Message, false);
             if (page == null) MessageBox.Show(this, ex.Message, "Не удалось установить расширение", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
+    }
+
+    void ShowExtPanel()
+    {
+        if (Incognito) return;
+        if (extPanel is { Visible: true }) { extPanel.Hide(); return; }
+        if (extPanel == null || extPanel.IsDisposed)
+        {
+            extPanel = new ExtensionsPanel(tips, HandleMessage);
+            extPanel.OpenInTab += u => _ = AddTab(u);
+        }
+        extPanel.ShowBelow(extBtn);
     }
 
     async Task SendExtensions(CoreWebView2 page)
@@ -156,6 +168,8 @@ sealed partial class MainForm
         foreach (var ext in await profile.GetBrowserExtensionsAsync())
         {
             meta.TryGetValue(ext.Id, out var info);
+            // Служебные расширения самого движка (буфер обмена, просмотр PDF) не показываем
+            if (info == null && ext.Name.StartsWith("Microsoft", StringComparison.OrdinalIgnoreCase)) continue;
             list.Add(new
             {
                 id = ext.Id, name = info?.Name ?? ext.Name, enabled = ext.IsEnabled,
@@ -198,7 +212,19 @@ sealed partial class MainForm
                 await SendExtensions(core);
                 Post(core, new { type = "extStatus", text = "Расширение удалено", ok = true });
                 break;
+            case "ext:popup":
+                var pid = Str("id");
+                if (!System.Text.RegularExpressions.Regex.IsMatch(pid, "^[a-p]{32}$")) break;
+                var pinfo = Extensions.LoadMeta().GetValueOrDefault(pid);
+                if (string.IsNullOrEmpty(pinfo?.Popup)) break;
+                extPanel?.ShowPopup(pinfo.Name, $"chrome-extension://{pid}/{pinfo.Popup.TrimStart('/')}");
+                break;
+            case "ext:manage":
+                extPanel?.Hide();
+                OpenLitePage(LitePages.ExtensionsPage);
+                break;
             case "ext:open":
+                extPanel?.Hide();
                 var id = Str("id");
                 if (!System.Text.RegularExpressions.Regex.IsMatch(id, "^[a-p]{32}$")) break;
                 var info = Extensions.LoadMeta().GetValueOrDefault(id);
@@ -207,6 +233,7 @@ sealed partial class MainForm
                 _ = AddTab($"chrome-extension://{id}/{path.TrimStart('/')}");
                 break;
             case "ext:store":
+                extPanel?.Hide();
                 var storeUrl = Str("store") switch
                 {
                     "edge" => "https://microsoftedge.microsoft.com/addons/category/Edge-Extensions",

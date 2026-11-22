@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<title>Расширения</title>
+<link rel="stylesheet" href="common.css">
+<style>
+  html, body { height: 100%; overflow: hidden; }
+  body { background: #20222a; display: flex; flex-direction: column; font-size: 13px; }
+  .list { flex: 1; overflow-y: auto; padding: 4px 8px; }
+  .ext { display: flex; align-items: center; gap: 10px; padding: 8px 8px; border-radius: 12px; transition: background .15s; }
+  .ext:hover { background: rgba(255,255,255,.05); }
+  .ext.off .ico, .ext.off .t { opacity: .5; }
+  .ico { width: 32px; height: 32px; border-radius: 9px; flex: none; display: grid; place-items: center; background: rgba(255,255,255,.07); overflow: hidden; }
+  .ico img { width: 24px; height: 24px; }
+  .ico .icon { color: var(--dim); font-size: 15px; }
+  .t { flex: 1; min-width: 0; cursor: default; }
+  .t b { display: block; font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .t span { display: block; color: var(--dim); font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+  .ext.can .t { cursor: pointer; }
+  .ib { width: 30px; height: 30px; border-radius: 8px; border: 0; background: none; color: var(--dim); cursor: pointer; flex: none;
+        font-family: "Segoe Fluent Icons", "Segoe MDL2 Assets"; font-size: 13px; }
+  .ib:hover { background: rgba(255,255,255,.09); color: var(--text); }
+  .ib:disabled { opacity: .3; cursor: default; background: none; }
+  .switch.sm { width: 36px; height: 20px; }
+  .switch.sm .slider::before { width: 14px; height: 14px; }
+  .switch.sm input:checked + .slider::before { transform: translateX(16px); }
+  .menu { position: fixed; z-index: 9; background: #2a2d38; border: 1px solid var(--line); border-radius: 12px; padding: 5px; min-width: 200px;
+          box-shadow: 0 14px 34px rgba(0,0,0,.45); display: none; }
+  .menu.show { display: block; }
+  .menu button { display: flex; gap: 10px; align-items: center; width: 100%; font: inherit; font-size: 13px; color: var(--text); background: none; border: 0;
+                 padding: 8px 10px; border-radius: 8px; cursor: pointer; text-align: left; }
+  .menu button .icon { width: 16px; color: var(--dim); }
+  .menu button:hover { background: rgba(255,255,255,.07); }
+  .menu button.danger { color: var(--bad); }
+  .menu button.danger .icon { color: var(--bad); }
+  .empty { color: var(--dim); text-align: center; padding: 40px 20px; line-height: 1.6; }
+  .foot { flex: none; border-top: 1px solid var(--line); padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+  .foot button { display: flex; gap: 10px; align-items: center; font: inherit; font-size: 13px; color: var(--text); background: none; border: 0;
+                 padding: 8px 10px; border-radius: 10px; cursor: pointer; text-align: left; }
+  .foot button .icon { color: var(--dim); width: 18px; }
+  .foot button:hover { background: rgba(255,255,255,.06); }
+  .hint { color: var(--dim); font-size: 11.5px; padding: 6px 12px 2px; line-height: 1.45; }
+</style>
+</head>
+<body>
+  <div class="list" id="list"><div class="empty">Загрузка…</div></div>
+  <div class="foot">
+    <button id="manage"><span class="icon">&#xE713;</span>Управление расширениями</button>
+    <button id="store"><span class="icon">&#xE719;</span>Найти расширения в Chrome Web Store</button>
+  </div>
+  <div class="menu" id="menu"></div>
+<script src="ext-panel.js"></script>
+</body>
+</html>

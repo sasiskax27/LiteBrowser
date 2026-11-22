@@ -40,7 +40,8 @@ sealed partial class MainForm : Form
     readonly SuggestPopup suggest = new();
     readonly SidePanel sidePanel;
     readonly Splitter splitter = new() { Dock = DockStyle.Right, Visible = false, MinSize = 200, MinExtra = 300 };
-    readonly IconButton sideBtn;
+    readonly IconButton sideBtn, extBtn;
+    ExtensionsPanel? extPanel;
     FindBar findBar = null!;
     CancellationTokenSource? suggestCts;
     (string origin, string user, string pass, DateTime time)? pendingCapture;
@@ -150,9 +151,11 @@ sealed partial class MainForm : Form
         address.Box.MouseUp += (_, _) => { if (selectOnClick && address.Box.SelectionLength == 0) address.Box.SelectAll(); selectOnClick = false; };
         address.Box.Leave += (_, _) => selectOnClick = false;
 
+        extBtn = new IconButton("", "Расширения", tips);
+        extBtn.Click += (_, _) => ShowExtPanel();
         sideBtn = new IconButton("", "Боковая панель (Ctrl+B)", tips);
         sideBtn.Click += (_, _) => ToggleSidePanel(!sidePanel!.Visible);
-        toolbar.Controls.AddRange(new Control[] { back, forward, reload, home, address, installBtn, zoomBtn, proxyBtn, downloadsBtn, sideBtn, menuBtn });
+        toolbar.Controls.AddRange(new Control[] { back, forward, reload, home, address, installBtn, zoomBtn, proxyBtn, downloadsBtn, extBtn, sideBtn, menuBtn });
         toolbar.Resize += (_, _) => LayoutToolbar();
         toolbar.Paint += PaintProgress;
 
@@ -213,10 +216,10 @@ sealed partial class MainForm : Form
         int s = Theme.S(36), y = (toolbar.Height - s) / 2, x = Theme.S(10);
         foreach (var b in new[] { back, forward, reload, home }) { b.SetBounds(x, y, s, s); x += s + Theme.S(2); }
         int right = toolbar.Width - Theme.S(10);
-        foreach (var b in new[] { menuBtn, sideBtn, downloadsBtn, proxyBtn, zoomBtn, installBtn })
+        foreach (var b in new[] { menuBtn, sideBtn, extBtn, downloadsBtn, proxyBtn, zoomBtn, installBtn })
         {
             // Visible до показа окна всегда false, поэтому храним желаемое состояние отдельно
-            bool want = b == downloadsBtn ? showDownloads : b == proxyBtn ? showProxy : b == installBtn ? showInstall : true;
+            bool want = b == downloadsBtn ? showDownloads : b == proxyBtn ? showProxy : b == installBtn ? showInstall : b == extBtn ? !Incognito : true;
             b.Visible = want;
             if (!want) continue;
             int w = b == zoomBtn ? Theme.S(58) : b == installBtn ? Theme.S(200) : s;
