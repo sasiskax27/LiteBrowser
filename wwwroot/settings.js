@@ -176,7 +176,7 @@ function renderLookAndSync() {
     b.onclick = () => { state.accent = a.id; save(); render(); };
     acc.appendChild(b);
   }
-  $('wallState').textContent = state.wallpaper ? 'Установлена своя картинка' : 'Своя картинка вместо фона. Плитки сайтов меняются кнопкой «Изменить» на самой стартовой странице';
+  $('wallState').textContent = state.wallpaper ? (state.wallpaperVideo ? 'Установлено своё видео' : 'Установлена своя картинка') : 'Своя картинка вместо фона. Плитки сайтов меняются кнопкой «Изменить» на самой стартовой странице';
   $('removeWall').style.display = state.wallpaper ? '' : 'none';
 
   const sy = info.sync;

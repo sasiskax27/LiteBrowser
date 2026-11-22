@@ -119,8 +119,10 @@ if (wv) {
     $('q').placeholder = 'Поиск в ' + name + ' или адрес сайта';
     $('import').classList.toggle('show', !!m.importSuggest);
     if (!editing) { tiles = (m.settings.homeTiles || []).map(t => ({ name: t.name, url: t.url })); renderTiles(); }
-    if (m.settings.wallpaper) { document.body.classList.add('wall'); document.body.style.backgroundImage = `url(wallpaper?v=${m.settings.wallpaperVersion})`; }
+    const img = m.settings.wallpaper && !m.settings.wallpaperVideo;
+    if (img) { document.body.classList.add('wall'); document.body.style.backgroundImage = `url(wallpaper?v=${m.settings.wallpaperVersion})`; }
     else { document.body.classList.remove('wall'); document.body.style.backgroundImage = ''; }
+    HomeBg.apply(m.settings);
     $('foot').innerHTML = item('Только HTTPS', m.settings.httpsOnly) +
       item('Блокировка рекламы и трекеров', m.settings.blockAds) + item('SmartScreen', true) +
       (m.proxyRunning ? item('Обход блокировок', true) : '') +

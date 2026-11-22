@@ -895,5 +895,17 @@
 "Чёрная": "Black",
 "Полночь": "Midnight",
 "Лес": "Forest",
-"Тёплая": "Warm"
+"Тёплая": "Warm",
+"Картинка или видео для стартовой страницы": "Picture or video for the start page",
+"Картинки и видео": "Pictures and videos",
+"Видео больше 80 МБ": "The video is larger than 80 MB",
+"Картинка больше 25 МБ": "The picture is larger than 25 MB",
+"Выбрать картинку или видео": "Choose a picture or video",
+"Живой фон стартовой страницы": "Live start page background",
+"Плавная анимация в цветах акцента, когда своих обоев нет. Не мешает: в фоновых вкладках не рисуется": "A smooth animation in your accent colors when there's no wallpaper. It pauses in background tabs",
+"Нет": "None",
+"Аврора": "Aurora",
+"Звёзды": "Stars",
+"Волны": "Waves",
+"Установлено своё видео": "Your video is set"
 }

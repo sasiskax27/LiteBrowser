@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self'">
 <title>Новая вкладка</title>
 <link rel="stylesheet" href="common.css">
 <style>
@@ -68,7 +68,10 @@
   .edit-tiles .icon { font-size: 11px; margin-right: 4px; }
   body.wall { background-size: cover !important; background-position: center !important; background-attachment: fixed !important; }
   body.wall::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,.35); z-index: -1; }
-  body.wall .glow { display: none; }
+  body.wall .glow, body.live .glow { display: none; }
+  .livebg { position: fixed; inset: 0; width: 100vw; height: 100vh; object-fit: cover; z-index: -2; pointer-events: none; }
+  body.live::before { content: ''; position: fixed; inset: 0; background: rgba(0,0,0,.25); z-index: -1; }
+  body.live .time, body.live .date, body.live .hello, body.live .tile, body.live .foot { text-shadow: 0 2px 12px rgba(0,0,0,.6); }
   body.wall .time, body.wall .date, body.wall .hello, body.wall .tile, body.wall .foot { text-shadow: 0 2px 12px rgba(0,0,0,.6); }
   @media (max-width: 760px) { .tiles { grid-template-columns: repeat(3, 100px); } }
 </style>
@@ -102,6 +105,7 @@
 </div>
 
 <div class="foot" id="foot"></div>
+<script src="homebg.js"></script>
 <script src="home.js"></script>
 </body>
 </html>

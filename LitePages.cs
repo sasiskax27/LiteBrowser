@@ -39,7 +39,9 @@ static class LitePages
             var wp = Path.Combine(AppEnv.DataDir, "wallpaper.img");
             if (!File.Exists(wp)) return env.CreateWebResourceResponse(null, 404, "Not Found", "");
             var bytes = File.ReadAllBytes(wp);
-            string mime = bytes.Length > 3 && bytes[0] == 0x89 && bytes[1] == 'P' ? "image/png"
+            string mime = bytes.Length > 11 && bytes[4] == 'f' && bytes[5] == 't' && bytes[6] == 'y' && bytes[7] == 'p' ? "video/mp4"
+                : bytes.Length > 3 && bytes[0] == 0x1A && bytes[1] == 0x45 && bytes[2] == 0xDF && bytes[3] == 0xA3 ? "video/webm"
+                : bytes.Length > 3 && bytes[0] == 0x89 && bytes[1] == 'P' ? "image/png"
                 : bytes.Length > 3 && bytes[0] == 'R' && bytes[1] == 'I' ? "image/webp"
                 : bytes.Length > 3 && bytes[0] == 'G' && bytes[1] == 'I' ? "image/gif" : "image/jpeg";
             return env.CreateWebResourceResponse(new MemoryStream(bytes), 200, "OK", $"Content-Type: {mime}\r\nCache-Control: no-store");

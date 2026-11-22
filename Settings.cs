@@ -147,6 +147,8 @@ sealed class AppSettings
     public string Accent { get; set; } = "blue";     // blue | purple | green | orange | pink | red
     public bool Wallpaper { get; set; } = false;
     public int WallpaperVersion { get; set; }
+    public bool WallpaperVideo { get; set; }            // обои — видео (mp4/webm), крутится без звука
+    public string HomeAnim { get; set; } = "";          // живой фон стартовой: "" | aurora | stars | waves
     public List<HomeTile> HomeTiles { get; set; } = HomeTile.Defaults();
     // Обновления и браузер по умолчанию
     public bool AutoUpdate { get; set; } = true;
@@ -173,6 +175,7 @@ sealed class AppSettings
         if (FreezeMinutes is not (0 or 5 or 15 or 30 or 60)) FreezeMinutes = 15;
         if (!UiScales.Contains(UiScale)) UiScale = 100;
         SidePanelWidth = Math.Clamp(SidePanelWidth, 260, 1000);
+        if (HomeAnim is not ("" or "aurora" or "stars" or "waves")) HomeAnim = "";
         if (UiTheme is not ("dark" or "light" or "auto") && !Theme.ExtraThemes.Contains(UiTheme)) UiTheme = "dark";
         if (TranslateService is not ("google" or "yandex")) TranslateService = "google";
         if (AiProvider is not ("local" or "ollama" or "openai")) AiProvider = "local";

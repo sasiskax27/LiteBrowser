@@ -18,7 +18,7 @@ sealed partial class MainForm
     /// <summary>Настройки для гостевого окна: только оформление и поисковик, без ваших плиток и данных.</summary>
     static AppSettings GuestSettings() => new()
     {
-        UiTheme = Cfg.UiTheme, Accent = Cfg.Accent, Engine = Cfg.Engine, Language = Cfg.Language, HomeWidgets = Cfg.HomeWidgets,
+        UiTheme = Cfg.UiTheme, Accent = Cfg.Accent, Engine = Cfg.Engine, Language = Cfg.Language, HomeWidgets = Cfg.HomeWidgets, HomeAnim = Cfg.HomeAnim,
         WidgetCity = Cfg.WidgetCity, ImportOffered = true,
     };
 
@@ -360,18 +360,19 @@ sealed partial class MainForm
             case "pickWallpaper":
                 BeginInvoke(() =>
                 {
-                    using var dlg = new OpenFileDialog { Title = "Картинка для стартовой страницы", Filter = "Изображения|*.jpg;*.jpeg;*.png;*.webp;*.gif" };
+                    using var dlg = new OpenFileDialog { Title = L.T("Картинка или видео для стартовой страницы"), Filter = L.T("Картинки и видео") + "|*.jpg;*.jpeg;*.png;*.webp;*.gif;*.mp4;*.webm" };
                     if (dlg.ShowDialog(this) != DialogResult.OK) return;
-                    if (new FileInfo(dlg.FileName).Length > 25_000_000) { Post(core, new { type = "error", text = "Картинка больше 25 МБ" }); return; }
+                    bool video = Path.GetExtension(dlg.FileName).ToLowerInvariant() is ".mp4" or ".webm";
+                    if (new FileInfo(dlg.FileName).Length > (video ? 80_000_000 : 25_000_000)) { Post(core, new { type = "error", text = video ? L.T("Видео больше 80 МБ") : L.T("Картинка больше 25 МБ") }); return; }
                     File.Copy(dlg.FileName, Path.Combine(AppEnv.DataDir, "wallpaper.img"), true);
-                    CopyAndSave(x => { x.Wallpaper = true; x.WallpaperVersion++; });
+                    CopyAndSave(x => { x.Wallpaper = true; x.WallpaperVideo = video; x.WallpaperVersion++; });
                     Post(core, new { type = "done", text = "Обои установлены — откройте новую вкладку" });
                     SendSettings(core);
                 });
                 break;
             case "removeWallpaper":
                 try { File.Delete(Path.Combine(AppEnv.DataDir, "wallpaper.img")); } catch { }
-                CopyAndSave(x => x.Wallpaper = false);
+                CopyAndSave(x => { x.Wallpaper = false; x.WallpaperVideo = false; });
                 SendSettings(core);
                 break;
             // ---- Пароль на браузер ----
