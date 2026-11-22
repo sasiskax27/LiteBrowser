@@ -91,6 +91,10 @@ sealed class AppSettings
     public bool BuiltInDownloads { get; set; } = true;
     // Внешний вид
     public string Language { get; set; } = "auto";      // auto | ru | en
+    public Dictionary<string, int> SiteZoom { get; set; } = new();   // сайт → масштаб, %
+    public bool ForceDark { get; set; } = false;        // тёмная тема для всех сайтов
+    public List<string> DarkSites { get; set; } = new();     // тёмная тема для этих сайтов (если общая выключена)
+    public List<string> DarkExclude { get; set; } = new();   // без тёмной темы (если общая включена)
     public string SiteTheme { get; set; } = "auto";     // auto | dark | light
     // Менеджер паролей
     public bool PasswordManager { get; set; } = true;

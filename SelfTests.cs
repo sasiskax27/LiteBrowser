@@ -257,6 +257,29 @@ static class DevToolsSelfTest
                 var stems = MainForm.HistoryStems("статья про видеокарты на прошлой неделе");
                 Check("история: основы слов", stems.SequenceEqual(new[] { "видео" }), string.Join(",", stems));
 
+                // Тёмная тема для сайта: стиль появляется на светлой странице и не появляется на чужом сайте
+                var back2 = new TaskCompletionSource<bool>();
+                void OnBack(object? s, CoreWebView2NavigationCompletedEventArgs e) => back2.TrySetResult(e.IsSuccess);
+                core.NavigationCompleted += OnBack;
+                core.Navigate("https://example.com/");
+                await Task.WhenAny(back2.Task, Task.Delay(20_000));
+                core.NavigationCompleted -= OnBack;
+                // example.com сейчас сам тёмный — делаем страницу светлой, чтобы проверить затемнение
+                await core.ExecuteScriptAsync("document.documentElement.style.background = '#fff'; document.body.style.background = '#fff'; document.body.style.color = '#111';");
+                await core.ExecuteScriptAsync(MainForm.DarkScriptFor(false, new() { "example.com" }, new()));
+                await Task.Delay(300);
+                var darkOn = await core.ExecuteScriptAsync("!!document.getElementById('lite-dark')");
+                var bgLum = await core.ExecuteScriptAsync("getComputedStyle(document.body).backgroundColor");
+                Check("тёмная тема: включается для светлого сайта из списка", darkOn == "true", "фон страницы " + bgLum);
+                await core.ExecuteScriptAsync("document.getElementById('lite-dark')?.remove(); document.documentElement.style.background = '#111'; document.body.style.background = '#111';");
+                await core.ExecuteScriptAsync(MainForm.DarkScriptFor(false, new() { "example.com" }, new()));
+                await Task.Delay(300);
+                Check("тёмная тема: не трогает сайт, который уже тёмный", await core.ExecuteScriptAsync("!!document.getElementById('lite-dark')") == "false");
+                await core.ExecuteScriptAsync(MainForm.DarkScriptFor(false, new() { "other.org" }, new()));
+                Check("тёмная тема: не трогает другие сайты", await core.ExecuteScriptAsync("!!document.getElementById('lite-dark')") == "false");
+                await core.ExecuteScriptAsync(MainForm.DarkScriptFor(true, new(), new() { "example.com" }));
+                Check("тёмная тема: исключение при общей тёмной теме", await core.ExecuteScriptAsync("!!document.getElementById('lite-dark')") == "false");
+
                 dev.OnNavigation("https://example.org/");
                 Check("переход очищает журнал сети", dev.Net.Count == 0);
                 dev.Detach();

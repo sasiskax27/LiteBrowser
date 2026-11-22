@@ -715,5 +715,17 @@
 "Работает на страницах": "Works on pages",
 "Включить": "Turn on",
 "Открыть окно расширения": "Open extension window",
-"Значки расширений на панели WebView2 не показывает — поэтому они собраны здесь.": "WebView2 doesn't show extension icons on the toolbar, so they're collected here."
+"Значки расширений на панели WebView2 не показывает — поэтому они собраны здесь.": "WebView2 doesn't show extension icons on the toolbar, so they're collected here.",
+"Тёмная тема для этого сайта": "Dark mode for this site",
+"✓  Тёмная тема для этого сайта": "✓  Dark mode for this site",
+"●  Тёмная тема для этого сайта": "●  Dark mode for this site",
+"○  Тёмная тема для этого сайта": "○  Dark mode for this site",
+"Включить тёмную тему для всех сайтов": "Turn on dark mode for all sites",
+"Выключить тёмную тему для всех сайтов": "Turn off dark mode for all sites",
+"Тёмная тема для всех сайтов": "Dark mode for all sites",
+"Даже для тех, у которых своей тёмной темы нет. Сайты, которые уже тёмные, не трогаются. Отдельный сайт — замок в адресной строке": "Even for sites without their own dark theme. Sites that are already dark are left alone. For a single site — the lock in the address bar",
+"Недавно закрытые": "Recently closed",
+"Пока ничего не закрывали": "Nothing closed yet",
+"Вернуть: ": "Restore: ",
+"Масштаб этого сайта: {n}% — сбросить": "This site's zoom: {n}% — reset"
 }

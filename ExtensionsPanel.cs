@@ -84,6 +84,13 @@ sealed class ExtensionsPanel : Form
         var env = await AppEnv.GetEnvironment();
         await view.EnsureCoreWebView2Async(env);
         var core = view.CoreWebView2;
+        // Escape закрывает окошко, даже когда фокус внутри страницы (клавиши получает движок, а не окно)
+        var field = typeof(WebView2).GetField("_coreWebView2Controller", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        if (field?.GetValue(view) is CoreWebView2Controller ctl)
+            ctl.AcceleratorKeyPressed += (_, e) =>
+            {
+                if (e.KeyEventKind == CoreWebView2KeyEventKind.KeyDown && e.VirtualKey == (uint)Keys.Escape) { e.Handled = true; BeginInvoke(Hide); }
+            };
         core.Settings.IsPasswordAutosaveEnabled = false;
         core.Settings.IsGeneralAutofillEnabled = false;
         core.AddWebResourceRequestedFilter(LitePages.Prefix + "*", CoreWebView2WebResourceContext.All);

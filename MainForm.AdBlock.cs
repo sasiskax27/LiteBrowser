@@ -64,6 +64,10 @@ sealed partial class MainForm
         menu.Items.Add(Theme.Item((level == -1 ? "●  " : "○  ") + "Ненадёжный — без JavaScript, окон и разрешений", () => SetLevel(-1)));
         menu.Items.Add(new ToolStripSeparator());
 
+        menu.Items.Add(Theme.Item((DarkFor(host) ? "●  " : "○  ") + "Тёмная тема для этого сайта", ToggleDarkForSite));
+        if (Cfg.SiteZoom.TryGetValue(PasswordTools.HostKey(host), out var sz))
+            menu.Items.Add(Theme.Item($"Масштаб этого сайта: {sz}% — сбросить", () => { CopyAndSave(x => x.SiteZoom.Remove(PasswordTools.HostKey(host))); ApplySiteZoom(tab); }));
+        menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(new ToolStripMenuItem(L.T("Разрешения")) { Enabled = false, Padding = new Padding(6, 4, 6, 2) });
         Cfg.SitePermissions.TryGetValue(key, out var perms);
         if (perms == null || perms.Count == 0)

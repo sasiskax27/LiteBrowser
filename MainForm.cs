@@ -308,8 +308,10 @@ sealed partial class MainForm : Form
             HookController(tab);
             Configure(tab, env);
             ApplyAdScripts(tab);
+            tab.ExpectedZoom = Cfg.PageZoom;
             tab.View.ZoomFactor = Cfg.PageZoom / 100.0;
-            tab.View.ZoomFactorChanged += (_, _) => { if (tab == active) UpdateZoomLabel(); };
+            tab.View.ZoomFactorChanged += (_, _) => OnZoomChanged(tab);
+            ApplyDarkScript(tab);
             var url = tab.PendingUrl;
             tab.PendingUrl = null;
             if (url != null) tab.Core.Navigate(url);
@@ -360,7 +362,7 @@ sealed partial class MainForm : Form
     void CloseTab(BrowserTab tab)
     {
         var url = tab.Core?.Source ?? tab.PendingUrl;
-        if (url != null && !url.StartsWith(LitePages.Home)) { closedTabs.Push(url); }
+        if (url != null && !url.StartsWith(LitePages.Home)) { closedTabs.Push(url); RememberClosed(tab, url); }
         if (tabs.Count == 1) { Close(); return; }
         if (tab.SplitWith is { } sp) { sp.SplitWith = null; tab.SplitWith = null; }
         int idx = tabs.IndexOf(tab);
@@ -632,7 +634,7 @@ sealed partial class MainForm : Form
             tab.BlockedHosts.Clear();
             tab.PopupsBlocked = 0;
             tab.HasLoginForm = false;
-            if (Uri.TryCreate(e.Uri, UriKind.Absolute, out var nu)) tab.PageHost = nu.Host;
+            if (Uri.TryCreate(e.Uri, UriKind.Absolute, out var nu)) { tab.PageHost = nu.Host; ApplySiteZoom(tab); }
             // Ненадёжный сайт — без JavaScript
             bool scripts = !Untrusted(tab.PageHost);
             if (core.Settings.IsScriptEnabled != scripts) core.Settings.IsScriptEnabled = scripts;
@@ -838,7 +840,8 @@ sealed partial class MainForm : Form
             t.Core.Profile.PreferredColorScheme = ColorScheme();
             ApplyFilters(t);
             ApplyAdScripts(t);
-            if (zoomChanged) t.View.ZoomFactor = Cfg.PageZoom / 100.0;
+            if (zoomChanged) ApplySiteZoom(t);
+            ApplyDarkScript(t);
         }
         if (Cfg.UiScale != appliedUiScale) ApplyScale();
         var themeSig = Cfg.UiTheme + "|" + Cfg.Accent;
@@ -1004,6 +1007,8 @@ sealed partial class MainForm : Form
         pageMenu.DropDownItems.Add(Theme.Item("Скриншот видимой части", () => _ = TakeScreenshot(false), "Ctrl+Shift+S", "\uE722"));
         pageMenu.DropDownItems.Add(Theme.Item("Скриншот всей страницы", () => _ = TakeScreenshot(true), null, "\uE722"));
         pageMenu.DropDownItems.Add(Theme.Item("QR-код страницы", ShowQr, null, "\uED14"));
+        if (active?.PageHost is { Length: > 0 } ph && ph != LitePages.Host)
+            pageMenu.DropDownItems.Add(Theme.Item((DarkFor(ph) ? "✓  " : "") + "Тёмная тема для этого сайта", ToggleDarkForSite, null, "\uE708"));
         pageMenu.DropDownItems.Add(new ToolStripSeparator());
         pageMenu.DropDownItems.Add(Theme.Item("Картинка в картинке", () => _ = PictureInPicture(), "Ctrl+Shift+V", "\uE8B9"));
         var speed = SubMenu("Скорость видео", "\uE768");
@@ -1020,7 +1025,7 @@ sealed partial class MainForm : Form
         var tools = SubMenu("Инструменты", "\uEC7A");
         tools.DropDownItems.Add(Theme.Item(sidePanel.Visible ? "Скрыть боковую панель" : "Боковая панель", () => ToggleSidePanel(!sidePanel.Visible), "Ctrl+B", "\uE8A0"));
         tools.DropDownItems.Add(Theme.Item(Cfg.ShowBookmarksBar ? "Скрыть панель закладок" : "Показать панель закладок", ToggleBookmarksBar, "Ctrl+Shift+B", "\uE728"));
-        tools.DropDownItems.Add(Theme.Item("Открыть закрытую вкладку", ReopenClosedTab, "Ctrl+Shift+T", "\uE81C"));
+        tools.DropDownItems.Add(RecentlyClosedMenu());
         tools.DropDownItems.Add(new ToolStripSeparator());
         tools.DropDownItems.Add(Theme.Item("Заметки и выделения", () => OpenLitePage(LitePages.Notes), null, "\uE8EC"));
         tools.DropDownItems.Add(Theme.Item("Сохранённые страницы", () => OpenLitePage(LitePages.OfflinePage), null, "\uE8B7"));

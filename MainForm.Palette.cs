@@ -1,4 +1,4 @@
-namespace LiteBrowser;
+﻿namespace LiteBrowser;
 
 /// <summary>Палитра команд Ctrl+K.</summary>
 sealed partial class MainForm
@@ -44,6 +44,9 @@ sealed partial class MainForm
         Cmd("", "Скриншот всей страницы", () => _ = TakeScreenshot(true), "", "screenshot снимок полный");
         Cmd("", "Скачать видео или аудио со страницы", () => _ = DownloadMedia(), "", "download media");
         Cmd("", "QR-код страницы", ShowQr, "", "qr телефон");
+        Cmd("", "Тёмная тема для этого сайта", ToggleDarkForSite, "", "dark mode тёмный режим ночь");
+        Cmd("", (Cfg.ForceDark ? "Выключить" : "Включить") + " тёмную тему для всех сайтов", () => { bool v = !Cfg.ForceDark; CopyAndSave(x => x.ForceDark = v); foreach (var t in tabs) ApplyDarkScript(t); active?.Core?.Reload(); }, "", "dark mode тёмный режим ночь все");
+        foreach (var (u, t) in recentlyClosed.Take(5)) { var uu = u; Cmd("", "Вернуть: " + (t.Length > 0 ? t : u), () => { recentlyClosed.RemoveAll(x => x.url == uu); _ = AddTab(uu); }, "", "закрытая вкладка reopen closed"); }
         Cmd("", "Сохранить для чтения без интернета", () => _ = SaveOffline(), "Ctrl+Shift+Y", "offline офлайн сохранить страницу mhtml");
         Cmd("", "Печать", () => _ = active?.Core?.ExecuteScriptAsync("window.print()"), "Ctrl+P", "print pdf");
         Cmd("", "Боковая панель", () => ToggleSidePanel(!sidePanel.Visible), "Ctrl+B", "sidebar");

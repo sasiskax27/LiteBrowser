@@ -33,7 +33,10 @@ sealed class BrowserTab
     public string AdSig { get; set; } = "";
     public (string origin, string user)? LastUser { get; set; }
     public DevMonitor? Dev { get; set; }
-    public BrowserTab? SplitWith { get; set; }   // пара в разделённом экране
+    public BrowserTab? SplitWith { get; set; }
+    public int ExpectedZoom { get; set; } = 100;     // масштаб, который поставил сам браузер (для запоминания по сайтам)
+    public string DarkSig { get; set; } = "";
+    public string? DarkScriptId { get; set; }   // пара в разделённом экране
 }
 
 /// <summary>Круглая кнопка-иконка; умеет показывать кольцо прогресса.</summary>
