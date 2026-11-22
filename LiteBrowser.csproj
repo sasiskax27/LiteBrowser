@@ -10,7 +10,7 @@
     <NoWarn>$(NoWarn);MSB3277</NoWarn>
     <AssemblyTitle>LiteBrowser</AssemblyTitle>
     <Product>LiteBrowser</Product>
-    <Version>3.6.0</Version>
+    <Version>3.7.0</Version>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
