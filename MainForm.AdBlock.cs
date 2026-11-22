@@ -121,15 +121,18 @@ sealed partial class MainForm
         bool cosmetic = Cfg.BlockAds && Cfg.CosmeticFiltering;
         bool yt = Cfg.BlockAds && Cfg.YouTubeAds;
         var eng = AdBlock.Engine;
-        string sig = (cosmetic ? eng.Version : -1) + "|" + yt;
+        bool cookies = Cfg.CookieBanners;
+        string sig = (cosmetic ? eng.Version : -1) + "|" + yt + "|" + cookies;
         if (sig == tab.AdSig) return;
         tab.AdSig = sig;
         try
         {
             if (tab.AdScriptId != null) { core.RemoveScriptToExecuteOnDocumentCreated(tab.AdScriptId); tab.AdScriptId = null; }
             if (tab.YtScriptId != null) { core.RemoveScriptToExecuteOnDocumentCreated(tab.YtScriptId); tab.YtScriptId = null; }
+            if (tab.CookieScriptId != null) { core.RemoveScriptToExecuteOnDocumentCreated(tab.CookieScriptId); tab.CookieScriptId = null; }
             if (cosmetic) tab.AdScriptId = await core.AddScriptToExecuteOnDocumentCreatedAsync(AdScripts.Cosmetic(eng.GenericCss));
             if (yt) tab.YtScriptId = await core.AddScriptToExecuteOnDocumentCreatedAsync(AdScripts.YouTube);
+            if (cookies) tab.CookieScriptId = await core.AddScriptToExecuteOnDocumentCreatedAsync(CookieBanners.Script);
         }
         catch { tab.AdSig = ""; }
     }

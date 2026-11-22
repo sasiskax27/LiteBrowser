@@ -970,5 +970,7 @@
 "Подтвердите, что это вы": "Confirm it's you",
 "Вход через Windows Hello включён": "Windows Hello sign-in is on",
 "Вход через Windows Hello": "Sign in with Windows Hello",
-"Отпечаток пальца, лицо или PIN Windows вместо PIN браузера. Если Hello не сработает — спросим PIN браузера": "Fingerprint, face or Windows PIN instead of the browser PIN. If Hello fails, we'll ask for the browser PIN"
+"Отпечаток пальца, лицо или PIN Windows вместо PIN браузера. Если Hello не сработает — спросим PIN браузера": "Fingerprint, face or Windows PIN instead of the browser PIN. If Hello fails, we'll ask for the browser PIN",
+"Отклонять cookie-баннеры": "Reject cookie banners",
+"Сам нажимает «Отклонить» или «Только необходимые». Если отказаться нельзя — просто прячет баннер, согласие не даёт": "Clicks \"Reject\" or \"Necessary only\" for you. If there's no way to refuse, it just hides the banner without consenting"
 }

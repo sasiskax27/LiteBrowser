@@ -30,6 +30,7 @@ sealed class BrowserTab
     public int PopupsBlocked { get; set; }
     public string? AdScriptId { get; set; }
     public string? YtScriptId { get; set; }
+    public string? CookieScriptId { get; set; }
     public string AdSig { get; set; } = "";
     public (string origin, string user)? LastUser { get; set; }
     public DevMonitor? Dev { get; set; }
