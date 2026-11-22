@@ -104,6 +104,7 @@ sealed partial class MainForm
                 if (ns == null) return;
                 // Родительский контроль меняется только отдельно и с PIN-кодом
                 ns.ParentalEnabled = Cfg.ParentalEnabled; ns.ParentalPinHash = Cfg.ParentalPinHash;
+                ns.LockPinHash = Cfg.LockPinHash; // пароль на браузер меняется только через lock:set
                 ns.ParentalAdult = Cfg.ParentalAdult; ns.ParentalBlocked = Cfg.ParentalBlocked.ToList();
                 bool wantBlocklist = ns.ExtendedBlocklist && ns.BlockAds && Blocklist.ExtendedCount == 0;
                 bool listsChanged = AdBlock.Lists.Any(l => AdBlock.Enabled(ns, l.Id) != AdBlock.Enabled(Cfg, l.Id));
@@ -364,6 +365,23 @@ sealed partial class MainForm
                 CopyAndSave(x => x.Wallpaper = false);
                 SendSettings(core);
                 break;
+            // ---- Пароль на браузер ----
+            case "lock:set":
+            {
+                var pin = Str("pin");
+                if (AppLock.Enabled && !AppLock.Check(Str("old"))) { Post(core, new { type = "lockResult", ok = false, text = L.T("Неверный текущий PIN-код") }); break; }
+                if (pin.Length < 4 || pin.Length > 32) { Post(core, new { type = "lockResult", ok = false, text = L.T("PIN-код — от 4 до 32 символов") }); break; }
+                var hash = AppLock.Hash(pin);
+                CopyAndSave(x => x.LockPinHash = hash);
+                Post(core, new { type = "lockResult", ok = true, enabled = true, text = L.T("Пароль на браузер включён") });
+                break;
+            }
+            case "lock:clear":
+                if (AppLock.Enabled && !AppLock.Check(Str("old"))) { Post(core, new { type = "lockResult", ok = false, text = L.T("Неверный текущий PIN-код") }); break; }
+                CopyAndSave(x => x.LockPinHash = "");
+                Post(core, new { type = "lockResult", ok = true, enabled = false, text = L.T("Пароль на браузер выключен") });
+                break;
+
             // ---- Виджеты стартовой страницы ----
             case "home:widgets":
                 if (!Cfg.HomeWidgets) { Post(core, new { type = "widgets", enabled = false }); break; }

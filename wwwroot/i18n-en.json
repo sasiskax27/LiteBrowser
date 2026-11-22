@@ -869,5 +869,20 @@
 "Добавить открытый здесь сайт": "Add the site open here",
 "Добавить сайт по адресу…": "Add a site by address…",
 "Адрес сайта для боковой панели": "Site address for the side panel",
-"Убрать из панели": "Remove from panel"
+"Убрать из панели": "Remove from panel",
+"Браузер заблокирован": "Browser is locked",
+"Введите PIN-код, чтобы открыть LiteBrowser": "Enter your PIN to open LiteBrowser",
+"Подождите ": "Wait ",
+" с": " s",
+"Слишком много попыток — подождите немного": "Too many attempts — please wait",
+"Неверный PIN-код": "Wrong PIN",
+"Неверный текущий PIN-код": "Wrong current PIN",
+"PIN-код — от 4 до 32 символов": "PIN must be 4 to 32 characters",
+"Пароль на браузер включён": "Browser password is on",
+"Пароль на браузер выключен": "Browser password is off",
+"Пароль на браузер": "Browser password",
+"Текущий PIN": "Current PIN",
+"Новый PIN (от 4 символов)": "New PIN (4+ characters)",
+"Сменить PIN": "Change PIN",
+"PIN-код при запуске и после блокировки Windows (Win+L). Забыли PIN — удалите файл настроек; данные сайтов останутся": "A PIN at startup and after locking Windows (Win+L). Forgot it? Delete the settings file; site data stays"
 }

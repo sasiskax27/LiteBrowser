@@ -223,6 +223,17 @@ $('pHost').oninput = () => { state.proxyHost = $('pHost').value.trim(); saveLate
 $('pPort').oninput = () => { const p = parseInt($('pPort').value, 10); if (p > 0 && p < 65536) { state.proxyPort = p; saveLater(); } };
 $('sites').oninput = () => { state.proxySites = $('sites').value.split('\n').map(s => s.trim()).filter(Boolean); saveLater(); };
 $('focusSites').oninput = () => { state.focusSites = $('focusSites').value.split('\n').map(s => s.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '')).filter(Boolean); saveLater(); };
+// ---- Пароль на браузер ----
+function renderLock(on) {
+  $('lockDot').classList.toggle('on', on);
+  $('lockState').textContent = on ? 'Включён' : 'Выключен';
+  $('lockOld').classList.toggle('hidden', !on);
+  $('lockSet').textContent = on ? 'Сменить PIN' : 'Включить';
+  $('lockClear').classList.toggle('hidden', !on);
+}
+$('lockSet').onclick = () => wv.postMessage({ type: 'lock:set', pin: $('lockNew').value, old: $('lockOld').value });
+$('lockClear').onclick = () => wv.postMessage({ type: 'lock:clear', old: $('lockOld').value });
+
 // ---- Встроенный Tor ----
 let torBridges = '', torTimer = 0;
 function renderTor(t) {
@@ -299,7 +310,8 @@ $('clear').onclick = () => {
 if (wv) {
   wv.addEventListener('message', e => {
     const m = e.data;
-    if (m.type === 'settings') { state = m.settings; info = m; render(); }
+    if (m.type === 'settings') { state = m.settings; info = m; render(); renderLock(!!state.lockPinHash); }
+    else if (m.type === 'lockResult') { toast(m.text); if (m.ok) { $('lockOld').value = ''; $('lockNew').value = ''; renderLock(m.enabled); } }
     else if (m.type === 'torStatus') renderTor(m);
     else if (m.type === 'torError') { $('torState').textContent = 'Ошибка: ' + m.text; }
     else if (m.type === 'saved') { if (info) { info.restartNeeded = m.restartNeeded; renderProxy(); } toast('Сохранено'); }

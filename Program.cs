@@ -292,6 +292,8 @@ sealed class BrowserApp : ApplicationContext
     {
         Instance = this;
         _ = invoker.Handle;
+        // Пароль на браузер — до открытия окон
+        if (AppLock.Enabled && !incognito && !AppLock.Prompt()) { Environment.Exit(0); return; }
         bool crashed = Store.MarkRunning();
         int ticks = 0;
         flush.Tick += (_, _) =>
@@ -306,7 +308,11 @@ sealed class BrowserApp : ApplicationContext
         };
         flush.Start();
         // Блокируем пароли, когда пользователь блокирует Windows (Win+L)
-        SystemEvents.SessionSwitch += (_, e) => { if (e.Reason == SessionSwitchReason.SessionLock) Vault.Lock(); };
+        SystemEvents.SessionSwitch += (_, e) =>
+        {
+            if (e.Reason == SessionSwitchReason.SessionLock) { Vault.Lock(); if (AppLock.Enabled) invoker.BeginInvoke(LockWindows); }
+            else if (e.Reason == SessionSwitchReason.SessionUnlock && locked) invoker.BeginInvoke(UnlockWindows);
+        };
         SingleInstance.Listen(m => invoker.BeginInvoke(() => OnRemote(m)));
 
         List<string>? tabs = null;
@@ -329,8 +335,26 @@ sealed class BrowserApp : ApplicationContext
         if (AppEnv.Settings.TorEnabled) _ = TorService.StartAsync(AppEnv.Settings.TorBridges);
     }
 
+    bool locked;
+
+    /// <summary>Win+L — прячем окна браузера; после входа в Windows спрашиваем PIN.</summary>
+    void LockWindows()
+    {
+        locked = true;
+        foreach (var w in windows) w.Hide();
+    }
+
+    void UnlockWindows()
+    {
+        if (!AppLock.Prompt()) { foreach (var w in windows.ToList()) w.Close(); return; }
+        locked = false;
+        foreach (var w in windows) w.Show();
+        windows.LastOrDefault()?.Activate();
+    }
+
     void OnRemote(string msg)
     {
+        if (locked) return;
         var parts = msg.Split('\n', 2);
         bool inc = parts[0] == "incognito";
         string? url = parts.Length > 1 && parts[1].Length > 0 ? parts[1] : null;

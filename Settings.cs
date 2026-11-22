@@ -97,6 +97,7 @@ sealed class AppSettings
     public bool TorEnabled { get; set; } = false;       // весь трафик через встроенный Tor
     public bool HomeWidgets { get; set; } = true;       // погода, курс, заметка на стартовой
     public bool AutoPip { get; set; } = true;
+    public string LockPinHash { get; set; } = "";       // пароль (PIN) на браузер: соль:хеш PBKDF2, пусто — выключен
     public int AutoCollapseGroupsMinutes { get; set; } = 30; // сворачивать неиспользуемые группы вкладок (0 — нет)           // видео в «картинке в картинке» при уходе с вкладки
     public string WidgetCity { get; set; } = "";        // город для погоды (вводит пользователь)
     public string HomeNote { get; set; } = "";          // заметка на стартовой странице

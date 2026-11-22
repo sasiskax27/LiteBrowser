@@ -127,6 +127,16 @@
   <section id="security">
     <h2><span class="icon">&#xEA18;</span>Безопасность</h2>
     <div class="row">
+      <div><div class="row-title">Пароль на браузер</div>
+        <div class="row-sub">PIN-код при запуске и после блокировки Windows (Win+L). Забыли PIN — удалите файл настроек; данные сайтов останутся
+          <br><span class="status" style="margin-top:6px"><span class="dot" id="lockDot"></span><span id="lockState">Выключен</span></span></div>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+          <input class="text" type="password" id="lockOld" placeholder="Текущий PIN" style="width:130px" autocomplete="off">
+          <input class="text" type="password" id="lockNew" placeholder="Новый PIN (от 4 символов)" style="width:200px" autocomplete="new-password">
+        </div></div>
+      <div class="actions"><button class="btn primary" id="lockSet">Включить</button><button class="btn hidden" id="lockClear">Выключить</button></div>
+    </div>
+    <div class="row">
       <div><div class="row-title">Только защищённые сайты (HTTPS)</div>
         <div class="row-sub">Браузер сам переходит на защищённое соединение и предупреждает, если сайт его не поддерживает</div></div>
       <label class="switch"><input type="checkbox" data-key="httpsOnly"><span class="slider"></span></label>

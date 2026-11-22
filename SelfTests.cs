@@ -188,6 +188,17 @@ static class DevToolsSelfTest
                 }
                 catch (Exception ex) { Check("виджеты: сервисы доступны", false, ex.Message); }
 
+                // Пароль на браузер: PIN проверяется, хеш не содержит PIN и каждый раз с новой солью
+                {
+                    var h1 = AppLock.Hash("4821");
+                    var h2 = AppLock.Hash("4821");
+                    AppEnv.Settings.LockPinHash = h1;
+                    bool good = AppLock.Check("4821"), bad = AppLock.Check("0000");
+                    AppEnv.Settings.LockPinHash = "";
+                    Check("пароль на браузер: верный PIN открывает, неверный — нет", good && !bad);
+                    Check("пароль на браузер: соль разная, PIN в хеше не виден", h1 != h2 && !h1.Contains("4821"));
+                }
+
                 // Палитра команд: нечёткий поиск
                 Check("поиск «вкл» находит «Новая вкладка»", CommandPalette.Score("Новая вкладка", "вкл") > 0);
                 Check("«нвк» находит «Новая вкладка» по буквам", CommandPalette.Score("Новая вкладка", "нвк") > 0);
