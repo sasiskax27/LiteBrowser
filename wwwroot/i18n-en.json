@@ -864,5 +864,10 @@
 "Видео в маленьком окне при переключении вкладок": "Video in a small window when switching tabs",
 "Ушли с вкладки, где играет видео, — оно продолжит играть в «картинке в картинке». Вернулись — окно закроется": "Leave a tab with a playing video and it keeps playing picture-in-picture. Come back and the window closes",
 "Сворачивать неиспользуемые группы вкладок": "Collapse unused tab groups",
-"Группа, в которую давно не заходили, сворачивается в цветную метку. Клик по метке — развернуть": "A group you haven't visited for a while collapses into a colored label. Click the label to expand"
+"Группа, в которую давно не заходили, сворачивается в цветную метку. Клик по метке — развернуть": "A group you haven't visited for a while collapses into a colored label. Click the label to expand",
+"Добавить приложение в панель": "Add an app to the panel",
+"Добавить открытый здесь сайт": "Add the site open here",
+"Добавить сайт по адресу…": "Add a site by address…",
+"Адрес сайта для боковой панели": "Site address for the side panel",
+"Убрать из панели": "Remove from panel"
 }

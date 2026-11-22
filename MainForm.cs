@@ -169,6 +169,8 @@ sealed partial class MainForm : Form
 
         sidePanel = new SidePanel(tips, HandleMessage);
         sidePanel.OpenInMain += u => _ = AddTab(u);
+        sidePanel.SetApps(Cfg.SidePanelApps);
+        sidePanel.AppsChanged += list => { if (!Incognito) CopyAndSave(x => x.SidePanelApps = list); };
         sidePanel.CloseRequested += () => ToggleSidePanel(false);
         sidePanel.UrlChanged += u => { if (u != Cfg.SidePanelUrl && !Incognito) CopyAndSave(x => x.SidePanelUrl = u); };
         splitter.SplitterMoved += (_, _) => CopyAndSave(x => x.SidePanelWidth = (int)(sidePanel.Width / Theme.Dpi));

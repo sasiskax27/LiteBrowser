@@ -115,6 +115,7 @@ sealed class AppSettings
     public bool SidePanelOpen { get; set; } = false;
     public string SidePanelUrl { get; set; } = "https://lite.home/bookmarks.html";
     public int SidePanelWidth { get; set; } = 380;
+    public List<HomeTile> SidePanelApps { get; set; } = SidePanel.DefaultApps(); // приложения в боковой панели
     // ИИ-помощник
     public bool AiEnabled { get; set; } = true;
     public string AiProvider { get; set; } = "local";    // local (встроенный) | ollama | openai
