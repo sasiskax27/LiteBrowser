@@ -759,6 +759,7 @@ sealed partial class MainForm : Form
         _ = core.AddScriptToExecuteOnDocumentCreatedAsync(PasswordScripts.Page);
         _ = core.AddScriptToExecuteOnDocumentCreatedAsync(PageTools.Gestures);
         _ = core.AddScriptToExecuteOnDocumentCreatedAsync(PageTools.FocusPing);
+        if (Cfg.SelectionTranslate) _ = core.AddScriptToExecuteOnDocumentCreatedAsync(SelectionTranslate.Script);
         SetupContextMenu(tab, core, env);
 
         core.WebMessageReceived += async (_, e) =>

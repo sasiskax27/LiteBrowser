@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Text.Json;
@@ -36,11 +36,36 @@ sealed partial class MainForm
     }
 
     /// <summary>Сообщение от скрипта паролей на обычной странице. Адрес сайта берём из движка, а не из сообщения.</summary>
+    DateTime lastTranslate;
+
     void HandlePageMessage(BrowserTab tab, CoreWebView2 core, string source, string json)
     {
         if (json.Length > 4000) return;
         var origin = PasswordTools.Origin(source);
         if (origin == null) return;
+
+        // Перевод выделенного текста (по клику на кнопку у выделения; не чаще раза в секунду)
+        if (json.Contains("\"lite-translate\""))
+        {
+            if (!Cfg.SelectionTranslate || (DateTime.Now - lastTranslate).TotalMilliseconds < 800) return;
+            lastTranslate = DateTime.Now;
+            using var td = JsonDocument.Parse(json);
+            var text = td.RootElement.TryGetProperty("text", out var tv) ? tv.GetString() ?? "" : "";
+            if (text.Length is 0 or > 1500) return;
+            _ = Task.Run(async () =>
+            {
+                string result, note;
+                try
+                {
+                    var (tr, from) = await SelectionTranslate.TranslateAsync(text, L.Lang);
+                    result = tr;
+                    note = "Google " + L.T("Переводчик") + (from.Length > 0 ? " · " + from : "");
+                }
+                catch { result = L.T("Не удалось перевести — нет связи с переводчиком"); note = ""; }
+                BeginInvoke(() => { try { _ = core.ExecuteScriptAsync($"window.__liteTr && window.__liteTr({JsonSerializer.Serialize(result)}, {JsonSerializer.Serialize(note)})"); } catch { } });
+            });
+            return;
+        }
 
         // Жесты мышью (не чаще раза в 400 мс — на случай, если страница сама шлёт такие сообщения)
         if (json.Contains("\"gesture\""))

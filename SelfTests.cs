@@ -287,6 +287,18 @@ static class DevToolsSelfTest
                 await core.ExecuteScriptAsync(MainForm.DarkScriptFor(true, new(), new() { "example.com" }));
                 Check("тёмная тема: исключение при общей тёмной теме", await core.ExecuteScriptAsync("!!document.getElementById('lite-dark')") == "false");
 
+                // Перевод выделенного: скрипт встаёт на страницу, переводчик отвечает
+                await core.ExecuteScriptAsync(SelectionTranslate.Script);
+                Check("перевод выделенного: скрипт на странице", await core.ExecuteScriptAsync("typeof window.__liteTr") == "\"function\"");
+                try
+                {
+                    var (tr1, from1) = await SelectionTranslate.TranslateAsync("Good morning, my friend", "ru");
+                    Check("перевод: английский → русский", tr1.Any(c => c >= 'А' && c <= 'я'), $"{from1}: {tr1}");
+                    var (tr2, from2) = await SelectionTranslate.TranslateAsync("Доброе утро, друг", "ru");
+                    Check("перевод: русский → английский", tr2.Any(char.IsAsciiLetter) && from2 == "ru", $"{from2}: {tr2}");
+                }
+                catch (Exception ex) { Check("перевод: переводчик доступен", false, ex.Message); }
+
                 dev.OnNavigation("https://example.org/");
                 Check("переход очищает журнал сети", dev.Net.Count == 0);
                 dev.Detach();

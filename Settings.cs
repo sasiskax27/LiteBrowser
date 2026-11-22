@@ -120,6 +120,7 @@ sealed class AppSettings
     public bool DataSaver { get; set; } = false;          // не грузить картинки и видео
     public bool MouseGestures { get; set; } = true;
     public bool OfferTranslate { get; set; } = true;
+    public bool SelectionTranslate { get; set; } = true;  // кнопка «Перевести» у выделенного текста
     public string TranslateService { get; set; } = "google"; // google | yandex
     // Родительский контроль
     public bool ParentalEnabled { get; set; } = false;

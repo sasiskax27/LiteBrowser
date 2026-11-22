@@ -772,5 +772,9 @@
 "Всё равно открыть на 5 минут": "Open anyway for 5 minutes",
 "подождёт. Вернитесь к делу — сайт откроется, когда фокус закончится.": "can wait. Get back to work — the site will open when focus ends.",
 "Фокус-режим: какие сайты закрывать": "Focus mode: which sites to block",
-"Включается в меню → Инструменты → Фокус-режим или в Ctrl+K. По одному сайту в строке, поддомены включаются сами": "Turn it on in menu → Tools → Focus mode or with Ctrl+K. One site per line, subdomains included"
+"Включается в меню → Инструменты → Фокус-режим или в Ctrl+K. По одному сайту в строке, поддомены включаются сами": "Turn it on in menu → Tools → Focus mode or with Ctrl+K. One site per line, subdomains included",
+"Переводчик": "Translate",
+"Не удалось перевести — нет связи с переводчиком": "Couldn't translate — no connection to the translator",
+"Перевод выделенного текста": "Translate selected text",
+"Выделите слово или фразу — рядом появится кнопка «Перевести». Текст уходит в Google Переводчик только по клику": "Select a word or phrase and a “Translate” button appears next to it. The text is sent to Google Translate only when you click"
 }
