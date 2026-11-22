@@ -159,6 +159,7 @@ sealed partial class MainForm
             strip.Height = Theme.S(44);
         }
         strip.Invalidate();
+        RefreshFrame();
     }
 
     void ToggleVerticalTabs()

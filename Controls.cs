@@ -1,4 +1,4 @@
-using System.Drawing.Drawing2D;
+﻿using System.Drawing.Drawing2D;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 
@@ -374,6 +374,41 @@ sealed class TabStrip : Control
     Rectangle searchRect;
     bool hoverSearch;
 
+    // ---- Свои кнопки окна (заголовок Windows убран, вкладки на его месте) ----
+    public bool CaptionButtons { get; set; }
+    public bool WindowMaximized { get; set; }
+    public event Action? MinimizeClicked, CloseClicked;
+    bool hoverMin, hoverCloseWin, hoverMaxNc;
+    /// <summary>Наведение на «развернуть» приходит от окна (это неклиентская кнопка — ради раскладок Windows 11).</summary>
+    public bool HoverMax { get => hoverMaxNc; set { if (hoverMaxNc != value) { hoverMaxNc = value; Invalidate(); } } }
+    int CapW => CaptionButtons && !Vertical ? S(46) * 3 : 0;
+    Rectangle MinRect => new(Width - CapW, 0, S(46), Height);
+    public Rectangle MaxRect => new(Width - CapW + S(46), 0, S(46), Height);
+    Rectangle CloseWinRect => new(Width - S(46), 0, S(46), Height);
+
+    /// <summary>Что под точкой для окна: 0 — вкладки/кнопки, 1 — пустое место (тянуть окно), 2 — «развернуть», 3 — верхний край (менять размер).</summary>
+    public int NcHit(Point p)
+    {
+        if (!CaptionButtons || Vertical) return 0;
+        Relayout();
+        if (CapW > 0 && MaxRect.Contains(p)) return 2;
+        if (CapW > 0 && (MinRect.Contains(p) || CloseWinRect.Contains(p))) return 0;
+        if (!WindowMaximized && p.Y < S(5)) return 3;
+        if (slots.Any(s => s.R.Contains(p)) || plusRect.Contains(p) || searchRect.Contains(p)) return 0;
+        return 1;
+    }
+
+    protected override void WndProc(ref Message m)
+    {
+        // Пустое место полосы и «развернуть» отдаём окну: там его можно тянуть, разворачивать двойным кликом, открывать раскладки
+        if (m.Msg == 0x84 && CaptionButtons && !Vertical)
+        {
+            var p = PointToClient(new Point((short)(m.LParam.ToInt64() & 0xFFFF), (short)((m.LParam.ToInt64() >> 16) & 0xFFFF)));
+            if (NcHit(p) != 0) { m.Result = (IntPtr)(-1); return; } // HTTRANSPARENT
+        }
+        base.WndProc(ref m);
+    }
+
     public float Spin;
     public Color FrameColor { get; set; } = Theme.Frame;
     public string? Badge { get; set; }
@@ -469,7 +504,7 @@ sealed class TabStrip : Control
         }
         int labels = groups.Sum(LabelWidth) + groups.Count * S(4);
         int normal = visible.Count(t => !t.Pinned);
-        int avail = Width - S(12) - S(48) - S(40) - BadgeWidth - pinned * pinW - labels;
+        int avail = Width - S(12) - S(48) - S(40) - BadgeWidth - CapW - pinned * pinW - labels;
         int tw = Math.Clamp(avail / Math.Max(1, normal), S(44), S(236));
         int x = S(12);
         prev = null;
@@ -493,7 +528,7 @@ sealed class TabStrip : Control
         slots = list;
         int sz = S(30);
         plusRect = new Rectangle(x + S(8), Top0 + (h - sz) / 2, sz, sz);
-        searchRect = new Rectangle(Width - BadgeWidth - sz - S(8), Top0 + (h - sz) / 2, sz, sz);
+        searchRect = new Rectangle(Width - CapW - BadgeWidth - sz - S(8), Top0 + (h - sz) / 2, sz, sz);
     }
 
     Rectangle CloseRect(Rectangle r) => new(r.Right - S(30), r.Y + (r.Height - S(22)) / 2, S(22), S(22));
@@ -666,13 +701,31 @@ sealed class TabStrip : Control
         if (Badge != null)
         {
             int w = BadgeWidth - S(12), h = S(26);
-            var br = new RectangleF(Width - w - S(10), Top0 + (Height - Top0 - h) / 2f - S(2), w, h);
+            var br = new RectangleF(Width - CapW - w - S(10), Top0 + (Height - Top0 - h) / 2f - S(2), w, h);
             using var path = Theme.Round(br, h / 2f);
             using var b = new SolidBrush(Color.FromArgb(70, 176, 124, 255));
             g.FillPath(b, path);
             TextRenderer.DrawText(g, "", smallIcon, new Rectangle((int)br.X + S(8), (int)br.Y, S(16), h), Theme.Text, Theme.Center);
             TextRenderer.DrawText(g, Badge, badgeFont, new Rectangle((int)br.X + S(26), (int)br.Y, w - S(30), h), Theme.Text,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+        }
+
+        // Кнопки окна: свернуть, развернуть/восстановить, закрыть
+        if (CapW > 0)
+        {
+            var capFont = Theme.GetFont(Theme.IconFont, 7.5f);
+            void Cap(Rectangle r, string glyph, bool hover, bool danger)
+            {
+                if (hover)
+                {
+                    using var b = new SolidBrush(danger ? Color.FromArgb(232, 17, 35) : Color.FromArgb(28, Theme.Text));
+                    g.FillRectangle(b, r);
+                }
+                TextRenderer.DrawText(g, glyph, capFont, r, hover && danger ? Color.White : Theme.Text, Theme.Center);
+            }
+            Cap(MinRect, "\uE921", hoverMin, false);
+            Cap(MaxRect, WindowMaximized ? "\uE923" : "\uE922", hoverMaxNc, false);
+            Cap(CloseWinRect, "\uE8BB", hoverCloseWin, true);
         }
     }
 
@@ -694,6 +747,10 @@ sealed class TabStrip : Control
         bool hp = plusRect.Contains(p);
         bool hco = Vertical && collapseRect.Contains(p);
         bool hs = !Vertical && searchRect.Contains(p);
+        bool hmin = CapW > 0 && MinRect.Contains(p), hcw = CapW > 0 && CloseWinRect.Contains(p);
+        if (hmin != hoverMin || hcw != hoverCloseWin) { hoverMin = hmin; hoverCloseWin = hcw; Invalidate(); }
+        if (hmin || hcw) { hs = false; HoverMax = false; }
+        if (hmin || hcw) { ht = null; hl = null; hc = ha = false; }
         if (hs != hoverSearch) { hoverSearch = hs; Invalidate(); }
         if (hs) { ht = null; hl = null; hc = ha = hp = false; }
         if (hco) { ht = null; hl = null; hc = ha = hp = false; }
@@ -735,6 +792,7 @@ sealed class TabStrip : Control
     protected override void OnMouseLeave(EventArgs e)
     {
         hoverTab = null; hoverLabel = null; hoverClose = hoverPlus = hoverAudio = hoverCollapse = false;
+        hoverMin = hoverCloseWin = false;
         HoverChanged?.Invoke(null, Rectangle.Empty);
         Invalidate();
         base.OnMouseLeave(e);
@@ -746,6 +804,8 @@ sealed class TabStrip : Control
         HoverChanged?.Invoke(null, Rectangle.Empty);
         if (hoverCollapse && e.Button == MouseButtons.Left) { CompactToggled?.Invoke(); base.OnMouseDown(e); return; }
         if (hoverSearch && e.Button == MouseButtons.Left) { TabSearch?.Invoke(); base.OnMouseDown(e); return; }
+        if (hoverMin && e.Button == MouseButtons.Left) { MinimizeClicked?.Invoke(); base.OnMouseDown(e); return; }
+        if (hoverCloseWin && e.Button == MouseButtons.Left) { CloseClicked?.Invoke(); base.OnMouseDown(e); return; }
         if (hoverLabel != null)
         {
             if (e.Button == MouseButtons.Left) GroupClicked?.Invoke(hoverLabel);

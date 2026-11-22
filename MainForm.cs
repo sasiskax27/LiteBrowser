@@ -85,6 +85,7 @@ sealed partial class MainForm : Form
         strip.NewTab += () => _ = AddTab(homeUrl);
         strip.HoverChanged += OnTabHover;
         strip.TabSearch += ShowPalette;
+        SetupFrame();
         strip.CompactToggled += () => { bool v = !Cfg.VerticalTabsCompact; CopyAndSave(x => x.VerticalTabsCompact = v); };
 
         toolbar.Height = Theme.S(50);
@@ -1209,6 +1210,7 @@ sealed partial class MainForm : Form
             bookmarksBar.Visible = Cfg.ShowBookmarksBar;
             WindowState = stateBeforeFullscreen;
         }
+        RefreshFrame();
     }
 
     // ================= Анимация загрузки =================
