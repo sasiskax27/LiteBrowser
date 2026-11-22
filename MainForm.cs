@@ -1068,6 +1068,7 @@ sealed partial class MainForm : Form
         pageMenu.DropDownItems.Add(Theme.Item("Сохранить для чтения без интернета", () => _ = SaveOffline(), "Ctrl+Shift+Y", "\uE78B"));
         pageMenu.DropDownItems.Add(Theme.Item("Скриншот видимой части", () => _ = TakeScreenshot(false), "Ctrl+Shift+S", "\uE722"));
         pageMenu.DropDownItems.Add(Theme.Item("Скриншот всей страницы", () => _ = TakeScreenshot(true), null, "\uE722"));
+        pageMenu.DropDownItems.Add(Theme.Item("Сравнить цены в магазинах", () => _ = ComparePrices(), null, "\uE7BF"));
         pageMenu.DropDownItems.Add(Theme.Item(recorder != null ? "Остановить запись видео" : "Записать видео вкладки", () => _ = ToggleRecording(), "Alt+Shift+R", "\uE7C8"));
         pageMenu.DropDownItems.Add(Theme.Item("QR-код страницы", ShowQr, null, "\uED14"));
         if (active?.PageHost is { Length: > 0 } ph && ph != LitePages.Host)

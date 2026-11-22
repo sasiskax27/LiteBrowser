@@ -197,7 +197,7 @@ sealed partial class MainForm
         {
             "summarize" => "Перескажи страницу", "keypoints" => "Ключевые мысли страницы", "explain" => "Объясни выделенное",
             "translate" => "Переведи выделенное", "rewrite" => "Перепиши выделенное", "code" => "Объясни код", "search" => "Что поискать по теме",
-            "tabs" => "Сравни открытые вкладки", "video" => "Перескажи видео", _ => prompt,
+            "tabs" => "Сравни открытые вкладки", "video" => "Перескажи видео", "product" => "Разбери товар", _ => prompt,
         };
         Post(page, new { type = "aiStart", question = shown, page = title });
         var sb = new StringBuilder();

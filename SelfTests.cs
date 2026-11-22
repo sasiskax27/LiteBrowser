@@ -241,6 +241,12 @@ static class DevToolsSelfTest
                 Check("скорость: метрики получены", m.GetValueOrDefault("Nodes") > 0, $"узлов {m.GetValueOrDefault("Nodes")}, память {m.GetValueOrDefault("JSHeapUsedSize") / 1024:0} КБ");
                 var timing = System.Text.Json.JsonSerializer.Deserialize<string>(await core.ExecuteScriptAsync(DevMonitor.TimingScript));
                 Check("скорость: замеры страницы", timing?.Contains("\"ttfb\"") == true, timing?.Length > 160 ? timing[..160] : timing);
+                // Сравнение цен: товар из разметки schema.org и чистка названия
+                await core.ExecuteScriptAsync("var s=document.createElement('script');s.type='application/ld+json';s.textContent=JSON.stringify({'@context':'https://schema.org','@graph':[{'@type':'WebPage'},{'@type':'Product','name':'Смартфон Test X 128 ГБ','offers':{'@type':'Offer','price':'19990','priceCurrency':'RUB'}}]});document.head.appendChild(s);");
+                var prod = System.Text.Json.JsonSerializer.Deserialize<string>(await core.ExecuteScriptAsync(MainForm.ProductJs)) ?? "";
+                Check("цены: товар найден на странице", prod.Contains("Test X 128") && prod.Contains("19990") && prod.Contains("RUB"), prod);
+                var cleaned = new[] { MainForm.CleanProductName("Купить Наушники Sony WH-1000XM5 по выгодной цене — интернет-магазин"), MainForm.CleanProductName("Apple iPhone 15 128 ГБ | Ozon") };
+                Check("цены: название без «купить» и магазина", cleaned[0] == "Наушники Sony WH-1000XM5" && cleaned[1] == "Apple iPhone 15 128 ГБ", string.Join(" / ", cleaned));
                 // Чтение без интернета: снимок MHTML и открытие из файла
                 Offline.UseDir(Path.Combine(root, "offline"));
                 var origText = System.Text.Json.JsonSerializer.Deserialize<string>(await core.ExecuteScriptAsync("document.body.innerText.slice(0, 60)")) ?? "";

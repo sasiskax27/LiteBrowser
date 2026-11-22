@@ -42,6 +42,7 @@ sealed partial class MainForm
         Cmd("", "Голосовой ввод", () => _ = VoiceInput(), "Ctrl+Shift+M", "микрофон voice");
         Cmd("", "Картинка в картинке", () => _ = PictureInPicture(), "Ctrl+Shift+V", "pip видео");
         Cmd("", "Скриншот видимой части", () => _ = TakeScreenshot(false), "Ctrl+Shift+S", "screenshot снимок");
+        Cmd("", "Сравнить цены в магазинах", () => _ = ComparePrices(), "", "цена price магазин ozon wildberries маркет товар купить");
         Cmd("", "Записать видео вкладки / остановить", () => _ = ToggleRecording(), "Alt+Shift+R", "запись видео record video screencast");
         Cmd("", "Скриншот всей страницы", () => _ = TakeScreenshot(true), "", "screenshot снимок полный");
         Cmd("", "Скачать видео или аудио со страницы", () => _ = DownloadMedia(), "", "download media");
