@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Text.Json;
@@ -97,6 +97,17 @@ sealed partial class MainForm
             case "ai:stop":
                 aiCts?.Cancel();
                 break;
+            // ---- Ответ ИИ — в заметки к странице ----
+            case "ai:note":
+                var noteText = Str("text");
+                if (noteText.Length is > 0 and < 20000 && active?.Core?.Source is { } nurl && nurl.StartsWith("http"))
+                {
+                    Store.AddHighlight(new Highlight { Url = Store.PageKey(nurl), Title = active.Title, Note = "✦ " + Str("question") + "\n\n" + noteText });
+                    Post(page, new { type = "aiNoted" });
+                }
+                else Post(page, new { type = "aiError", text = L.T("Откройте страницу, к которой сохранить заметку") });
+                break;
+
             case "ai:ask":
                 await AskAi(page, Str("prompt").Trim(), Str("action"), Bool("usePage"));
                 break;

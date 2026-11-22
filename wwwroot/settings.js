@@ -223,6 +223,24 @@ $('pHost').oninput = () => { state.proxyHost = $('pHost').value.trim(); saveLate
 $('pPort').oninput = () => { const p = parseInt($('pPort').value, 10); if (p > 0 && p < 65536) { state.proxyPort = p; saveLater(); } };
 $('sites').oninput = () => { state.proxySites = $('sites').value.split('\n').map(s => s.trim()).filter(Boolean); saveLater(); };
 $('focusSites').oninput = () => { state.focusSites = $('focusSites').value.split('\n').map(s => s.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '')).filter(Boolean); saveLater(); };
+// ---- Встроенный Tor ----
+let torBridges = '', torTimer = 0;
+function renderTor(t) {
+  torBridges = t.bridges || torBridges;
+  document.querySelectorAll('[data-tb]').forEach(b => b.style.borderColor = b.dataset.tb === torBridges ? 'var(--accent)' : '');
+  $('torDot').classList.toggle('on', t.running && t.progress >= 100);
+  $('torState').textContent = t.busy || (t.running && t.progress < 100) ? (t.status || 'Подключаюсь…')
+    : t.running ? (t.restartNeeded ? 'Tor подключён — перезапустите браузер, чтобы пустить трафик через него' : 'Работает: весь трафик идёт через Tor')
+    : t.enabled ? (t.status || 'Запускаю…') : (t.status && t.status !== 'Tor выключен' ? t.status : 'Выключен');
+  $('torOn').classList.toggle('hidden', t.enabled);
+  $('torOff').classList.toggle('hidden', !t.enabled);
+  $('restartBanner').classList.toggle('show', !!t.restartNeeded);
+  clearTimeout(torTimer);
+  if (t.busy || (t.enabled && t.progress < 100)) torTimer = setTimeout(() => wv.postMessage({ type: 'tor:status' }), 1000);
+}
+document.querySelectorAll('[data-tb]').forEach(b => b.onclick = () => { torBridges = b.dataset.tb; renderTor({ bridges: torBridges }); });
+$('torOn').onclick = () => { $('torState').textContent = 'Скачиваю и запускаю Tor…'; wv.postMessage({ type: 'tor:enable', bridges: torBridges }); };
+$('torOff').onclick = () => wv.postMessage({ type: 'tor:disable' });
 $('resetSites').onclick = () => { state.proxySites = info.defaultSites.slice(); $('sites').value = state.proxySites.join('\n'); save(); };
 document.querySelectorAll('.chip').forEach(c => c.onclick = () => {
   state.proxyHost = '127.0.0.1'; state.proxyPort = Number(c.dataset.port); state.proxyType = 'socks5';
@@ -282,6 +300,8 @@ if (wv) {
   wv.addEventListener('message', e => {
     const m = e.data;
     if (m.type === 'settings') { state = m.settings; info = m; render(); }
+    else if (m.type === 'torStatus') renderTor(m);
+    else if (m.type === 'torError') { $('torState').textContent = 'Ошибка: ' + m.text; }
     else if (m.type === 'saved') { if (info) { info.restartNeeded = m.restartNeeded; renderProxy(); } toast('Сохранено'); }
     else if (m.type === 'proxyTest') {
       $('testResult').className = 'test ' + (m.ok ? 'ok' : 'bad');
@@ -297,6 +317,7 @@ if (wv) {
     else if (m.type === 'error') toast('Ошибка: ' + m.text);
   });
   wv.postMessage({ type: 'get' });
+  wv.postMessage({ type: 'tor:status' });
   wv.postMessage({ type: 'importScan' });
 }
 

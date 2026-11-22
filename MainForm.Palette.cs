@@ -45,6 +45,10 @@ sealed partial class MainForm
         Cmd("", "Скачать видео или аудио со страницы", () => _ = DownloadMedia(), "", "download media");
         Cmd("", "QR-код страницы", ShowQr, "", "qr телефон");
         Cmd("", "Тёмная тема для этого сайта", ToggleDarkForSite, "", "dark mode тёмный режим ночь");
+        Cmd("", Cfg.TorEnabled ? "Tor: настройки и выключение" : "Включить Tor (обход блокировок)", () => OpenLitePage(LitePages.Settings, "#proxy"), "", "tor тор vpn обход блокировок анонимность");
+        Cmd("", "Прочитать позже", AddToReadLater, "Ctrl+Shift+L", "read later потом сохранить список");
+        Cmd("", "Список «Прочитать позже»", () => OpenLitePage(LitePages.ReadLaterPage), "", "read later потом список");
+        if (active != null && TabUrl(active).StartsWith("http")) { var at = active; Cmd("", "Отложить вкладку до завтра", () => SnoozeTab(at, "tomorrow"), "", "snooze отложить потом напомнить"); }
         if (FocusActive) Cmd("\uF272", "Закончить фокус-режим", EndFocus, "", "focus фокус");
         else foreach (var m in new[] { 25, 50, 60, 120 }) { var mm = m; Cmd("\uF272", $"Фокус-режим на {m} минут", () => StartFocus(mm), "", "focus фокус помидор pomodoro учёба работа"); }
         Cmd("", Cfg.VerticalTabs ? "Вкладки сверху" : "Вертикальные вкладки (слева)", ToggleVerticalTabs, "", "vertical tabs вертикальные вкладки боковые");

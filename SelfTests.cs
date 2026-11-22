@@ -169,6 +169,15 @@ static class DevToolsSelfTest
                     Check($"подсказки {eng}", sg.Count > 0 && sg.Any(x => x.Contains("привет")), string.Join(" | ", sg.Take(3)));
                 }
 
+                // Сайты-подделки: ловим маскировки, не трогаем настоящие сайты
+                var fakes = new[] { "sberbank-online.xyz", "gosuslugi.ru.secure-login.com", "g00gle.com", "paypa1.com", "yandexx.ru", "wildberies.ru", "vk.com-login.ru", "xn--sberbnk-6fg.ru" };
+                var reals = new[] { "sberbank.ru", "online.sberbank.ru", "google.ru", "googleusercontent.com", "mail.google.com", "lenta.ru", "github.io",
+                                    "yandex.kz", "steamstatic.com", "email.com", "habr.com", "amazon.de", "news.ycombinator.com", "ozon.ru", "vkvideo.ru" };
+                var missed = fakes.Where(f => Lookalike.Check(f) == null).ToList();
+                var falseAlarms = reals.Where(r => Lookalike.Check(r) != null).Select(r => r + "→" + Lookalike.Check(r)).ToList();
+                Check("подделки распознаются", missed.Count == 0, missed.Count > 0 ? "пропущены: " + string.Join(", ", missed) : string.Join(", ", fakes.Select(f => f + "→" + Lookalike.Check(f))));
+                Check("настоящие сайты не трогаются", falseAlarms.Count == 0, string.Join(", ", falseAlarms));
+
                 // Палитра команд: нечёткий поиск
                 Check("поиск «вкл» находит «Новая вкладка»", CommandPalette.Score("Новая вкладка", "вкл") > 0);
                 Check("«нвк» находит «Новая вкладка» по буквам", CommandPalette.Score("Новая вкладка", "нвк") > 0);
@@ -375,5 +384,40 @@ static class VideoSelfTest
         };
         Application.Run(form);
         try { Directory.Delete(root, true); } catch { }
+    }
+}
+
+/// <summary>Самотест встроенного Tor: скачать, подключиться (без мостов, затем с мостами) и проверить выход через Tor.</summary>
+static class TorSelfTest
+{
+    public static void Run(string outFile, string? only = null)
+    {
+        var log = new List<string>();
+        void Check(string name, bool ok, string? extra = null) => log.Add((ok ? "OK   " : "FAIL ") + name + (extra != null ? " — " + extra : ""));
+        try
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            TorService.InstallAsync().GetAwaiter().GetResult();
+            Check("Tor скачан и проверен (SHA-256)", TorService.Installed, $"{sw.Elapsed.TotalSeconds:0} с");
+            foreach (var bridges in only != null ? new[] { only } : new[] { "", "obfs4", "snowflake" })
+            {
+                sw.Restart();
+                TorService.StartAsync(bridges).GetAwaiter().GetResult();
+                log.Add($"     {(bridges.Length == 0 ? "без мостов" : bridges)}: {TorService.Progress}% за {sw.Elapsed.TotalSeconds:0} с — {TorService.Status}");
+                if (TorService.Progress >= 100)
+                {
+                    using var http = new HttpClient(new HttpClientHandler { Proxy = new System.Net.WebProxy($"socks5://127.0.0.1:{TorService.SocksPort}"), UseProxy = true })
+                    { Timeout = TimeSpan.FromSeconds(60) };
+                    var json = http.GetStringAsync("https://check.torproject.org/api/ip").GetAwaiter().GetResult();
+                    Check("трафик идёт через Tor" + (bridges.Length > 0 ? $" ({bridges})" : ""), json.Contains("\"IsTor\":true"), json);
+                    TorService.Stop();
+                    break;
+                }
+                TorService.Stop();
+            }
+            if (!log.Any(l => l.StartsWith("OK   трафик"))) Check("подключение к Tor", false, "ни один способ не подключился");
+        }
+        catch (Exception ex) { log.Add("FAIL исключение: " + ex.Message); }
+        finally { TorService.Stop(); File.WriteAllLines(outFile, log); }
     }
 }

@@ -369,6 +369,10 @@ sealed class TabStrip : Control
     public event Action? CompactToggled;
     /// <summary>Мышь над вкладкой (для превью): вкладка и её прямоугольник на экране; null — ушла.</summary>
     public event Action<BrowserTab?, Rectangle>? HoverChanged;
+    /// <summary>Кнопка «⌄» справа — поиск по вкладкам.</summary>
+    public event Action? TabSearch;
+    Rectangle searchRect;
+    bool hoverSearch;
 
     public float Spin;
     public Color FrameColor { get; set; } = Theme.Frame;
@@ -465,7 +469,7 @@ sealed class TabStrip : Control
         }
         int labels = groups.Sum(LabelWidth) + groups.Count * S(4);
         int normal = visible.Count(t => !t.Pinned);
-        int avail = Width - S(12) - S(48) - BadgeWidth - pinned * pinW - labels;
+        int avail = Width - S(12) - S(48) - S(40) - BadgeWidth - pinned * pinW - labels;
         int tw = Math.Clamp(avail / Math.Max(1, normal), S(44), S(236));
         int x = S(12);
         prev = null;
@@ -489,6 +493,7 @@ sealed class TabStrip : Control
         slots = list;
         int sz = S(30);
         plusRect = new Rectangle(x + S(8), Top0 + (h - sz) / 2, sz, sz);
+        searchRect = new Rectangle(Width - BadgeWidth - sz - S(8), Top0 + (h - sz) / 2, sz, sz);
     }
 
     Rectangle CloseRect(Rectangle r) => new(r.Right - S(30), r.Y + (r.Height - S(22)) / 2, S(22), S(22));
@@ -648,6 +653,16 @@ sealed class TabStrip : Control
         }
         TextRenderer.DrawText(g, "", iconFont, pr, Theme.Text, Theme.Center);
 
+        // «⌄» — поиск по вкладкам
+        var sr = searchRect;
+        sr.Offset(0, -S(2));
+        if (hoverSearch)
+        {
+            using var b = new SolidBrush(Theme.Hover);
+            g.FillEllipse(b, sr);
+        }
+        TextRenderer.DrawText(g, "", smallIcon, sr, Theme.TextDim, Theme.Center);
+
         if (Badge != null)
         {
             int w = BadgeWidth - S(12), h = S(26);
@@ -678,6 +693,9 @@ sealed class TabStrip : Control
         }
         bool hp = plusRect.Contains(p);
         bool hco = Vertical && collapseRect.Contains(p);
+        bool hs = !Vertical && searchRect.Contains(p);
+        if (hs != hoverSearch) { hoverSearch = hs; Invalidate(); }
+        if (hs) { ht = null; hl = null; hc = ha = hp = false; }
         if (hco) { ht = null; hl = null; hc = ha = hp = false; }
         if (ht == hoverTab && hl == hoverLabel && hc == hoverClose && hp == hoverPlus && ha == hoverAudio && hco == hoverCollapse) return;
         bool tabChanged = ht != hoverTab;
@@ -727,6 +745,7 @@ sealed class TabStrip : Control
         UpdateHover(e.Location);
         HoverChanged?.Invoke(null, Rectangle.Empty);
         if (hoverCollapse && e.Button == MouseButtons.Left) { CompactToggled?.Invoke(); base.OnMouseDown(e); return; }
+        if (hoverSearch && e.Button == MouseButtons.Left) { TabSearch?.Invoke(); base.OnMouseDown(e); return; }
         if (hoverLabel != null)
         {
             if (e.Button == MouseButtons.Left) GroupClicked?.Invoke(hoverLabel);

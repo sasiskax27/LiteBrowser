@@ -1,4 +1,4 @@
-if (window.top !== window) document.documentElement.innerHTML = '';
+﻿if (window.top !== window) document.documentElement.innerHTML = '';
 
 const $ = id => document.getElementById(id);
 const wv = window.chrome && window.chrome.webview;
@@ -32,6 +32,8 @@ function md(src) {
 }
 
 function scrollDown() { const sc = $('scroll'); sc.scrollTop = sc.scrollHeight; }
+
+let lastQuestion = '';
 
 function addUser(text, page) {
   const d = document.createElement('div');
@@ -176,9 +178,22 @@ if (wv) {
     const m = e.data;
     switch (m.type) {
       case 'aiStatus': st = m; render(); break;
-      case 'aiStart': addUser(m.question, m.page); current = addBot(); setBusy(true); scrollDown(); break;
+      case 'aiStart': lastQuestion = m.question; addUser(m.question, m.page); current = addBot(); setBusy(true); scrollDown(); break;
       case 'aiToken': if (current) { current.innerHTML = md(m.text); current.classList.add('cursor'); scrollDown(); } break;
-      case 'aiDone': if (current) { current.innerHTML = md(m.text || '…'); current.classList.remove('cursor'); } current = null; setBusy(false); scrollDown(); break;
+      case 'aiDone':
+        if (current) {
+          current.innerHTML = md(m.text || '…');
+          current.classList.remove('cursor');
+          // Кнопки под ответом: скопировать и сохранить в заметки к странице
+          const tools = document.createElement('div');
+          tools.className = 'ans-tools';
+          const answer = m.text || '', question = lastQuestion;
+          const mk = (label, fn) => { const b = document.createElement('button'); b.textContent = label; b.onclick = () => fn(b); tools.appendChild(b); };
+          mk('Копировать', b => { navigator.clipboard.writeText(answer); b.textContent = 'Скопировано'; });
+          mk('В заметки', b => { send({ type: 'ai:note', text: answer, question }); b.textContent = 'Сохранено в заметки'; b.disabled = true; });
+          current.parentElement.appendChild(tools);
+        }
+        current = null; setBusy(false); scrollDown(); break;
       case 'aiError': {
         if (current) { current.classList.remove('cursor'); current = null; }
         const d = document.createElement('div'); d.className = 'msg err'; d.textContent = '⚠ ' + m.text; $('chat').appendChild(d);

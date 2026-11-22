@@ -84,6 +84,7 @@ sealed partial class MainForm : Form
         strip.GroupMenu += ShowGroupMenu;
         strip.NewTab += () => _ = AddTab(homeUrl);
         strip.HoverChanged += OnTabHover;
+        strip.TabSearch += ShowPalette;
         strip.CompactToggled += () => { bool v = !Cfg.VerticalTabsCompact; CopyAndSave(x => x.VerticalTabsCompact = v); };
 
         toolbar.Height = Theme.S(50);
@@ -185,6 +186,7 @@ sealed partial class MainForm : Form
         freezeTimer.Start();
 
         AppEnv.SettingsChanged += OnSettingsChanged;
+        Shown += (_, _) => EnsureSnoozeTimer();
         Store.BookmarksChanged += OnBookmarksChanged;
         Downloads.Changed += OnDownloadsChanged;
         Vault.Changed += OnVaultChanged;
@@ -408,6 +410,7 @@ sealed partial class MainForm : Form
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(Theme.Item(tab.Pinned ? "Открепить вкладку" : "Закрепить вкладку", () => TogglePin(tab)));
         menu.Items.Add(Theme.Item(Cfg.VerticalTabs ? "Вкладки сверху" : "Вертикальные вкладки (слева)", ToggleVerticalTabs));
+        if (TabUrl(tab).StartsWith("http")) menu.Items.Add(SnoozeMenu(tab));
         menu.Items.Add(Theme.Item("Добавить в новую группу…", () => NewGroup(tab)));
         menu.Items.Add(Theme.Item("Сгруппировать вкладки по темам", AutoGroupTabs));
         if (Groups.Any()) menu.Items.Add(Theme.Item("Убрать все группы", UngroupAll));
@@ -604,6 +607,7 @@ sealed partial class MainForm : Form
                         if (target != null && Uri.TryCreate(target, UriKind.Absolute, out var t) && t.Scheme is "http" or "https")
                         {
                             Blocklist.Allow(t.Host);
+                            Lookalike.Allow(t.Host);
                             BeginInvoke(() => core.Navigate(t.ToString()));
                         }
                         return;
@@ -616,6 +620,14 @@ sealed partial class MainForm : Form
                         e.Cancel = true;
                         var pp = LitePages.Prefix + "parental.html?host=" + Uri.EscapeDataString(u.Host);
                         BeginInvoke(() => core.Navigate(pp));
+                        return;
+                    }
+                    // Похоже на подделку известного сайта (банк, госуслуги, почта) — предупреждаем
+                    if (Cfg.FakeSiteWarning && Lookalike.Check(u.Host) is { } real)
+                    {
+                        e.Cancel = true;
+                        var warn = LitePages.Blocked + "?url=" + Uri.EscapeDataString(e.Uri) + "&fake=" + Uri.EscapeDataString(real);
+                        BeginInvoke(() => core.Navigate(warn));
                         return;
                     }
                     // Фокус-режим: отвлекающий сайт — экран фокуса
@@ -1011,6 +1023,7 @@ sealed partial class MainForm : Form
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(Theme.Item("История", () => OpenLitePage(LitePages.History), "Ctrl+H", "\uE81C"));
         menu.Items.Add(Theme.Item("Закладки", () => OpenLitePage(LitePages.BookmarksPage), "Ctrl+Shift+O", "\uE728"));
+        menu.Items.Add(Theme.Item("Прочитать позже" + (ReadLater.All.Count(i => !i.Read) is > 0 and var n ? $"  ({n})" : ""), () => OpenLitePage(LitePages.ReadLaterPage), null, "\uE7BC"));
         menu.Items.Add(Theme.Item("Загрузки", () => OpenLitePage(LitePages.DownloadsPage), "Ctrl+J", "\uE896"));
         menu.Items.Add(Theme.Item("Пароли", () => OpenLitePage(LitePages.Passwords), "Ctrl+Shift+P", "\uE8D7"));
         menu.Items.Add(Theme.Item("Расширения", () => OpenLitePage(LitePages.ExtensionsPage), "Ctrl+Shift+E", "\uEA86"));
@@ -1025,6 +1038,7 @@ sealed partial class MainForm : Form
         pageMenu.DropDownItems.Add(Theme.Item("Режим чтения", () => _ = ToggleReader(), "Ctrl+Alt+R", "\uE8F1"));
         pageMenu.DropDownItems.Add(Theme.Item("Перевести страницу", TranslatePage, null, "\uE774"));
         pageMenu.DropDownItems.Add(Theme.Item("Читать вслух", () => _ = ReadAloud(), "Ctrl+Shift+U", "\uE767"));
+        pageMenu.DropDownItems.Add(Theme.Item("Прочитать позже", AddToReadLater, "Ctrl+Shift+L", "\uE7BC"));
         pageMenu.DropDownItems.Add(Theme.Item("Сохранить для чтения без интернета", () => _ = SaveOffline(), "Ctrl+Shift+Y", "\uE78B"));
         pageMenu.DropDownItems.Add(Theme.Item("Скриншот видимой части", () => _ = TakeScreenshot(false), "Ctrl+Shift+S", "\uE722"));
         pageMenu.DropDownItems.Add(Theme.Item("Скриншот всей страницы", () => _ = TakeScreenshot(true), null, "\uE722"));
@@ -1049,6 +1063,7 @@ sealed partial class MainForm : Form
         tools.DropDownItems.Add(Theme.Item(Cfg.ShowBookmarksBar ? "Скрыть панель закладок" : "Показать панель закладок", ToggleBookmarksBar, "Ctrl+Shift+B", "\uE728"));
         tools.DropDownItems.Add(RecentlyClosedMenu());
         tools.DropDownItems.Add(FocusMenu());
+        tools.DropDownItems.Add(SnoozedListMenu());
         tools.DropDownItems.Add(Theme.Item(Cfg.VerticalTabs ? "Вкладки сверху" : "Вертикальные вкладки", ToggleVerticalTabs, null, "\uE8A9"));
         tools.DropDownItems.Add(new ToolStripSeparator());
         tools.DropDownItems.Add(Theme.Item("Заметки и выделения", () => OpenLitePage(LitePages.Notes), null, "\uE8EC"));
@@ -1303,6 +1318,7 @@ sealed partial class MainForm : Form
                 case "security": return LitePages.Security + rest;
                 case "devtools": return LitePages.DevTools + rest;
                 case "offline": return LitePages.OfflinePage + rest;
+                case "readlater": return LitePages.ReadLaterPage + rest;
                 case "home": return homeUrl;
             }
         }
@@ -1345,6 +1361,7 @@ sealed partial class MainForm : Form
             case Keys.Control | Keys.Shift | Keys.I: OpenDevTools(); return true;
             case Keys.Control | Keys.K: ShowPalette(); return true;
             case Keys.Control | Keys.Shift | Keys.Y: _ = SaveOffline(); return true;
+            case Keys.Control | Keys.Shift | Keys.L: AddToReadLater(); return true;
             case Keys.Control | Keys.OemPipe: case Keys.Control | Keys.OemBackslash: ToggleSplit(); return true;
             case Keys.Control | Keys.Shift | Keys.B: ToggleBookmarksBar(); return true;
             case Keys.Control | Keys.Oemcomma: OpenLitePage(LitePages.Settings); return true;

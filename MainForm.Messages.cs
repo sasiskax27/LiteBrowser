@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Text.Json;
@@ -128,6 +128,44 @@ sealed partial class MainForm
 
             case "restart":
                 BrowserApp.Instance.Restart();
+                break;
+
+            // ---- Прочитать позже ----
+            case "rl:list":
+                Post(core, ReadLaterList());
+                break;
+            case "rl:open":
+                var rlu = Str("url");
+                if (rlu.StartsWith("http")) { ReadLater.MarkVisited(rlu); Navigate(rlu); }
+                break;
+            case "rl:read":
+                ReadLater.SetRead(Str("url"), root.TryGetProperty("read", out var rr) && rr.ValueKind == JsonValueKind.True);
+                Post(core, ReadLaterList());
+                break;
+            case "rl:remove":
+                ReadLater.Remove(Str("url"));
+                Post(core, ReadLaterList());
+                break;
+
+            // ---- Встроенный Tor ----
+            case "tor:status":
+                Post(core, TorStatus());
+                break;
+            case "tor:enable":
+                var bridges = Str("bridges") is "obfs4" or "snowflake" ? Str("bridges") : "";
+                CopyAndSave(x => { x.TorEnabled = true; x.TorBridges = bridges; });
+                TorService.Stop();
+                _ = Task.Run(async () =>
+                {
+                    try { await TorService.StartAsync(bridges); }
+                    catch (Exception ex) { BeginInvoke(() => Post(core, new { type = "torError", text = ex.Message })); }
+                });
+                Post(core, TorStatus());
+                break;
+            case "tor:disable":
+                CopyAndSave(x => x.TorEnabled = false);
+                TorService.Stop();
+                Post(core, TorStatus());
                 break;
 
             case "updateBlocklist":
@@ -409,4 +447,26 @@ sealed partial class MainForm
         }
     }
 
+
+    static object TorStatus() => new
+    {
+        type = "torStatus", enabled = AppEnv.Settings.TorEnabled, bridges = AppEnv.Settings.TorBridges,
+        installed = TorService.Installed, running = TorService.Running, busy = TorService.Busy,
+        progress = TorService.Progress, status = TorService.Status, restartNeeded = AppEnv.RestartNeeded,
+    };
+
+    static object ReadLaterList() => new
+    {
+        type = "rlList",
+        items = ReadLater.All.Select(i => new { url = i.Url, title = i.Title, added = i.Added, read = i.Read }),
+    };
+
+    void AddToReadLater()
+    {
+        var t = active;
+        var url = t?.Core?.Source ?? "";
+        if (!url.StartsWith("http")) return;
+        ReadLater.Add(url, t!.Title);
+        infoBar.ShowBar("readlater", "\uE7BC", L.T("Добавлено в «Прочитать позже»"), ("Открыть список", () => { infoBar.HideBar(); OpenLitePage(LitePages.ReadLaterPage); }, false), ("OK", () => infoBar.HideBar(), true));
+    }
 }

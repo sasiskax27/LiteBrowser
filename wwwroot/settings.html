@@ -137,6 +137,11 @@
       <label class="switch"><input type="checkbox" data-key="blockAds"><span class="slider"></span></label>
     </div>
     <div class="row">
+      <div><div class="row-title">Предупреждать о сайтах-подделках</div>
+        <div class="row-sub">Если адрес похож на банк, госуслуги, почту или соцсеть, но им не является (sberbank-online.xyz, g00gle.com) — браузер остановит переход</div></div>
+      <label class="switch"><input type="checkbox" data-key="fakeSiteWarning"><span class="slider"></span></label>
+    </div>
+    <div class="row">
       <div><div class="row-title">Расширенная защита</div>
         <div class="row-sub">Большой список (StevenBlack, около 80 000 доменов) рекламы, трекеров и вредоносных сайтов. Обновляется раз в неделю.
           <br><span id="blStatus"></span></div></div>
@@ -235,6 +240,14 @@
       Можно отправлять через прокси все сайты или только заблокированные, а остальные откроются напрямую и быстро.</p>
     <div class="banner" id="restartBanner"><span>Чтобы изменения прокси заработали, нужно перезапустить браузер. Вкладки сохранятся.</span>
       <button class="btn primary" id="restart">Перезапустить</button></div>
+    <div class="row" id="torRow">
+      <div><div class="row-title">Tor одной кнопкой</div>
+        <div class="row-sub">Браузер сам скачает официальный Tor (с torproject.org, с проверкой подписи файла), запустит его и пустит весь трафик через сеть Tor. Медленнее VPN, зато бесплатно и без своего сервера.
+          <br><span class="status" style="margin-top:6px"><span class="dot" id="torDot"></span><span id="torState">Выключен</span></span></div>
+        <div class="chips" style="margin-top:8px"><span class="label" style="margin:4px 4px 0 0">Если Tor заблокирован:</span>
+          <button class="chip" data-tb="">Автоматически</button><button class="chip" data-tb="snowflake">Snowflake (лучше всего проходит)</button><button class="chip" data-tb="obfs4">Мосты obfs4</button></div></div>
+      <div class="actions"><button class="btn primary" id="torOn">Включить Tor</button><button class="btn hidden" id="torOff">Выключить</button></div>
+    </div>
     <div class="row">
       <div><div class="row-title">Режим</div><div class="row-sub"><span class="status"><span class="dot" id="proxyDot"></span><span id="proxyState"></span></span></div></div>
       <div class="seg" data-seg="proxyMode"><button data-v="off">Выключено</button><button data-v="list">Только выбранные сайты</button><button data-v="all">Все сайты</button></div>

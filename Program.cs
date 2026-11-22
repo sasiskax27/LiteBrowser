@@ -184,6 +184,12 @@ static class Program
             return;
         }
 
+        if (args.Length >= 2 && args[0] == "--tor-selftest")
+        {
+            TorSelfTest.Run(args[1], args.Length > 2 ? args[2] : null);
+            return;
+        }
+
         if (args.Length == 2 && args[0] == "--devtools-selftest")
         {
             ApplicationConfiguration.Initialize();
@@ -320,6 +326,7 @@ sealed class BrowserApp : ApplicationContext
             _ = Blocklist.UpdateAsync(AppEnv.DataDir, AppEnv.Settings, force: false);
         _ = AdBlock.InitAsync(AppEnv.Settings);
         _ = Parental.InitAsync();
+        if (AppEnv.Settings.TorEnabled) _ = TorService.StartAsync(AppEnv.Settings.TorBridges);
     }
 
     void OnRemote(string msg)
@@ -347,6 +354,7 @@ sealed class BrowserApp : ApplicationContext
             if (windows.Count > 0) return;
             Store.Flush();
             Sync.PushOnExit();
+            TorService.Stop();
             Store.MarkClosed();
             ExitThread();
         };

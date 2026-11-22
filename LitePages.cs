@@ -27,6 +27,7 @@ static class LitePages
     public const string DevTools = Prefix + "devtools.html";
     public const string OfflinePage = Prefix + "offline.html";
     public const string ExtPanel = Prefix + "ext-panel.html";
+    public const string ReadLaterPage = Prefix + "readlater.html";
 
     public static CoreWebView2WebResourceResponse Response(CoreWebView2Environment env, string uri)
     {
@@ -88,6 +89,7 @@ static class LitePages
         if (src.StartsWith(Security, StringComparison.Ordinal)) return "lite://security";
         if (src.StartsWith(DevTools, StringComparison.Ordinal)) return "lite://devtools";
         if (src.StartsWith(OfflinePage, StringComparison.Ordinal)) return "lite://offline";
+        if (src.StartsWith(ReadLaterPage, StringComparison.Ordinal)) return "lite://readlater";
         if (src.StartsWith(Blocked, StringComparison.Ordinal))
             return HttpUtility.ParseQueryString(new Uri(src).Query)["url"] ?? "lite://blocked";
         return null;

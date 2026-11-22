@@ -94,6 +94,9 @@ sealed class AppSettings
     public Dictionary<string, int> SiteZoom { get; set; } = new();   // сайт → масштаб, %
     public bool ForceDark { get; set; } = false;        // тёмная тема для всех сайтов
     public bool VerticalTabs { get; set; } = false;     // вкладки слева
+    public bool TorEnabled { get; set; } = false;       // весь трафик через встроенный Tor
+    public bool FakeSiteWarning { get; set; } = true;   // предупреждать о сайтах-подделках
+    public string TorBridges { get; set; } = "";        // "" | obfs4 | snowflake
     public List<string> FocusSites { get; set; } = new() { "youtube.com", "vk.com", "tiktok.com", "instagram.com", "twitch.tv", "x.com", "twitter.com", "reddit.com", "pikabu.ru", "dzen.ru", "ok.ru", "facebook.com" };
     public bool VerticalTabsCompact { get; set; } = false; // вертикальные вкладки — только значки
     public List<string> DarkSites { get; set; } = new();     // тёмная тема для этих сайтов (если общая выключена)
@@ -208,6 +211,7 @@ sealed class AppSettings
 
     /// <summary>Подпись настроек, которые требуют перезапуска движка.</summary>
     public string EngineSignature() =>
+        TorEnabled ? "tor" :
         ProxyMode == "off" ? "off" : $"{ProxyMode}|{ProxyType}|{ProxyHost}|{ProxyPort}|{(ProxyMode == "list" ? string.Join(",", ProxySites) : "")}";
 
     static string FileIn(string dir) => Path.Combine(dir, "settings.json");

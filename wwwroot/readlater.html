@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<title>Прочитать позже</title>
+<link rel="stylesheet" href="common.css">
+<link rel="stylesheet" href="lists.css">
+<style>
+  .tabs { display: flex; gap: 6px; margin: 0 0 12px; }
+  .tabs button { font: inherit; font-size: 13px; color: var(--dim); background: rgba(255,255,255,.05); border: 1px solid var(--line); border-radius: 10px; padding: 6px 14px; cursor: pointer; }
+  .tabs button.on { background: var(--accent); color: #0d1020; font-weight: 600; border-color: transparent; }
+  .item.read .name { color: var(--dim); font-weight: 400; }
+  .fi.read { color: var(--ok); background: rgba(110,207,150,.12); }
+</style>
+</head>
+<body>
+<div class="glow"></div>
+<main>
+  <header>
+    <div class="logo icon">&#xE7BC;</div>
+    <div class="grow"><h1>Прочитать позже</h1><div class="sub" id="sub">Добавить страницу: меню → «Эта страница» → «Прочитать позже» или Ctrl+Shift+L</div></div>
+  </header>
+  <div class="bar"><input class="text" id="q" placeholder="Поиск по списку" spellcheck="false" autofocus></div>
+  <div class="tabs"><button data-f="unread" class="on">Непрочитанные</button><button data-f="read">Прочитанные</button><button data-f="all">Все</button></div>
+  <div id="out"></div>
+</main>
+<script src="readlater.js"></script>
+</body>
+</html>
