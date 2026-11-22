@@ -213,7 +213,7 @@ sealed partial class MainForm : Form
             suggest.Dispose();
         };
 
-        Load += (_, _) => { OpenStartTabs(); if (Cfg.SidePanelOpen && !Incognito) ToggleSidePanel(true); };
+        Load += (_, _) => { StartupTrace.Mark("окно: Load"); OpenStartTabs(); if (Cfg.SidePanelOpen && !Incognito) ToggleSidePanel(true); };
         if (guest) sideBtn.Visible = false;
         Shown += (_, _) => LayoutToolbar();
         ApplyChrome();
@@ -330,6 +330,7 @@ sealed partial class MainForm : Form
             }
             else await tab.View.EnsureCoreWebView2Async(env);
             if (tab.View.IsDisposed || tab.Core == null) return;
+            StartupTrace.Mark("вкладка: WebView2 готов");
             HookController(tab);
             Configure(tab, env);
             ApplyAdScripts(tab);
@@ -719,6 +720,7 @@ sealed partial class MainForm : Form
             // Текст страницы — для поиска по истории «по содержимому»
             if (e.IsSuccess && !Incognito && Cfg.SaveHistory && Cfg.FullTextHistory && core.Source.StartsWith("http") && !core.Source.StartsWith(LitePages.Prefix))
                 _ = PageIndex.CaptureAsync(core, core.Source);
+            if (AppEnv.StartupMs == 0) StartupTrace.Mark("первая страница загружена: " + core.Source);
             if (AppEnv.StartupMs == 0) try { AppEnv.StartupMs = (long)(DateTime.Now - System.Diagnostics.Process.GetCurrentProcess().StartTime).TotalMilliseconds; } catch { }
             if (tab == active) UpdateUi();
             strip.Invalidate();

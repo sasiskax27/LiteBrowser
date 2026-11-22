@@ -256,6 +256,14 @@ static class DevToolsSelfTest
                 var issue = CrashReport.IssueUrl(report);
                 Check("сбой: отчёт без личных данных", report.Contains("%USERPROFILE%") && !report.Contains(Environment.UserName, StringComparison.OrdinalIgnoreCase) && report.Contains("InvalidOperationException"));
                 Check("сбой: ссылка на обращение", issue.StartsWith("https://github.com/") && issue.Contains("InvalidOperationException") && issue.Length < 32000, $"{issue.Length} символов");
+                // Быстрое чтение настроек (сгенерированный код) — читает то же, что и обычный JSON
+                var setDir = Path.Combine(root, "settings-test");
+                Directory.CreateDirectory(setDir);
+                var sample = new AppSettings { UiTheme = "forest", ProxySites = new() { "a.ru", "b.com" }, HomeWidgets = false, FreezeMinutes = 30 };
+                sample.Save(setDir);
+                var loadedSet = AppSettings.Load(setDir);
+                Check("настройки: быстрое чтение совпадает", loadedSet.UiTheme == "forest" && loadedSet.ProxySites.SequenceEqual(new[] { "a.ru", "b.com" }) && !loadedSet.HomeWidgets && loadedSet.FreezeMinutes == 30
+                      && System.Text.Json.JsonSerializer.Serialize(loadedSet, AppSettings.Json) == System.Text.Json.JsonSerializer.Serialize(sample.Normalize(), AppSettings.Json));
                 // Громкость вкладки: ставится существующим и новым видео/аудио
                 await core.ExecuteScriptAsync("var a1=document.createElement('audio');document.body.appendChild(a1);");
                 await core.ExecuteScriptAsync(MainForm.VolumeJs(40));

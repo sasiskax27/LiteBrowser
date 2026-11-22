@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Diagnostics;
 using System.IO.Pipes;
 using System.Runtime.InteropServices;
@@ -11,6 +11,7 @@ static class Program
     [STAThread]
     static void Main(string[] args)
     {
+        StartupTrace.Mark("Main");
         // Диагностика переноса: только читает данные других браузеров и пишет сводку в файл
         if (args.Length == 2 && args[0] == "--import-check")
         {
@@ -252,7 +253,9 @@ static class Program
         try { File.Delete(Path.ChangeExtension(Environment.ProcessPath!, ".old")); } catch { }
 
         ApplicationConfiguration.Initialize();
+        StartupTrace.Mark("до AppEnv.Init");
         AppEnv.Init();
+        StartupTrace.Mark("AppEnv.Init");
         CrashReport.Install();
         if (SystemIntegration.IsInstalled) Installer.RegisterUninstall();
         Theme.ApplyPalette(AppEnv.Settings.UiTheme, AppEnv.Settings.Accent);

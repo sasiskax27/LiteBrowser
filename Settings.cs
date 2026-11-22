@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace LiteBrowser;
@@ -162,7 +162,7 @@ sealed class AppSettings
     // Предложение перенести данные на стартовой странице уже показано/скрыто
     public bool ImportOffered { get; set; } = false;
 
-    static readonly Regex HostRx = new(@"^[a-z0-9]([a-z0-9\-\.]*[a-z0-9])?$", RegexOptions.Compiled);
+    static readonly Regex HostRx = new(@"^[a-z0-9]([a-z0-9\-\.]*[a-z0-9])?$");
 
     /// <summary>Приводит к допустимым значениям. Важно: адреса попадают в параметры запуска движка.</summary>
     public AppSettings Normalize()
@@ -235,7 +235,10 @@ sealed class AppSettings
         {
             var path = FileIn(dir);
             if (File.Exists(path))
-                return (JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), Json) ?? new()).Normalize();
+            {
+                // Код чтения сгенерирован при сборке — без «разогрева» рефлексии, запуск быстрее
+                return (JsonSerializer.Deserialize(File.ReadAllText(path), SettingsJson.Default.AppSettings) ?? new()).Normalize();
+            }
         }
         catch { /* повреждённый файл — берём настройки по умолчанию */ }
         return new AppSettings();
@@ -251,3 +254,8 @@ sealed class AppSettings
         catch { }
     }
 }
+
+/// <summary>Чтение настроек при запуске без рефлексии (генератор System.Text.Json).</summary>
+[System.Text.Json.Serialization.JsonSourceGenerationOptions(JsonSerializerDefaults.Web)]
+[System.Text.Json.Serialization.JsonSerializable(typeof(AppSettings))]
+partial class SettingsJson : System.Text.Json.Serialization.JsonSerializerContext { }

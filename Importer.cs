@@ -245,8 +245,8 @@ static class Importer
         return sb.ToString();
     }
 
-    static readonly Regex LinkRx = new("<A\\s[^>]*?HREF\\s*=\\s*\"([^\"]+)\"[^>]*>(.*?)</A>", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.Compiled);
-    static readonly Regex TagRx = new("<[^>]+>", RegexOptions.Compiled);
+    static readonly Regex LinkRx = new("<A\\s[^>]*?HREF\\s*=\\s*\"([^\"]+)\"[^>]*>(.*?)</A>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+    static readonly Regex TagRx = new("<[^>]+>");
 
     public static List<(string title, string url)> ParseHtml(string html)
     {

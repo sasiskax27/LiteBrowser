@@ -54,7 +54,7 @@ static class AdBlock
     public static bool Updating { get; private set; }
     public static event Action? Changed;
 
-    static readonly Regex HostRx = new(@"^[a-z0-9]([a-z0-9\-\.]*[a-z0-9])?$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    static readonly Regex HostRx = new(@"^[a-z0-9]([a-z0-9\-\.]*[a-z0-9])?$", RegexOptions.IgnoreCase);
     static string Dir => Path.Combine(AppEnv.DataDir, "filters");
     static string FileFor(string id) => Path.Combine(Dir, id + ".txt");
 

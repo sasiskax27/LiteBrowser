@@ -1,4 +1,4 @@
-using System.Net.Sockets;
+﻿using System.Net.Sockets;
 using System.Text;
 using Microsoft.Web.WebView2.Core;
 
@@ -33,9 +33,13 @@ static class AppEnv
     public static void Init()
     {
         Settings = AppSettings.Load(DataDir);
+        StartupTrace.Mark("  настройки");
         Store.Load(DataDir);
+        StartupTrace.Mark("  закладки и история");
         Blocklist.LoadCached(DataDir);
+        StartupTrace.Mark("  список блокировки");
         Downloads.Load();
+        StartupTrace.Mark("  загрузки");
     }
 
     public static void UpdateSettings(AppSettings s)
@@ -57,11 +61,13 @@ static class AppEnv
             AdditionalBrowserArguments = BrowserArguments(s),
         };
         // После перезапуска старый процесс движка может ещё закрываться — пробуем несколько раз.
+        StartupTrace.Mark("создаю движок WebView2");
         for (int attempt = 0; ; attempt++)
         {
             try
             {
                 var env = await CoreWebView2Environment.CreateAsync(null, DataDir, options);
+                StartupTrace.Mark("движок создан");
                 RunningSignature = s.EngineSignature();
                 return env;
             }

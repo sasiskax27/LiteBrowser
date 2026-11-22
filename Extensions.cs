@@ -34,9 +34,9 @@ static class Extensions
     public static string? DirOverride { get; set; }
     static string Dir => DirOverride ?? Path.Combine(AppEnv.DataDir, "extensions");
     static string MetaFile => Path.Combine(Dir, "extensions.json");
-    static readonly Regex ChromeRx = new(@"^https?://(chromewebstore\.google\.com/detail|chrome\.google\.com/webstore/detail)/(?:[^/?#]+/)?([a-p]{32})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    static readonly Regex EdgeRx = new(@"^https?://microsoftedge\.microsoft\.com/addons/detail/(?:[^/?#]+/)?([a-z]{32})", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-    static readonly Regex FirefoxRx = new(@"^https?://addons\.mozilla\.org/(?:[^/?#]+/)?(?:firefox|android)/addon/([^/?#]+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    static readonly Regex ChromeRx = new(@"^https?://(chromewebstore\.google\.com/detail|chrome\.google\.com/webstore/detail)/(?:[^/?#]+/)?([a-p]{32})", RegexOptions.IgnoreCase);
+    static readonly Regex EdgeRx = new(@"^https?://microsoftedge\.microsoft\.com/addons/detail/(?:[^/?#]+/)?([a-z]{32})", RegexOptions.IgnoreCase);
+    static readonly Regex FirefoxRx = new(@"^https?://addons\.mozilla\.org/(?:[^/?#]+/)?(?:firefox|android)/addon/([^/?#]+)", RegexOptions.IgnoreCase);
 
     public static readonly (string name, string desc, string url)[] Recommended =
     {
