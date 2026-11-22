@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Text.Json;
@@ -55,6 +55,19 @@ sealed partial class MainForm
 
     // ================= Подсказки адресной строки =================
 
+    const string EnableSuggestUrl = "lite-action:enable-suggest";
+
+    /// <summary>Выбор в подсказках: особая строка «Включить подсказки» или переход по адресу.</summary>
+    bool HandleSuggestAction(string url)
+    {
+        if (url != EnableSuggestUrl) return false;
+        CopyAndSave(x => x.SearchSuggestions = true);
+        address.Box.Focus();
+        address.Box.SelectionStart = address.Box.TextLength;
+        UpdateSuggestions();
+        return true;
+    }
+
     void UpdateSuggestions()
     {
         if (!address.Box.Focused) { suggest.Hide(); return; }
@@ -62,35 +75,42 @@ sealed partial class MainForm
         if (q.Length == 0 || q.StartsWith("lite://")) { suggest.Hide(); return; }
         var engine = SearchEngines.Get(Cfg.Engine);
         bool looksUrl = !q.Contains(' ') && q.Contains('.') && !q.EndsWith('.');
-        var list = new List<SuggestPopup.Item>();
-        if (looksUrl) list.Add(new("", q, "перейти на сайт", ToUrl(q)));
-        list.Add(new("", q, "поиск в " + engine.Name, engine.Url + Uri.EscapeDataString(q)));
-        var seen = new HashSet<string>(list.Select(x => x.Url));
-        foreach (var b in Store.Bookmarks.Where(b => b.Title.Contains(q, StringComparison.OrdinalIgnoreCase) || b.Url.Contains(q, StringComparison.OrdinalIgnoreCase)).Take(3))
-            if (seen.Add(b.Url)) list.Add(new("", b.Title, b.Url, b.Url));
+        var top = new List<SuggestPopup.Item>();
+        if (looksUrl) top.Add(new("\uE774", q, L.T("перейти на сайт"), ToUrl(q)));
+        top.Add(new("\uE721", q, L.T("поиск в ") + engine.Name, engine.Url + Uri.EscapeDataString(q)));
+        var seen = new HashSet<string>(top.Select(x => x.Url));
+        var local = new List<SuggestPopup.Item>();
+        foreach (var b in Store.Bookmarks.Where(b => b.Title.Contains(q, StringComparison.OrdinalIgnoreCase) || b.Url.Contains(q, StringComparison.OrdinalIgnoreCase)).Take(2))
+            if (seen.Add(b.Url)) local.Add(new("\uE734", b.Title, b.Url, b.Url));
         if (!Incognito)
-            foreach (var h in Store.SearchHistory(q, 60).Where(h => h.Url.Length < 500).DistinctBy(h => h.Url).Take(6))
+            foreach (var h in Store.SearchHistory(q, 60).Where(h => h.Url.Length < 500).DistinctBy(h => h.Url).DistinctBy(h => h.Title).Take(8))
             {
-                if (list.Count >= 8) break;
-                if (seen.Add(h.Url)) list.Add(new("", h.Title.Length > 0 ? h.Title : h.Url, h.Url, h.Url));
+                if (local.Count >= 4) break;
+                if (seen.Add(h.Url)) local.Add(new("\uE81C", h.Title.Length > 0 ? h.Title : h.Url, h.Url, h.Url));
             }
-        suggest.ShowItems(address, list);
+        bool canRemote = !Incognito && !looksUrl;
+        // Подсказки поисковика выключены — предлагаем включить одной строкой (запросы уйдут поисковику по мере ввода)
+        var tail = new List<SuggestPopup.Item>();
+        if (canRemote && !Cfg.SearchSuggestions)
+            tail.Add(new("\uE946", L.T("Включить подсказки ") + engine.Name, L.T("то, что вы печатаете, будет уходить поисковику"), EnableSuggestUrl));
+        suggest.ShowItems(address, top.Concat(local).Concat(tail).ToList());
 
         suggestCts?.Cancel();
-        if (!Cfg.SearchSuggestions || Incognito || looksUrl) return;
+        if (!Cfg.SearchSuggestions || !canRemote) return;
         var cts = suggestCts = new CancellationTokenSource();
         _ = Task.Run(async () =>
         {
-            await Task.Delay(180, cts.Token);
+            await Task.Delay(120, cts.Token);
             var remote = await RemoteSuggest.Get(engine.Id, q, cts.Token);
             if (cts.IsCancellationRequested || remote.Count == 0) return;
             BeginInvoke(() =>
             {
                 if (cts.IsCancellationRequested || address.Box.Text.Trim() != q || !address.Box.Focused) return;
-                var merged = list.Take(2).ToList();
-                foreach (var r in remote.Where(r => !r.Equals(q, StringComparison.OrdinalIgnoreCase)).Take(4))
-                    merged.Add(new("", r, "поиск", engine.Url + Uri.EscapeDataString(r)));
-                merged.AddRange(list.Skip(2).Take(Math.Max(0, 9 - merged.Count)));
+                // Как в Chrome: сначала поиск и подсказки поисковика, потом история и закладки
+                var merged = top.ToList();
+                foreach (var r in remote.Where(r => !r.Equals(q, StringComparison.OrdinalIgnoreCase)).Take(6))
+                    merged.Add(new("\uE721", r, "", engine.Url + Uri.EscapeDataString(r)));
+                merged.AddRange(local.Take(Math.Max(0, 10 - merged.Count)));
                 suggest.ShowItems(address, merged);
             });
         });

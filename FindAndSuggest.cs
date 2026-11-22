@@ -193,7 +193,7 @@ static class RemoteSuggest
     static string? Endpoint(string engine, string q) => engine switch
     {
         "duckduckgo" => "https://duckduckgo.com/ac/?type=list&q=" + Uri.EscapeDataString(q),
-        "google" => "https://suggestqueries.google.com/complete/search?client=firefox&q=" + Uri.EscapeDataString(q),
+        "google" => "https://suggestqueries.google.com/complete/search?client=firefox&ie=utf-8&oe=utf-8&hl=ru&q=" + Uri.EscapeDataString(q),
         "yandex" => "https://suggest.yandex.ru/suggest-ff.cgi?part=" + Uri.EscapeDataString(q),
         "bing" => "https://api.bing.com/osjson.aspx?query=" + Uri.EscapeDataString(q),
         "brave" => "https://search.brave.com/api/suggest?q=" + Uri.EscapeDataString(q),
@@ -209,7 +209,7 @@ static class RemoteSuggest
             var json = await Http.GetStringAsync(url, ct);
             using var doc = JsonDocument.Parse(json);
             if (doc.RootElement.ValueKind != JsonValueKind.Array || doc.RootElement.GetArrayLength() < 2) return new();
-            return doc.RootElement[1].EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).Take(5).ToList();
+            return doc.RootElement[1].EnumerateArray().Where(x => x.ValueKind == JsonValueKind.String).Select(x => x.GetString()!).Take(8).ToList();
         }
         catch { return new(); }
     }

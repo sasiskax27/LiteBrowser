@@ -129,13 +129,14 @@ sealed partial class MainForm : Form
             if (e.KeyCode != Keys.Enter) return;
             e.SuppressKeyPress = true;
             var target = suggest.Visible && suggest.Selected is { } sel ? sel.Url : ToUrl(address.Box.Text);
+            if (HandleSuggestAction(target)) return;
             suggest.Hide();
             Navigate(target);
             active?.View.Focus();
         };
         address.Box.TextChanged += (_, _) => UpdateSuggestions();
         address.Box.LostFocus += (_, _) => BeginInvoke(async () => { await Task.Delay(150); if (!address.Box.Focused) suggest.Hide(); });
-        suggest.Chosen += it => { suggest.Hide(); Navigate(it.Url); active?.View.Focus(); };
+        suggest.Chosen += it => { if (HandleSuggestAction(it.Url)) return; suggest.Hide(); Navigate(it.Url); active?.View.Focus(); };
 
         findBar = new FindBar(tips);
         findBar.Search += async term => await RunFind(term);

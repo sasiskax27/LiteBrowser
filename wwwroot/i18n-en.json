@@ -727,5 +727,9 @@
 "Недавно закрытые": "Recently closed",
 "Пока ничего не закрывали": "Nothing closed yet",
 "Вернуть: ": "Restore: ",
-"Масштаб этого сайта: {n}% — сбросить": "This site's zoom: {n}% — reset"
+"Масштаб этого сайта: {n}% — сбросить": "This site's zoom: {n}% — reset",
+"перейти на сайт": "go to site",
+"поиск в ": "search with ",
+"Включить подсказки ": "Turn on suggestions from ",
+"то, что вы печатаете, будет уходить поисковику": "what you type will be sent to the search engine"
 }

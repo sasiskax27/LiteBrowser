@@ -162,6 +162,13 @@ static class DevToolsSelfTest
         {
             try
             {
+                // Подсказки поисковиков (по-русски, без кракозябр)
+                foreach (var eng in new[] { "google", "yandex", "duckduckgo" })
+                {
+                    var sg = await RemoteSuggest.Get(eng, "привет", CancellationToken.None);
+                    Check($"подсказки {eng}", sg.Count > 0 && sg.Any(x => x.Contains("привет")), string.Join(" | ", sg.Take(3)));
+                }
+
                 // Палитра команд: нечёткий поиск
                 Check("поиск «вкл» находит «Новая вкладка»", CommandPalette.Score("Новая вкладка", "вкл") > 0);
                 Check("«нвк» находит «Новая вкладка» по буквам", CommandPalette.Score("Новая вкладка", "нвк") > 0);
