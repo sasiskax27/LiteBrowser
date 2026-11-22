@@ -45,6 +45,7 @@ sealed partial class MainForm
         Cmd("", "Скачать видео или аудио со страницы", () => _ = DownloadMedia(), "", "download media");
         Cmd("", "QR-код страницы", ShowQr, "", "qr телефон");
         Cmd("", "Тёмная тема для этого сайта", ToggleDarkForSite, "", "dark mode тёмный режим ночь");
+        Cmd("", Cfg.VerticalTabs ? "Вкладки сверху" : "Вертикальные вкладки (слева)", ToggleVerticalTabs, "", "vertical tabs вертикальные вкладки боковые");
         Cmd("", (Cfg.ForceDark ? "Выключить" : "Включить") + " тёмную тему для всех сайтов", () => { bool v = !Cfg.ForceDark; CopyAndSave(x => x.ForceDark = v); foreach (var t in tabs) ApplyDarkScript(t); active?.Core?.Reload(); }, "", "dark mode тёмный режим ночь все");
         foreach (var (u, t) in recentlyClosed.Take(5)) { var uu = u; Cmd("", "Вернуть: " + (t.Length > 0 ? t : u), () => { recentlyClosed.RemoveAll(x => x.url == uu); _ = AddTab(uu); }, "", "закрытая вкладка reopen closed"); }
         Cmd("", "Сохранить для чтения без интернета", () => _ = SaveOffline(), "Ctrl+Shift+Y", "offline офлайн сохранить страницу mhtml");

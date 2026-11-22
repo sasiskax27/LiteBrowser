@@ -358,7 +358,14 @@ sealed class TabStrip : Control
     TabGroup? hoverLabel;
     bool hoverClose, hoverPlus, hoverAudio;
     List<Slot> slots = new();
-    Rectangle plusRect;
+    Rectangle plusRect, collapseRect;
+    bool hoverCollapse;
+    int scroll;
+
+    /// <summary>Вертикальные вкладки (слева), Compact — только значки.</summary>
+    public bool Vertical { get; set; }
+    public bool Compact { get; set; }
+    public event Action? CompactToggled;
 
     public float Spin;
     public Color FrameColor { get; set; } = Theme.Frame;
@@ -387,8 +394,61 @@ sealed class TabStrip : Control
 
     bool Hidden(BrowserTab t) => t.Group?.Collapsed == true && t != selected && !t.Pinned;
 
+    int RowH => S(38);
+
+    void RelayoutVertical()
+    {
+        var list = new List<Slot>();
+        int pad = S(6), w = Width - pad * 2, y = S(8) - scroll;
+        // Закреплённые — плиткой сверху
+        int pinS = S(40), px = pad;
+        var pinned = tabs.Where(t => t.Pinned).ToList();
+        foreach (var t in pinned)
+        {
+            if (px + pinS > Width - pad) { px = pad; y += pinS + S(4); }
+            list.Add(new Slot(new Rectangle(px, y, pinS, pinS), t, null));
+            px += pinS + S(4);
+        }
+        if (pinned.Count > 0) y += pinS + S(10);
+        TabGroup? prev = null;
+        foreach (var t in tabs.Where(t => !t.Pinned))
+        {
+            if (t.Group != prev)
+            {
+                if (t.Group != null)
+                {
+                    list.Add(new Slot(new Rectangle(pad, y, w, S(26)), null, t.Group));
+                    y += S(28);
+                }
+                prev = t.Group;
+            }
+            if (Hidden(t)) continue;
+            list.Add(new Slot(new Rectangle(pad, y, w, RowH), t, null));
+            y += RowH + S(2);
+        }
+        slots = list;
+        plusRect = new Rectangle(pad, y + S(4), w, S(34));
+        int cs = S(32);
+        collapseRect = new Rectangle(pad, Height - cs - S(8), Compact ? w : cs, cs);
+    }
+
+    int ContentHeight => slots.Count == 0 ? 0 : plusRect.Bottom + scroll + S(56);
+
+    protected override void OnMouseWheel(MouseEventArgs e)
+    {
+        if (Vertical)
+        {
+            Relayout();
+            int max = Math.Max(0, ContentHeight - Height);
+            scroll = Math.Clamp(scroll - Math.Sign(e.Delta) * RowH * 2, 0, max);
+            Invalidate();
+        }
+        base.OnMouseWheel(e);
+    }
+
     void Relayout()
     {
+        if (Vertical) { RelayoutVertical(); return; }
         var list = new List<Slot>();
         int h = Height - Top0, pinW = S(46);
         var visible = tabs.Where(t => !Hidden(t)).ToList();
@@ -429,8 +489,8 @@ sealed class TabStrip : Control
     }
 
     Rectangle CloseRect(Rectangle r) => new(r.Right - S(30), r.Y + (r.Height - S(22)) / 2, S(22), S(22));
-    bool ShowClose(BrowserTab t, Rectangle r) => !t.Pinned && (t == selected || r.Width >= S(100));
-    bool ShowAudio(BrowserTab t, Rectangle r) => (t.Audio || t.Muted) && (t.Pinned || r.Width >= S(90));
+    bool ShowClose(BrowserTab t, Rectangle r) => !t.Pinned && !(Vertical && Compact) && (t == selected || r.Width >= S(100) || (Vertical && t == hoverTab));
+    bool ShowAudio(BrowserTab t, Rectangle r) => (t.Audio || t.Muted) && (t.Pinned || r.Width >= S(90)) && !(Vertical && Compact);
 
     Rectangle AudioRect(BrowserTab t, Rectangle r)
     {
@@ -452,7 +512,8 @@ sealed class TabStrip : Control
             var (r, t, label) = slots[i];
             if (label != null)
             {
-                var lr = new RectangleF(r.X, r.Y + (r.Height - S(24)) / 2f - S(2), r.Width, S(24));
+                var lr = Vertical ? new RectangleF(r.X, r.Y, Compact ? r.Width : Math.Min(r.Width, LabelWidth(label)), r.Height)
+                                  : new RectangleF(r.X, r.Y + (r.Height - S(24)) / 2f - S(2), r.Width, S(24));
                 using var p = Theme.Round(lr, S(12));
                 using var b = new SolidBrush(label == hoverLabel ? ControlPaint.Light(label.Color, 0.15f) : label.Color);
                 g.FillPath(b, p);
@@ -464,36 +525,42 @@ sealed class TabStrip : Control
             bool isSel = t == selected, isHover = t == hoverTab;
             if (isSel)
             {
-                using var p = Theme.TabShape(r, S(9));
-                using var b = new SolidBrush(Theme.Toolbar);
+                using var p = Vertical ? Theme.Round(r, S(9)) : Theme.TabShape(r, S(9));
+                using var b = new SolidBrush(Vertical ? Theme.Hover : Theme.Toolbar);
                 g.FillPath(b, p);
+                if (Vertical && !t.Pinned)
+                {
+                    using var ab = new SolidBrush(Theme.Accent);
+                    g.FillRectangle(ab, r.X, r.Y + S(9), S(3), r.Height - S(18));
+                }
             }
             else if (selected != null && t.SplitWith == selected)
             {
                 // Вторая половина разделённого экрана
-                using var p = Theme.TabShape(r, S(9));
-                using var b = new SolidBrush(Color.FromArgb(150, Theme.Toolbar));
+                using var p = Vertical ? Theme.Round(r, S(9)) : Theme.TabShape(r, S(9));
+                using var b = new SolidBrush(Color.FromArgb(150, Vertical ? Theme.Hover : Theme.Toolbar));
                 g.FillPath(b, p);
             }
             else if (isHover)
             {
-                using var p = Theme.Round(new RectangleF(r.X + S(3), r.Y + S(2), r.Width - S(6), r.Height - S(8)), S(8));
+                using var p = Vertical ? Theme.Round(r, S(9)) : Theme.Round(new RectangleF(r.X + S(3), r.Y + S(2), r.Width - S(6), r.Height - S(8)), S(8));
                 using var b = new SolidBrush(Color.FromArgb(22, Theme.Text));
                 g.FillPath(b, p);
             }
             if (t.Group != null)
             {
                 using var gb = new SolidBrush(t.Group.Color);
-                g.FillRectangle(gb, r.X + S(10), r.Bottom - S(3), r.Width - S(20), S(3));
+                if (Vertical) g.FillRectangle(gb, r.Right - S(4), r.Y + S(8), S(3), r.Height - S(16));
+                else g.FillRectangle(gb, r.X + S(10), r.Bottom - S(3), r.Width - S(20), S(3));
             }
             var next = i + 1 < slots.Count ? slots[i + 1].Tab : null;
-            if (next != null && !isSel && next != selected && !isHover && next != hoverTab && !t.Pinned)
+            if (!Vertical && next != null && !isSel && next != selected && !isHover && next != hoverTab && !t.Pinned)
             {
                 using var pen = new Pen(Theme.Line, 1f);
                 g.DrawLine(pen, r.Right, r.Y + S(9), r.Right, r.Bottom - S(11));
             }
 
-            int ix = t.Pinned ? r.X + (r.Width - S(16)) / 2 : r.X + S(14), iy = r.Y + (r.Height - S(16)) / 2 - S(2);
+            int ix = t.Pinned || (Vertical && Compact) ? r.X + (r.Width - S(16)) / 2 : r.X + S(14), iy = r.Y + (r.Height - S(16)) / 2 - (Vertical ? 0 : S(2));
             if (t.Loading)
             {
                 using var pen = new Pen(Theme.Accent, S(2)) { StartCap = LineCap.Round, EndCap = LineCap.Round };
@@ -512,7 +579,8 @@ sealed class TabStrip : Control
                 int tr = audio ? AudioRect(t, r).X - S(2) : close ? CloseRect(r).X - S(4) : r.Right - S(10);
                 var titleColor = isSel ? Theme.Text : t.Frozen || t.PendingUrl != null ? Color.FromArgb(150, Theme.TextDim) : Theme.TextDim;
                 if (tr > tx)
-                    TextRenderer.DrawText(g, t.Title, titleFont, new Rectangle(tx, r.Y, tr - tx, r.Height - S(4)), titleColor,
+                if (tr > tx && !(Vertical && Compact))
+                    TextRenderer.DrawText(g, t.Title, titleFont, new Rectangle(tx, r.Y, tr - tx, r.Height - (Vertical ? 0 : S(4))), titleColor,
                         TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis |
                         TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
             }
@@ -538,6 +606,34 @@ sealed class TabStrip : Control
                 }
                 TextRenderer.DrawText(g, "", smallIcon, c, isSel || isHover ? Theme.Text : Theme.TextDim, Theme.Center);
             }
+        }
+
+        if (Vertical)
+        {
+            // «+ Новая вкладка» строкой и кнопка «свернуть до значков» внизу
+            if (hoverPlus)
+            {
+                using var p = Theme.Round(plusRect, S(9));
+                using var b = new SolidBrush(Color.FromArgb(22, Theme.Text));
+                g.FillPath(b, p);
+            }
+            if (Compact) TextRenderer.DrawText(g, "", iconFont, plusRect, Theme.Text, Theme.Center);
+            else
+            {
+                TextRenderer.DrawText(g, "", iconFont, new Rectangle(plusRect.X + S(12), plusRect.Y, S(20), plusRect.Height), Theme.TextDim, Theme.Center);
+                TextRenderer.DrawText(g, L.T("Новая вкладка"), titleFont, new Rectangle(plusRect.X + S(40), plusRect.Y, plusRect.Width - S(44), plusRect.Height), Theme.TextDim,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            }
+            using (var bg = new SolidBrush(FrameColor)) g.FillRectangle(bg, 0, collapseRect.Y - S(8), Width, Height - collapseRect.Y + S(8));
+            if (hoverCollapse)
+            {
+                using var p = Theme.Round(collapseRect, S(8));
+                using var b = new SolidBrush(Theme.Hover);
+                g.FillPath(b, p);
+            }
+            TextRenderer.DrawText(g, Compact ? "" : "", smallIcon, collapseRect, Theme.TextDim, Theme.Center);
+            using (var pen = new Pen(Theme.Line)) g.DrawLine(pen, Width - 1, 0, Width - 1, Height);
+            return;
         }
 
         var pr = plusRect;
@@ -578,8 +674,10 @@ sealed class TabStrip : Control
             break;
         }
         bool hp = plusRect.Contains(p);
-        if (ht == hoverTab && hl == hoverLabel && hc == hoverClose && hp == hoverPlus && ha == hoverAudio) return;
-        hoverTab = ht; hoverLabel = hl; hoverClose = hc; hoverPlus = hp; hoverAudio = ha;
+        bool hco = Vertical && collapseRect.Contains(p);
+        if (hco) { ht = null; hl = null; hc = ha = hp = false; }
+        if (ht == hoverTab && hl == hoverLabel && hc == hoverClose && hp == hoverPlus && ha == hoverAudio && hco == hoverCollapse) return;
+        hoverTab = ht; hoverLabel = hl; hoverClose = hc; hoverPlus = hp; hoverAudio = ha; hoverCollapse = hco;
         Invalidate();
     }
 
@@ -587,10 +685,11 @@ sealed class TabStrip : Control
     {
         if (e.Button == MouseButtons.Left && dragTab != null)
         {
-            if (!dragging && Math.Abs(e.X - dragStart.X) > S(6)) dragging = true;
+            if (!dragging && (Vertical ? Math.Abs(e.Y - dragStart.Y) : Math.Abs(e.X - dragStart.X)) > S(6)) dragging = true;
             if (dragging)
             {
-                var target = slots.FirstOrDefault(s => s.Tab != null && s.Tab != dragTab && s.R.Contains(new Point(e.X, s.R.Y + 2)))?.Tab;
+                var target = slots.FirstOrDefault(s => s.Tab != null && s.Tab != dragTab &&
+                    s.R.Contains(Vertical ? new Point(s.R.X + 2, e.Y) : new Point(e.X, s.R.Y + 2)))?.Tab;
                 if (target != null && target.Pinned == dragTab.Pinned)
                 {
                     int to = tabs.IndexOf(target);
@@ -608,7 +707,7 @@ sealed class TabStrip : Control
 
     protected override void OnMouseLeave(EventArgs e)
     {
-        hoverTab = null; hoverLabel = null; hoverClose = hoverPlus = hoverAudio = false;
+        hoverTab = null; hoverLabel = null; hoverClose = hoverPlus = hoverAudio = hoverCollapse = false;
         Invalidate();
         base.OnMouseLeave(e);
     }
@@ -616,6 +715,7 @@ sealed class TabStrip : Control
     protected override void OnMouseDown(MouseEventArgs e)
     {
         UpdateHover(e.Location);
+        if (hoverCollapse && e.Button == MouseButtons.Left) { CompactToggled?.Invoke(); base.OnMouseDown(e); return; }
         if (hoverLabel != null)
         {
             if (e.Button == MouseButtons.Left) GroupClicked?.Invoke(hoverLabel);

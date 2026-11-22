@@ -731,5 +731,9 @@
 "перейти на сайт": "go to site",
 "поиск в ": "search with ",
 "Включить подсказки ": "Turn on suggestions from ",
-"то, что вы печатаете, будет уходить поисковику": "what you type will be sent to the search engine"
+"то, что вы печатаете, будет уходить поисковику": "what you type will be sent to the search engine",
+"Вкладки сверху": "Tabs on top",
+"Вертикальные вкладки (слева)": "Vertical tabs (left)",
+"Вертикальные вкладки": "Vertical tabs",
+"Вкладки списком слева, как в Edge. Удобно, когда вкладок много. Свернуть до значков — кнопка внизу списка": "Tabs as a list on the left, like in Edge. Handy with many tabs. Collapse to icons with the button at the bottom"
 }

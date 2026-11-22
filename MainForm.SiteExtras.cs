@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Microsoft.Web.WebView2.Core;
 
 namespace LiteBrowser;
@@ -138,5 +138,32 @@ sealed partial class MainForm
             sub.DropDownItems.Add(Theme.Item("Открыть закрытую вкладку", ReopenClosedTab, "Ctrl+Shift+T", ""));
         }
         return sub;
+    }
+
+    // ================= Вертикальные вкладки =================
+
+    /// <summary>Вкладки сверху или слева (вертикально), в том числе свёрнутые до значков.</summary>
+    void ApplyTabLayout()
+    {
+        bool v = Cfg.VerticalTabs && !(FormBorderStyle == FormBorderStyle.None && WindowState == FormWindowState.Maximized && !strip.Visible);
+        strip.Vertical = Cfg.VerticalTabs;
+        strip.Compact = Cfg.VerticalTabsCompact;
+        if (Cfg.VerticalTabs)
+        {
+            if (strip.Dock != DockStyle.Left) strip.Dock = DockStyle.Left;
+            strip.Width = Theme.S(Cfg.VerticalTabsCompact ? 56 : 250);
+        }
+        else
+        {
+            if (strip.Dock != DockStyle.Top) strip.Dock = DockStyle.Top;
+            strip.Height = Theme.S(44);
+        }
+        strip.Invalidate();
+    }
+
+    void ToggleVerticalTabs()
+    {
+        bool v = !Cfg.VerticalTabs;
+        CopyAndSave(x => x.VerticalTabs = v);
     }
 }

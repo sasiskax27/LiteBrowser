@@ -82,6 +82,7 @@ sealed partial class MainForm : Form
         strip.GroupClicked += g => { g.Collapsed = !g.Collapsed; if (g.Collapsed && active?.Group == g) { var other = tabs.FirstOrDefault(t => t.Group != g); if (other != null) SelectTab(other); } strip.Invalidate(); };
         strip.GroupMenu += ShowGroupMenu;
         strip.NewTab += () => _ = AddTab(homeUrl);
+        strip.CompactToggled += () => { bool v = !Cfg.VerticalTabsCompact; CopyAndSave(x => x.VerticalTabsCompact = v); };
 
         toolbar.Height = Theme.S(50);
         toolbar.BackColor = Theme.Toolbar;
@@ -173,6 +174,7 @@ sealed partial class MainForm : Form
         Controls.Add(bookmarksBar);
         Controls.Add(toolbar);
         Controls.Add(strip);
+        ApplyTabLayout();
 
         anim.Tick += (_, _) => Animate();
         freezeTimer.Tick += async (_, _) => await FreezeIdleTabs();
@@ -399,6 +401,7 @@ sealed partial class MainForm : Form
         else menu.Items.Add(Theme.Item("Разделить экран", ToggleSplit, "Ctrl+\\"));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(Theme.Item(tab.Pinned ? "Открепить вкладку" : "Закрепить вкладку", () => TogglePin(tab)));
+        menu.Items.Add(Theme.Item(Cfg.VerticalTabs ? "Вкладки сверху" : "Вертикальные вкладки (слева)", ToggleVerticalTabs));
         menu.Items.Add(Theme.Item("Добавить в новую группу…", () => NewGroup(tab)));
         menu.Items.Add(Theme.Item("Сгруппировать вкладки по темам", AutoGroupTabs));
         if (Groups.Any()) menu.Items.Add(Theme.Item("Убрать все группы", UngroupAll));
@@ -845,6 +848,7 @@ sealed partial class MainForm : Form
             ApplyDarkScript(t);
         }
         if (Cfg.UiScale != appliedUiScale) ApplyScale();
+        ApplyTabLayout();
         var themeSig = Cfg.UiTheme + "|" + Cfg.Accent;
         if (themeSig != appliedTheme)
         {
@@ -891,7 +895,7 @@ sealed partial class MainForm : Form
         appliedUiScale = Cfg.UiScale;
         Theme.UiScale = Cfg.UiScale / 100f;
         SuspendLayout();
-        strip.Height = Theme.S(44);
+        ApplyTabLayout();
         toolbar.Height = Theme.S(50);
         bookmarksBar.Height = Theme.S(34);
         address.ApplyScale();
@@ -1027,6 +1031,7 @@ sealed partial class MainForm : Form
         tools.DropDownItems.Add(Theme.Item(sidePanel.Visible ? "Скрыть боковую панель" : "Боковая панель", () => ToggleSidePanel(!sidePanel.Visible), "Ctrl+B", "\uE8A0"));
         tools.DropDownItems.Add(Theme.Item(Cfg.ShowBookmarksBar ? "Скрыть панель закладок" : "Показать панель закладок", ToggleBookmarksBar, "Ctrl+Shift+B", "\uE728"));
         tools.DropDownItems.Add(RecentlyClosedMenu());
+        tools.DropDownItems.Add(Theme.Item(Cfg.VerticalTabs ? "Вкладки сверху" : "Вертикальные вкладки", ToggleVerticalTabs, null, "\uE8A9"));
         tools.DropDownItems.Add(new ToolStripSeparator());
         tools.DropDownItems.Add(Theme.Item("Заметки и выделения", () => OpenLitePage(LitePages.Notes), null, "\uE8EC"));
         tools.DropDownItems.Add(Theme.Item("Сохранённые страницы", () => OpenLitePage(LitePages.OfflinePage), null, "\uE8B7"));
