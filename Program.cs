@@ -218,12 +218,13 @@ static class Program
         if (args.Contains("--install")) { Installer.Install(args.Contains("--quiet")); return; }
 
         bool restore = args.Contains("--restore");
-        bool incognito = args.Contains("--incognito");
+        bool guest = args.Contains("--guest");
+        bool incognito = args.Contains("--incognito") || guest;
         string? url = args.FirstOrDefault(a => !a.StartsWith("--"));
 
         // Если браузер уже открыт — передаём ему ссылку и выходим
         using var mutex = new Mutex(true, AppEnv.InstanceName, out bool first);
-        if (!first && !restore && SingleInstance.Send((incognito ? "incognito" : "normal") + "\n" + (url ?? "")))
+        if (!first && !restore && SingleInstance.Send((guest ? "guest" : incognito ? "incognito" : "normal") + "\n" + (url ?? "")))
             return;
 
         // Убираем старую версию, оставшуюся после обновления
@@ -233,7 +234,7 @@ static class Program
         AppEnv.Init();
         if (SystemIntegration.IsInstalled) Installer.RegisterUninstall();
         Theme.ApplyPalette(AppEnv.Settings.UiTheme, AppEnv.Settings.Accent);
-        Application.Run(new BrowserApp(url, incognito, restore));
+        Application.Run(new BrowserApp(url, incognito, restore, guest));
     }
 }
 
@@ -288,12 +289,12 @@ sealed class BrowserApp : ApplicationContext
     readonly Control invoker = new();
     MainForm? lastActive;
 
-    public BrowserApp(string? url, bool incognito, bool restore)
+    public BrowserApp(string? url, bool incognito, bool restore, bool guest = false)
     {
         Instance = this;
         _ = invoker.Handle;
         // Пароль на браузер — до открытия окон
-        if (AppLock.Enabled && !incognito && !AppLock.Prompt()) { Environment.Exit(0); return; }
+        if (AppLock.Enabled && !guest && !AppLock.Prompt()) { Environment.Exit(0); return; }
         bool crashed = Store.MarkRunning();
         int ticks = 0;
         flush.Tick += (_, _) =>
@@ -325,7 +326,7 @@ sealed class BrowserApp : ApplicationContext
             var saved = Store.LoadWindows();
             if (saved.Count > 0) { var s = saved[0]; tabs = s.Tabs; active = s.Active; session = s; extra = saved.Skip(1).ToList(); }
         }
-        var first = OpenWindow(incognito, url, tabs, active, session);
+        var first = OpenWindow(incognito, url, tabs, active, session, guest);
         foreach (var s in extra) OpenWindow(false, null, s.Tabs, s.Active, s);
         if (crashed && tabs == null && !incognito && Store.LoadCrashWindows() is { Count: > 0 } cs) first.OfferCrashRestore(cs);
         else _ = first.RunStartupChecks();
@@ -361,6 +362,7 @@ sealed class BrowserApp : ApplicationContext
         var parts = msg.Split('\n', 2);
         bool inc = parts[0] == "incognito";
         string? url = parts.Length > 1 && parts[1].Length > 0 ? parts[1] : null;
+        if (parts[0] == "guest") { OpenGuest(); return; }
         if (inc) { OpenWindow(true, url); return; }
         // Повторный запуск без ссылки (ярлык, значок на панели задач) — новое окно, как в Chrome.
         // Ссылка из другой программы — вкладкой в последнее окно.
@@ -393,9 +395,12 @@ sealed class BrowserApp : ApplicationContext
         foreach (var w in windows.ToList()) w.Close();
     }
 
-    public MainForm OpenWindow(bool incognito, string? url = null, List<string>? tabs = null, int active = 0, Session? session = null)
+    /// <summary>Гостевое окно — для того, кто сел за ваш компьютер: ваших данных не видно, после закрытия ничего не остаётся.</summary>
+    public void OpenGuest() => OpenWindow(true, guest: true);
+
+    public MainForm OpenWindow(bool incognito, string? url = null, List<string>? tabs = null, int active = 0, Session? session = null, bool guest = false)
     {
-        var f = new MainForm(incognito, url, tabs, active) { StartSession = session };
+        var f = new MainForm(incognito, url, tabs, active, guest) { StartSession = session };
         windows.Add(f);
         f.Activated += (_, _) => lastActive = f;
         f.FormClosed += (_, _) =>

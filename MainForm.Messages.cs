@@ -15,10 +15,17 @@ sealed partial class MainForm
 
     static void Post(CoreWebView2 core, object msg) => core.PostWebMessageAsJson(JsonSerializer.Serialize(msg, AppSettings.Json));
 
+    /// <summary>Настройки для гостевого окна: только оформление и поисковик, без ваших плиток и данных.</summary>
+    static AppSettings GuestSettings() => new()
+    {
+        UiTheme = Cfg.UiTheme, Accent = Cfg.Accent, Engine = Cfg.Engine, Language = Cfg.Language, HomeWidgets = Cfg.HomeWidgets,
+        WidgetCity = Cfg.WidgetCity, ImportOffered = true,
+    };
+
     void SendSettings(CoreWebView2 core) => Post(core, new
     {
         type = "settings",
-        settings = Cfg,
+        settings = Guest ? GuestSettings() : Cfg,
         version = AppEnv.Version,
         browserVersion = AppEnv.GetEnvironment().IsCompletedSuccessfully ? AppEnv.GetEnvironment().Result.BrowserVersionString : "",
         incognito = Incognito,
@@ -93,6 +100,8 @@ sealed partial class MainForm
                 await HandleExtensionMessage(core, msgType, root);
             return;
         }
+        // Гостю — только чтение стартовой страницы, без ваших плиток, заметки и настроек
+        if (Guest && msgType is not ("get" or "home:widgets")) return;
         switch (msgType)
         {
             case "get":
@@ -388,7 +397,7 @@ sealed partial class MainForm
                 object? weather = null, currency = null;
                 try { weather = await Widgets.WeatherAsync(Cfg.WidgetCity); } catch { weather = new { error = L.T("Нет связи с сервисом погоды") }; }
                 try { currency = await Widgets.CurrencyAsync(); } catch { }
-                Post(core, new { type = "widgets", enabled = true, city = Cfg.WidgetCity, note = Cfg.HomeNote, weather, currency });
+                Post(core, new { type = "widgets", enabled = true, city = Cfg.WidgetCity, note = Guest ? "" : Cfg.HomeNote, weather, currency });
                 break;
             case "home:city":
                 var city = Str("city").Trim();

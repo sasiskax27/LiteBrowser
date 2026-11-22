@@ -80,7 +80,7 @@ sealed partial class MainForm
         top.Add(new("\uE721", q, L.T("поиск в ") + engine.Name, engine.Url + Uri.EscapeDataString(q)));
         var seen = new HashSet<string>(top.Select(x => x.Url));
         var local = new List<SuggestPopup.Item>();
-        foreach (var b in Store.Bookmarks.Where(b => b.Title.Contains(q, StringComparison.OrdinalIgnoreCase) || b.Url.Contains(q, StringComparison.OrdinalIgnoreCase)).Take(2))
+        foreach (var b in Store.Bookmarks.Where(_ => !Guest).Where(b => b.Title.Contains(q, StringComparison.OrdinalIgnoreCase) || b.Url.Contains(q, StringComparison.OrdinalIgnoreCase)).Take(2))
             if (seen.Add(b.Url)) local.Add(new("\uE734", b.Title, b.Url, b.Url));
         if (!Incognito)
             foreach (var h in Store.SearchHistory(q, 60).Where(h => h.Url.Length < 500).DistinctBy(h => h.Url).DistinctBy(h => h.Title).Take(8))

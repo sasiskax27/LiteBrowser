@@ -14,6 +14,12 @@ function tick() {
 tick();
 setInterval(tick, 1000);
 if (new URLSearchParams(location.search).has('private')) $('private').classList.add('show');
+if (new URLSearchParams(location.search).has('guest')) {
+  // В гостевом окне ничего не сохраняется — прячем правку плиток и заметку
+  $('guest').classList.add('show');
+  $('editTiles').style.display = 'none';
+  $('wgNote').closest('.wg').style.display = 'none';
+}
 
 const item = (name, on) => `<span class="${on ? '' : 'off'}">${name}: <b>${on ? 'вкл' : 'выкл'}</b></span>`;
 

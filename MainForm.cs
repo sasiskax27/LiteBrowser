@@ -50,11 +50,15 @@ sealed partial class MainForm : Form
     bool showInstall;
 
     public bool Incognito { get; }
+    /// <summary>Гостевое окно: приватное и без ваших данных — закладок, истории, паролей, настроек, боковой панели.</summary>
+    public bool Guest { get; }
 
     static AppSettings Cfg => AppEnv.Settings;
 
-    public MainForm(bool incognito, string? startUrl = null, List<string>? startTabs = null, int startActive = 0)
+    public MainForm(bool incognito, string? startUrl = null, List<string>? startTabs = null, int startActive = 0, bool guest = false)
     {
+        Guest = guest;
+        incognito |= guest;
         Incognito = incognito;
         this.startUrl = startUrl;
         this.startTabs = startTabs;
@@ -65,9 +69,9 @@ sealed partial class MainForm : Form
         appliedPageZoom = Cfg.PageZoom;
         appliedTheme = Cfg.UiTheme + "|" + Cfg.Accent;
         frame = incognito ? Theme.IncognitoFrame : Theme.Frame;
-        homeUrl = incognito ? LitePages.Home + "?private=1" : LitePages.Home;
+        homeUrl = guest ? LitePages.Home + "?guest=1" : incognito ? LitePages.Home + "?private=1" : LitePages.Home;
 
-        Text = incognito ? "Инкогнито — LiteBrowser" : "LiteBrowser";
+        Text = guest ? L.T("Гость") + " — LiteBrowser" : incognito ? "Инкогнито — LiteBrowser" : "LiteBrowser";
         Icon = Theme.MakeAppIcon();
         BackColor = frame;
         Size = new Size(Theme.S(1280), Theme.S(820));
@@ -75,7 +79,7 @@ sealed partial class MainForm : Form
         StartPosition = FormStartPosition.CenterScreen;
         KeyPreview = true;
 
-        strip = new TabStrip(tabs) { Dock = DockStyle.Top, Height = Theme.S(44), FrameColor = frame, Badge = incognito ? "Инкогнито" : Profiles.Current.Length > 0 ? Profiles.Current : null };
+        strip = new TabStrip(tabs) { Dock = DockStyle.Top, Height = Theme.S(44), FrameColor = frame, Badge = guest ? "Гость" : incognito ? "Инкогнито" : Profiles.Current.Length > 0 ? Profiles.Current : null };
         strip.TabSelected += SelectTab;
         strip.TabClosed += CloseTab;
         strip.TabMuteToggled += t => { if (t.Core != null) t.Core.IsMuted = !t.Core.IsMuted; };
@@ -207,6 +211,7 @@ sealed partial class MainForm : Form
         };
 
         Load += (_, _) => { OpenStartTabs(); if (Cfg.SidePanelOpen && !Incognito) ToggleSidePanel(true); };
+        if (guest) sideBtn.Visible = false;
         Shown += (_, _) => LayoutToolbar();
         ApplyChrome();
     }
@@ -231,7 +236,7 @@ sealed partial class MainForm : Form
         foreach (var b in new[] { menuBtn, sideBtn, extBtn, downloadsBtn, focusBtn, proxyBtn, zoomBtn, installBtn })
         {
             // Visible до показа окна всегда false, поэтому храним желаемое состояние отдельно
-            bool want = b == downloadsBtn ? showDownloads : b == proxyBtn ? showProxy : b == installBtn ? showInstall : b == extBtn ? !Incognito : b == focusBtn ? showFocus : true;
+            bool want = b == downloadsBtn ? showDownloads : b == proxyBtn ? showProxy : b == installBtn ? showInstall : b == extBtn ? !Incognito : b == focusBtn ? showFocus : b == sideBtn ? !Guest : true;
             b.Visible = want;
             if (!want) continue;
             int w = b == zoomBtn ? Theme.S(58) : b == installBtn ? Theme.S(200) : b == focusBtn ? Theme.S(84) : s;
@@ -300,6 +305,9 @@ sealed partial class MainForm : Form
         return tab;
     }
 
+    static readonly string[] GuestPages = { "/home.html", "/blocked.html", "/offline.html", "/search", "/allow" };
+    static bool GuestAllowed(string path) => GuestPages.Contains(path, StringComparer.OrdinalIgnoreCase) || path.EndsWith(".js") || path.EndsWith(".css") || path.EndsWith(".json") || path.EndsWith(".png") || path.EndsWith(".svg");
+
     Task InitTab(BrowserTab tab) => tab.InitTask ??= InitTabCore(tab);
 
     async Task InitTabCore(BrowserTab tab)
@@ -312,7 +320,7 @@ sealed partial class MainForm : Form
             {
                 var o = env.CreateCoreWebView2ControllerOptions();
                 o.IsInPrivateModeEnabled = true;
-                o.ProfileName = "Incognito";
+                o.ProfileName = Guest ? "Guest" : "Incognito";
                 await tab.View.EnsureCoreWebView2Async(env, o);
             }
             else await tab.View.EnsureCoreWebView2Async(env);
@@ -598,6 +606,12 @@ sealed partial class MainForm : Form
                 if (u.Host == LitePages.Host)
                 {
                     var qs = HttpUtility.ParseQueryString(u.Query);
+                    // Гостю — только стартовая и служебные страницы: ни настроек, ни паролей, ни истории
+                    if (Guest && !GuestAllowed(u.AbsolutePath)) { e.Cancel = true; BeginInvoke(() =>
+                    {
+                        infoBar.ShowBar("guest", "\uE77B", L.T("В гостевом окне эта страница недоступна"));
+                        if (!core.Source.StartsWith("http")) core.Navigate(homeUrl); // пустая вкладка — показываем стартовую
+                    }); return; }
                     if (u.AbsolutePath == "/search")
                     {
                         e.Cancel = true;
@@ -990,7 +1004,7 @@ sealed partial class MainForm : Form
     void ApplyChrome()
     {
         address.Box.PlaceholderText = $"Поиск в {SearchEngines.Get(Cfg.Engine).Name} или адрес сайта";
-        bookmarksBar.Visible = Cfg.ShowBookmarksBar;
+        bookmarksBar.Visible = Cfg.ShowBookmarksBar && !Guest;
         showProxy = AppEnv.RunningSignature != "off" || Cfg.ProxyMode != "off";
         proxyBtn.GlyphColor = AppEnv.RestartNeeded ? Theme.Danger : Theme.Secure;
         tips.SetToolTip(proxyBtn, AppEnv.RestartNeeded
@@ -1026,6 +1040,7 @@ sealed partial class MainForm : Form
         menu.Items.Add(Theme.Item("Новая вкладка", () => _ = AddTab(homeUrl), "Ctrl+T", "\uE710"));
         menu.Items.Add(Theme.Item("Новое окно", () => BrowserApp.Instance.OpenWindow(false), "Ctrl+N", "\uE7C4"));
         menu.Items.Add(Theme.Item("Окно инкогнито", () => BrowserApp.Instance.OpenWindow(true), "Ctrl+Shift+N", "\uE727"));
+        menu.Items.Add(Theme.Item("Гостевое окно", BrowserApp.Instance.OpenGuest, "", "\uE77B"));
         if (WorkspacesHere) { var ws = WorkspacesMenu(); ws.Image = Theme.Glyph("\uE74C"); menu.Items.Add(ws); }
         menu.Items.Add(ProfilesMenu());
         menu.Items.Add(new ToolStripSeparator());
@@ -1215,7 +1230,7 @@ sealed partial class MainForm : Form
         {
             FormBorderStyle = FormBorderStyle.Sizable;
             strip.Visible = toolbar.Visible = true;
-            bookmarksBar.Visible = Cfg.ShowBookmarksBar;
+            bookmarksBar.Visible = Cfg.ShowBookmarksBar && !Guest;
             WindowState = stateBeforeFullscreen;
         }
         RefreshFrame();
@@ -1289,7 +1304,7 @@ sealed partial class MainForm : Form
     void UpdateTitle()
     {
         var title = active?.Title;
-        var suffix = Incognito ? " — Инкогнито — LiteBrowser" : Profiles.Current.Length > 0 ? $" — {Profiles.Current} — LiteBrowser" : " — LiteBrowser";
+        var suffix = Guest ? " — " + L.T("Гость") + " — LiteBrowser" : Incognito ? " — Инкогнито — LiteBrowser" : Profiles.Current.Length > 0 ? $" — {Profiles.Current} — LiteBrowser" : " — LiteBrowser";
         suffix = WorkspaceSuffix + suffix;
         Text = string.IsNullOrWhiteSpace(title) ? suffix[3..] : title + suffix;
     }

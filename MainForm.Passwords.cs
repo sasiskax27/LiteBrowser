@@ -29,7 +29,7 @@ sealed partial class MainForm
     void UpdateKey()
     {
         var origin = ActiveOrigin;
-        if (!Cfg.PasswordManager || origin == null) { address.SetKey(false, false); return; }
+        if (!Cfg.PasswordManager || origin == null || Guest) { address.SetKey(false, false); return; }
         bool saved = Vault.Unlocked && Vault.ForOrigin(origin).Count > 0;
         bool pending = PendingFor(origin);
         address.SetKey(active!.HasLoginForm || saved || pending, saved || pending);

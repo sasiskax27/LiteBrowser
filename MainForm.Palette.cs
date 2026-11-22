@@ -22,6 +22,7 @@ sealed partial class MainForm
         Cmd("", "Новая вкладка", () => _ = AddTab(homeUrl), "Ctrl+T", "new tab открыть");
         Cmd("", "Новое окно", () => BrowserApp.Instance.OpenWindow(false), "Ctrl+N", "window");
         Cmd("", "Новое окно инкогнито", () => BrowserApp.Instance.OpenWindow(true), "Ctrl+Shift+N", "приватное incognito private");
+        Cmd("", "Гостевое окно", BrowserApp.Instance.OpenGuest, "", "гость guest чужой");
         Cmd("", "Закрыть вкладку", () => { if (active != null) CloseTab(active); }, "Ctrl+W", "close");
         Cmd("", "Открыть закрытую вкладку", ReopenClosedTab, "Ctrl+Shift+T", "восстановить reopen");
         Cmd("", "Обновить страницу", () => active?.Core?.Reload(), "F5", "reload перезагрузить");

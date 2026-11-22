@@ -885,5 +885,9 @@
 "Новый PIN (от 4 символов)": "New PIN (4+ characters)",
 "Сменить PIN": "Change PIN",
 "PIN-код при запуске и после блокировки Windows (Win+L). Забыли PIN — удалите файл настроек; данные сайтов останутся": "A PIN at startup and after locking Windows (Win+L). Forgot it? Delete the settings file; site data stays",
-"Выход (запомнить все окна)": "Exit (remember all windows)"
+"Выход (запомнить все окна)": "Exit (remember all windows)",
+"Гость": "Guest",
+"Гостевое окно": "Guest window",
+"В гостевом окне эта страница недоступна": "This page isn't available in a guest window",
+"👤 Гостевой режим: ваши закладки, история и пароли не видны. Всё, что здесь откроют, удалится при закрытии окна": "👤 Guest mode: your bookmarks, history and passwords are hidden. Everything opened here is deleted when the window closes"
 }
