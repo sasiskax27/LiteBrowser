@@ -34,6 +34,7 @@ sealed partial class MainForm
             Cmd("✦", "ИИ: кратко пересказать страницу", () => OpenAi("summarize"), "", "ai summary итог суммаризация");
             Cmd("✦", "ИИ: главные мысли страницы", () => OpenAi("keypoints"), "", "ai тезисы");
             Cmd("✦", "ИИ: перевести страницу", () => OpenAi("translate"), "", "ai translate");
+            Cmd("✦", "ИИ: пересказать видео YouTube", () => OpenAi("video"), "", "ai youtube видео субтитры summary");
         }
         Cmd("", "Перевести страницу", TranslatePage, "", "translate google яндекс");
         Cmd("", "Читать вслух", () => _ = ReadAloud(), "Ctrl+Shift+U", "озвучить tts speech");

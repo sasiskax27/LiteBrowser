@@ -115,7 +115,23 @@ sealed partial class MainForm
 
         // Контекст страницы — из активной вкладки основного окна; это недоверенные данные
         string context = "", title = "";
-        if (action is "tabs" or "history")
+        // Пересказ страницы YouTube-видео — по субтитрам, а не по тексту страницы
+        if (action == "summarize" && active?.Core?.Source is { } ytUrl && VideoContext.IsYouTubeVideo(ytUrl)) action = "video";
+        if (action == "video")
+        {
+            if (active?.Core is not { } vcore || !VideoContext.IsYouTubeVideo(vcore.Source)) { Post(page, new { type = "aiError", text = L.T("Откройте видео на YouTube в активной вкладке") }); return; }
+            VideoContext.Result v;
+            try { v = await VideoContext.GetAsync(vcore); }
+            catch { Post(page, new { type = "aiError", text = L.T("Не удалось прочитать страницу видео") }); return; }
+            if (v.Error == "noplayer") { Post(page, new { type = "aiError", text = L.T("Плеер ещё не загрузился — подождите пару секунд") }); return; }
+            int vbudget = s.AiProvider == "local" ? 8000 : 60000;
+            var body = v.Text.Length > 0
+                ? "Субтитры" + (v.Lang.Length > 0 ? $" ({v.Lang})" : "") + ":\n" + VideoContext.Fit(v.Text, vbudget)
+                : "Субтитров у видео нет. Описание видео:\n" + v.Description;
+            title = v.Title;
+            context = $"<page>\nВидео: {v.Title}\nКанал: {v.Author}\nДлительность: {v.Length / 60}:{v.Length % 60:00}\n\n{body}\n</page>";
+        }
+        else if (action is "tabs" or "history")
         {
             if (action == "history" && prompt.Length == 0) { Post(page, new { type = "aiError", text = "Напишите, что искать в истории" }); return; }
             int budget = s.AiProvider == "local" ? 9000 : 40000;
@@ -155,7 +171,7 @@ sealed partial class MainForm
         {
             "summarize" => "Перескажи страницу", "keypoints" => "Ключевые мысли страницы", "explain" => "Объясни выделенное",
             "translate" => "Переведи выделенное", "rewrite" => "Перепиши выделенное", "code" => "Объясни код", "search" => "Что поискать по теме",
-            "tabs" => "Сравни открытые вкладки", _ => prompt,
+            "tabs" => "Сравни открытые вкладки", "video" => "Перескажи видео", _ => prompt,
         };
         Post(page, new { type = "aiStart", question = shown, page = title });
         var sb = new StringBuilder();

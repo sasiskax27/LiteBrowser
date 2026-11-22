@@ -1,4 +1,4 @@
-using Microsoft.Web.WebView2.Core;
+﻿using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 
 namespace LiteBrowser;
@@ -248,6 +248,52 @@ static class DevToolsSelfTest
                 Check("загрузки: метка «из интернета»", zone.Contains("ZoneId=3") && !zone.Contains("secret"), zone.Replace("\r\n", " | "));
             }
             catch (Exception ex) { log.Add("FAIL исключение: " + ex); }
+            finally { File.WriteAllLines(outFile, log); form.Close(); }
+        };
+        Application.Run(form);
+        try { Directory.Delete(root, true); } catch { }
+    }
+}
+
+/// <summary>Самотест субтитров YouTube: открывает видео во временной папке и достаёт субтитры, как для пересказа ИИ.</summary>
+static class VideoSelfTest
+{
+    public static void Run(string url, string outFile)
+    {
+        var log = new List<string>();
+        var root = Path.Combine(Path.GetTempPath(), "LiteVideoTest-" + Guid.NewGuid().ToString("N"));
+        var form = new Form { Width = 1000, Height = 700, ShowInTaskbar = false, StartPosition = FormStartPosition.Manual, Location = Environment.GetEnvironmentVariable("LITEBROWSER_TEST_VISIBLE") != null ? new Point(60, 60) : new Point(-3000, -3000) };
+        var view = new WebView2 { Dock = DockStyle.Fill };
+        form.Controls.Add(view);
+        form.Shown += async (_, _) =>
+        {
+            try
+            {
+                var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(root, "data"));
+                await view.EnsureCoreWebView2Async(env);
+                view.CoreWebView2.IsMuted = true;
+                var loaded = new TaskCompletionSource<bool>();
+                view.CoreWebView2.NavigationCompleted += (_, e) => loaded.TrySetResult(e.IsSuccess);
+                view.CoreWebView2.Navigate(url);
+                await Task.WhenAny(loaded.Task, Task.Delay(30_000));
+                VideoContext.Result? r = null;
+                // Как у живого зрителя: видео играет (субтитры YouTube грузит только во время просмотра)
+                await Task.Delay(3000);
+                await view.CoreWebView2.ExecuteScriptAsync("try { const m = document.getElementById('movie_player'); m.mute(); m.playVideo(); } catch (e) { }");
+                for (int i = 0; i < 10; i++)
+                {
+                    await Task.Delay(1500);
+                    r = await VideoContext.GetAsync(view.CoreWebView2);
+                    if (r.Error != "noplayer") break;
+                }
+                log.Add($"видео: {r!.Title} — {r.Author}, {r.Length} с, язык субтитров: {r.Lang}, ошибка: {(r.Error.Length > 0 ? r.Error : "нет")}");
+                log.Add($"субтитры: {r.Text.Length} символов; {r.Debug}");
+                foreach (var line in r.Text.Split('\n').Take(5)) log.Add("   " + line);
+                var fit = VideoContext.Fit(r.Text, 2000);
+                log.Add($"сжатие до 2000: {fit.Length} символов, строк {fit.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length}");
+                log.Add((r.Text.Length > 200 ? "OK   " : "FAIL ") + "субтитры получены");
+            }
+            catch (Exception ex) { log.Add("FAIL исключение: " + ex.Message); }
             finally { File.WriteAllLines(outFile, log); form.Close(); }
         };
         Application.Run(form);

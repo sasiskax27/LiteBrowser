@@ -675,5 +675,11 @@
 "{n} мс": "{n} ms",
 "{n} с": "{n} s",
 "{n} мин": "{n} min",
-"Учитывать открытую страницу": "Use the open page"
+"Учитывать открытую страницу": "Use the open page",
+"🎬 Пересказать видео YouTube": "🎬 Summarize YouTube video",
+"ИИ: пересказать видео YouTube": "AI: summarize YouTube video",
+"Перескажи видео": "Summarize the video",
+"Откройте видео на YouTube в активной вкладке": "Open a YouTube video in the active tab",
+"Не удалось прочитать страницу видео": "Couldn't read the video page",
+"Плеер ещё не загрузился — подождите пару секунд": "The player hasn't loaded yet — wait a couple of seconds"
 }
