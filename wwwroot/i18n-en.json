@@ -739,5 +739,17 @@
 "заморожена — не занимает память": "frozen — uses no memory",
 "ещё не загружена": "not loaded yet",
 "звук выключен": "muted",
-"играет звук": "playing audio"
+"играет звук": "playing audio",
+"Редактировать": "Edit",
+"Редактор скриншота": "Screenshot editor",
+"Стрелка": "Arrow",
+"Рамка": "Box",
+"Маркер": "Highlighter",
+"Текст": "Text",
+"Размыть (скрыть личное)": "Blur (hide private info)",
+"Обрезать": "Crop",
+"Отменить (Ctrl+Z)": "Undo (Ctrl+Z)",
+"Копировать": "Copy",
+"Текст на скриншоте": "Text on screenshot",
+"Скопировано в буфер обмена": "Copied to clipboard"
 }

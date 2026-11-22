@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Text.Json;
@@ -89,7 +89,8 @@ sealed partial class MainForm
         {
             var path = await PageTools.Screenshot(core, full);
             infoBar.ShowBar("shot", "", $"Скриншот сохранён и скопирован в буфер обмена: {Path.GetFileName(path)}",
-                ("Открыть", () => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }), true),
+                ("Редактировать", () => { infoBar.HideBar(); using var ed = new ScreenshotEditor(path); ed.ShowDialog(this); }, true),
+                ("Открыть", () => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path) { UseShellExecute = true }), false),
                 ("Показать в папке", () => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", $"/select,\"{path}\"") { UseShellExecute = true }), false));
         }
         catch (Exception ex) { MessageBox.Show(this, "Не удалось сделать скриншот: " + ex.Message, "Скриншот"); }

@@ -198,6 +198,16 @@ static class Program
             return;
         }
 
+        // Редактор скриншота для любой картинки: LiteBrowser.exe --edit-image "файл.png"
+        if (args.Length == 2 && args[0] == "--edit-image" && File.Exists(args[1]))
+        {
+            ApplicationConfiguration.Initialize();
+            AppEnv.Init();
+            Theme.ApplyPalette(AppEnv.Settings.UiTheme, AppEnv.Settings.Accent);
+            Application.Run(new ScreenshotEditor(args[1]));
+            return;
+        }
+
         if (args.Contains("--uninstall")) { Installer.Uninstall(args.Contains("--quiet")); return; }
         if (args.Contains("--install")) { Installer.Install(args.Contains("--quiet")); return; }
 
