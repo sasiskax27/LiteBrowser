@@ -972,7 +972,6 @@
 "Вход через Windows Hello": "Sign in with Windows Hello",
 "Отпечаток пальца, лицо или PIN Windows вместо PIN браузера. Если Hello не сработает — спросим PIN браузера": "Fingerprint, face or Windows PIN instead of the browser PIN. If Hello fails, we'll ask for the browser PIN",
 "Отклонять cookie-баннеры": "Reject cookie banners",
-"Сам нажимает «Отклонить» или «Только необходимые». Если отказаться нельзя — просто прячет баннер, согласие не даёт": "Clicks \"Reject\" or \"Necessary only\" for you. If there's no way to refuse, it just hides the banner without consenting",
 "Идёт запись этой вкладки со звуком браузера": "Recording this tab with browser sound",
 "Идёт запись этой вкладки (без звука: ": "Recording this tab (no sound: ",
 "Идёт запись этой вкладки (без звука)": "Recording this tab (no sound)",
@@ -1025,5 +1024,6 @@
 "Стоп": "Stop",
 "🔊 Прочитать вслух": "🔊 Read aloud",
 "🔊 Читать страницу вслух": "🔊 Read the page aloud",
-"Читать страницу вслух": "Read the page aloud"
+"Читать страницу вслух": "Read the page aloud",
+"Сам нажимает «Отклонить» или «Только необходимые» — сайт запоминает отказ. Если отказаться нельзя, прячет баннер. Список «Баннеры cookies» выше только прячет их": "Clicks \"Reject\" or \"Necessary only\" for you, so the site remembers your refusal. If there's no way to refuse, it hides the banner. The \"Cookie banners\" list above only hides them"
 }
