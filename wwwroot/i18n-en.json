@@ -735,5 +735,9 @@
 "Вкладки сверху": "Tabs on top",
 "Вертикальные вкладки (слева)": "Vertical tabs (left)",
 "Вертикальные вкладки": "Vertical tabs",
-"Вкладки списком слева, как в Edge. Удобно, когда вкладок много. Свернуть до значков — кнопка внизу списка": "Tabs as a list on the left, like in Edge. Handy with many tabs. Collapse to icons with the button at the bottom"
+"Вкладки списком слева, как в Edge. Удобно, когда вкладок много. Свернуть до значков — кнопка внизу списка": "Tabs as a list on the left, like in Edge. Handy with many tabs. Collapse to icons with the button at the bottom",
+"заморожена — не занимает память": "frozen — uses no memory",
+"ещё не загружена": "not loaded yet",
+"звук выключен": "muted",
+"играет звук": "playing audio"
 }

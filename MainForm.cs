@@ -82,6 +82,7 @@ sealed partial class MainForm : Form
         strip.GroupClicked += g => { g.Collapsed = !g.Collapsed; if (g.Collapsed && active?.Group == g) { var other = tabs.FirstOrDefault(t => t.Group != g); if (other != null) SelectTab(other); } strip.Invalidate(); };
         strip.GroupMenu += ShowGroupMenu;
         strip.NewTab += () => _ = AddTab(homeUrl);
+        strip.HoverChanged += OnTabHover;
         strip.CompactToggled += () => { bool v = !Cfg.VerticalTabsCompact; CopyAndSave(x => x.VerticalTabsCompact = v); };
 
         toolbar.Height = Theme.S(50);
@@ -346,6 +347,7 @@ sealed partial class MainForm : Form
 
     void SelectTab(BrowserTab tab)
     {
+        if (active != null && active != tab && active.Core != null) _ = TabPreview.CaptureAsync(active);
         if (findBar != null && active != tab) CloseFind();
         if (active != null && active != tab) active.LastActive = DateTime.Now;
         active = tab;
@@ -373,6 +375,7 @@ sealed partial class MainForm : Form
         content.Controls.Remove(tab.View);
         tab.View.Dispose();
         tab.Icon?.Dispose();
+        tab.Thumb?.Dispose();
         if (tab == active || active == null) SelectTab(tabs[Math.Min(idx, tabs.Count - 1)]);
         else strip.Invalidate();
     }
@@ -654,6 +657,7 @@ sealed partial class MainForm : Form
             strip.Invalidate();
             if (e.IsSuccess && !Incognito) _ = OfferTranslate(tab);
             if (e.IsSuccess) _ = ApplyHighlights(tab);
+            if (e.IsSuccess) _ = CaptureThumbLater(tab);
             if (e.IsSuccess || e.WebErrorStatus == CoreWebView2WebErrorStatus.OperationCanceled) return;
             if (TryOfflineFallback(core, core.Source, e.WebErrorStatus)) return;
             if (!Uri.TryCreate(core.Source, UriKind.Absolute, out var u)) return;

@@ -36,6 +36,7 @@ sealed class BrowserTab
     public BrowserTab? SplitWith { get; set; }
     public int ExpectedZoom { get; set; } = 100;     // масштаб, который поставил сам браузер (для запоминания по сайтам)
     public string DarkSig { get; set; } = "";
+    public Image? Thumb { get; set; }   // уменьшенный снимок страницы для превью
     public string? DarkScriptId { get; set; }   // пара в разделённом экране
 }
 
@@ -366,6 +367,8 @@ sealed class TabStrip : Control
     public bool Vertical { get; set; }
     public bool Compact { get; set; }
     public event Action? CompactToggled;
+    /// <summary>Мышь над вкладкой (для превью): вкладка и её прямоугольник на экране; null — ушла.</summary>
+    public event Action<BrowserTab?, Rectangle>? HoverChanged;
 
     public float Spin;
     public Color FrameColor { get; set; } = Theme.Frame;
@@ -677,7 +680,13 @@ sealed class TabStrip : Control
         bool hco = Vertical && collapseRect.Contains(p);
         if (hco) { ht = null; hl = null; hc = ha = hp = false; }
         if (ht == hoverTab && hl == hoverLabel && hc == hoverClose && hp == hoverPlus && ha == hoverAudio && hco == hoverCollapse) return;
+        bool tabChanged = ht != hoverTab;
         hoverTab = ht; hoverLabel = hl; hoverClose = hc; hoverPlus = hp; hoverAudio = ha; hoverCollapse = hco;
+        if (tabChanged)
+        {
+            var slot = ht == null ? null : slots.FirstOrDefault(s => s.Tab == ht);
+            HoverChanged?.Invoke(ht, slot == null ? Rectangle.Empty : RectangleToScreen(slot.R));
+        }
         Invalidate();
     }
 
@@ -708,6 +717,7 @@ sealed class TabStrip : Control
     protected override void OnMouseLeave(EventArgs e)
     {
         hoverTab = null; hoverLabel = null; hoverClose = hoverPlus = hoverAudio = hoverCollapse = false;
+        HoverChanged?.Invoke(null, Rectangle.Empty);
         Invalidate();
         base.OnMouseLeave(e);
     }
@@ -715,6 +725,7 @@ sealed class TabStrip : Control
     protected override void OnMouseDown(MouseEventArgs e)
     {
         UpdateHover(e.Location);
+        HoverChanged?.Invoke(null, Rectangle.Empty);
         if (hoverCollapse && e.Button == MouseButtons.Left) { CompactToggled?.Invoke(); base.OnMouseDown(e); return; }
         if (hoverLabel != null)
         {

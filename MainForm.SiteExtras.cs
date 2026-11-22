@@ -166,4 +166,39 @@ sealed partial class MainForm
         bool v = !Cfg.VerticalTabs;
         CopyAndSave(x => x.VerticalTabs = v);
     }
+
+    // ================= Превью вкладки при наведении =================
+
+    TabPreview? preview;
+    System.Windows.Forms.Timer? previewTimer;
+    (BrowserTab tab, Rectangle rect)? previewPending;
+
+    void OnTabHover(BrowserTab? t, Rectangle rect)
+    {
+        previewTimer?.Stop();
+        if (t == null) { preview?.Hide(); return; }
+        previewPending = (t, rect);
+        // Уже показана — сразу переключаем на другую вкладку, иначе небольшая задержка, как в Chrome
+        if (preview is { Visible: true }) { ShowPreviewNow(); return; }
+        previewTimer ??= new System.Windows.Forms.Timer { Interval = 550 };
+        previewTimer.Tick -= PreviewTick;
+        previewTimer.Tick += PreviewTick;
+        previewTimer.Start();
+    }
+
+    void PreviewTick(object? s, EventArgs e) { previewTimer?.Stop(); ShowPreviewNow(); }
+
+    void ShowPreviewNow()
+    {
+        if (previewPending is not { } p || !tabs.Contains(p.tab) || !ContainsFocus && Form.ActiveForm != this) return;
+        preview ??= new TabPreview();
+        preview.ShowFor(p.tab, p.rect, strip.Vertical, this);
+    }
+
+    /// <summary>Снимок страницы для превью — через пару секунд после загрузки, пока вкладка на экране.</summary>
+    async Task CaptureThumbLater(BrowserTab tab)
+    {
+        await Task.Delay(1500);
+        if (tab == active && !tab.View.IsDisposed) await TabPreview.CaptureAsync(tab);
+    }
 }
