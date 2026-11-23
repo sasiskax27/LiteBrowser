@@ -105,3 +105,8 @@ header .logo.icon { border-radius: 16px; font-size: 24px; font-weight: 400; colo
 main { animation: page-in .28s var(--ease); }
 @keyframes page-in { from { opacity: .4; transform: translateY(6px); } }
 @media (prefers-reduced-motion: reduce) { main { animation: none; } }
+
+/* Строки настроек: текст сжимается, кнопки справа не вылезают за край карточки */
+.row > div:first-child { flex: 1; min-width: 0; }
+.row > .actions, .row > .btn, .row > .seg, .row > .switch { flex-shrink: 0; }
+.row .actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; max-width: 55%; }

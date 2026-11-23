@@ -1,4 +1,4 @@
-using Microsoft.Web.WebView2.Core;
+﻿using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 
 namespace LiteBrowser;
@@ -82,7 +82,7 @@ sealed class SidePanel : Panel
         {
             var app = a;
             var label = AppLabel(a.Name);
-            var b = new IconButton(label, a.Name, tips) { TextMode = true };
+            var b = new IconButton(label, a.Name, tips) { TextMode = true, Tile = AppColor(a.Name) };
             b.BackColor = Theme.Toolbar;
             b.Click += (_, _) => ShowApp(app);
             b.MouseUp += (_, e) => { if (e.Button == MouseButtons.Right) ShowAppMenu(app, b); };
@@ -98,6 +98,21 @@ sealed class SidePanel : Panel
             appViews.Remove(key);
         }
         LayoutHeader();
+    }
+
+    /// <summary>Фирменный цвет приложения (или цвет из названия — у каждого свой, но постоянный).</summary>
+    static Color AppColor(string name)
+    {
+        var known = new Dictionary<string, Color>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Telegram"] = Color.FromArgb(42, 171, 238), ["WhatsApp"] = Color.FromArgb(37, 211, 102), ["ChatGPT"] = Color.FromArgb(16, 163, 127),
+            ["Яндекс Музыка"] = Color.FromArgb(255, 204, 0), ["YouTube Music"] = Color.FromArgb(255, 0, 51), ["Discord"] = Color.FromArgb(88, 101, 242),
+            ["ВКонтакте"] = Color.FromArgb(0, 119, 255), ["YouTube"] = Color.FromArgb(255, 0, 51),
+        };
+        if (known.TryGetValue(name, out var c)) return c;
+        Color[] pal = { Color.FromArgb(124, 92, 255), Color.FromArgb(236, 72, 153), Color.FromArgb(14, 165, 233), Color.FromArgb(245, 158, 11), Color.FromArgb(16, 185, 129) };
+        int h = 0; foreach (var ch in name) h = h * 31 + ch;
+        return pal[Math.Abs(h) % pal.Length];
     }
 
     static string AppLabel(string name)
@@ -132,7 +147,7 @@ sealed class SidePanel : Panel
         add.SetBounds(x, y, s, s);
         close.SetBounds(right, y, s, s);
         // Подсветка активного приложения
-        foreach (var (b, a) in appButtons) b.GlyphColor = current != view && appViews.GetValueOrDefault(a.Url) == current ? Theme.Accent : null;
+        foreach (var (b, a) in appButtons) b.Active = current != view && appViews.GetValueOrDefault(a.Url) == current;
     }
 
     Task Init() => init ??= Setup(view, lite: true);

@@ -194,7 +194,9 @@ function renderLookAndSync() {
     const b = document.createElement('button');
     b.style.background = a.color;
     b.title = a.name;
-    b.className = state.accent === a.id ? 'on' : '';
+    // В теме «Неон» акцент по умолчанию — неоновый, хотя в настройках он записан как синий
+    const cur = state.uiTheme === 'neon' && state.accent === 'blue' ? 'neon' : state.accent;
+    b.className = cur === a.id ? 'on' : '';
     b.onclick = () => { state.accent = a.id; save(); render(); };
     acc.appendChild(b);
   }

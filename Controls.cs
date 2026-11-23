@@ -72,6 +72,11 @@ sealed class IconButton : Control
     /// <summary>Показывать обычный текст (например «100%») вместо значка.</summary>
     public bool TextMode { get; set; }
     public Color? GlyphColor { get => glyphColor; set { if (glyphColor != value) { glyphColor = value; Invalidate(); } } }
+    /// <summary>Цветная плитка под текстом (значки приложений боковой панели).</summary>
+    public Color? Tile { get; set; }
+    /// <summary>Отметка «открыто» под плиткой.</summary>
+    public bool Active { get => active; set { if (active != value) { active = value; Invalidate(); } } }
+    bool active;
     /// <summary>-1 — без кольца, 0..1 — прогресс.</summary>
     public float Progress { get => progress; set { if (Math.Abs(progress - value) > 0.003f) { progress = value; Invalidate(); } } }
 
@@ -111,6 +116,24 @@ sealed class IconButton : Control
             g.DrawEllipse(track, r);
             using var pen = new Pen(Theme.Accent, w) { StartCap = LineCap.Round, EndCap = LineCap.Round };
             g.DrawArc(pen, r, -90, Math.Max(8, 360 * progress));
+        }
+        if (Tile is { } tile)
+        {
+            // Плитка приложения: скруглённый квадрат фирменного цвета с белой надписью
+            int pad = Theme.S(hover ? 4 : 5);
+            var tr = new RectangleF(pad, pad, Width - pad * 2 - 1, Height - pad * 2 - 1);
+            using var tp = Theme.Round(tr, Theme.S(7));
+            using var tb = new LinearGradientBrush(tr, ControlPaint.Light(tile, .15f), tile, 90f);
+            g.FillPath(tb, tp);
+            if (active)
+            {
+                using var ap = new Pen(Theme.Accent, Theme.S(2));
+                using var ar = Theme.Round(new RectangleF(1.5f, 1.5f, Width - 4, Height - 4), Theme.S(9));
+                g.DrawPath(ap, ar);
+            }
+            var tc = tile.GetBrightness() > .62f ? Color.FromArgb(30, 24, 10) : Color.White;
+            TextRenderer.DrawText(g, glyph, Theme.GetFont("Segoe UI", 8.5f, FontStyle.Bold), Rectangle.Round(tr), tc, Theme.Center);
+            return;
         }
         var color = !Enabled ? Color.FromArgb(78, 82, 96) : glyphColor ?? Theme.Text;
         var font = TextMode ? Theme.GetFont("Segoe UI", 9f, FontStyle.Bold) : progress >= 0 ? SmallFont : Theme.GetFont(Theme.IconFont, 11f);
@@ -580,6 +603,15 @@ sealed class TabStrip : Control
                     using var ab = new SolidBrush(Theme.Accent);
                     g.FillRectangle(ab, r.X, r.Y + S(9), S(3), r.Height - S(18));
                 }
+                if (Theme.Neon && !Vertical)
+                {
+                    // Неоновая полоска сверху активной вкладки: несколько слоёв — «свечение»
+                    for (int k = 3; k >= 1; k--)
+                    {
+                        using var gp = new Pen(Color.FromArgb(k == 1 ? 255 : 50 / k, Theme.Accent), S(k == 1 ? 2 : 2 + k * 2)) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+                        g.DrawLine(gp, r.X + S(14), r.Y + S(1.5f), r.Right - S(14), r.Y + S(1.5f));
+                    }
+                }
             }
             else if (selected != null && t.SplitWith == selected)
             {
@@ -893,18 +925,19 @@ sealed class InfoBar : Panel
         buttons.Controls.Clear();
         foreach (var (label, act, primary) in actions.Reverse())
         {
-            var b = new Button
+            var b = new RoundButton
             {
-                Text = L.T(label), AutoSize = true, FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand,
+                Text = L.T(label), AutoSize = true,
                 Font = Theme.GetFont("Segoe UI", 9f, primary ? FontStyle.Bold : FontStyle.Regular),
-                BackColor = primary ? Theme.Accent : Theme.Hover, ForeColor = primary ? Color.FromArgb(13, 16, 32) : Theme.Text,
-                Margin = new Padding(Theme.S(4), Theme.S(7), 0, 0), Padding = new Padding(Theme.S(8), 0, Theme.S(8), 0), Height = Theme.S(30),
+                BackColor = primary ? Theme.Accent : Theme.Field, ForeColor = primary ? (Theme.Neon ? Color.White : Color.FromArgb(13, 16, 32)) : Theme.Text,
+                Margin = new Padding(Theme.S(6), Theme.S(7), 0, 0), Padding = new Padding(Theme.S(12), 0, Theme.S(12), 0), Height = Theme.S(30),
             };
-            b.FlatAppearance.BorderSize = 0;
             b.Click += (_, _) => act();
             buttons.Controls.Add(b);
         }
-        BackColor = Theme.IsLight ? Color.FromArgb(226, 232, 252) : Color.FromArgb(40, 46, 70);
+        // Фон — в тон панели с лёгким оттенком акцента (а не плотная синяя лента)
+        BackColor = Blend(Theme.Toolbar, Theme.Accent, Theme.IsLight ? .10f : Theme.Neon ? .10f : .08f);
+        buttons.BackColor = icon.BackColor = text.BackColor = close.BackColor = BackColor;
         icon.ForeColor = Theme.Accent;
         text.ForeColor = Theme.Text;
         close.ForeColor = Theme.TextDim;
@@ -913,6 +946,18 @@ sealed class InfoBar : Panel
     }
 
     public void SetText(string message) => text.Text = L.T(message);
+
+    static Color Blend(Color a, Color b, float k) => Color.FromArgb((int)(a.R + (b.R - a.R) * k), (int)(a.G + (b.G - a.G) * k), (int)(a.B + (b.B - a.B) * k));
+
+    // Полоска акцента слева и тонкая линия снизу
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        using var ab = new SolidBrush(Theme.Accent);
+        e.Graphics.FillRectangle(ab, 0, 0, Theme.S(3), Height);
+        using var lp = new Pen(Theme.Line);
+        e.Graphics.DrawLine(lp, 0, Height - 1, Width, Height - 1);
+    }
 
     public void HideBar() { Visible = false; Key = null; }
 

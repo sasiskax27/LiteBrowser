@@ -33,6 +33,7 @@ static class Theme
         ["orange"] = (Color.FromArgb(255, 159, 74), Color.FromArgb(255, 107, 107), "Оранжевый"),
         ["pink"] = (Color.FromArgb(255, 111, 181), Color.FromArgb(176, 124, 255), "Розовый"),
         ["red"] = (Color.FromArgb(255, 107, 107), Color.FromArgb(255, 159, 74), "Красный"),
+        ["neon"] = (Color.FromArgb(255, 46, 151), Color.FromArgb(0, 229, 255), "Неон"),
         ["system"] = SystemAccent(),
     };
 
@@ -52,8 +53,32 @@ static class Theme
         return (c, b, "Как в Windows");
     }
 
+    /// <summary>CSS темы «Неон» для своих страниц: почти чёрный фон, свечение рамок, кнопок и заголовков, «техничный» шрифт заголовков.</summary>
+    static string NeonCss()
+    {
+        static string R(Color c) => $"{c.R},{c.G},{c.B}";
+        string a = R(Accent), b = R(Accent2);
+        return ":root{--bg:#06060a;--card:rgba(" + a + ",.045);--card2:rgba(255,255,255,.07);--line:rgba(" + a + ",.24);--text:#faf6ff;--dim:#aca0cc}" +
+               "body{background:#06060a}" +
+               ".glow{background:radial-gradient(40% 35% at 18% 18%,rgba(" + a + ",.32),transparent 70%),radial-gradient(36% 32% at 86% 82%,rgba(" + b + ",.24),transparent 70%)!important;opacity:1!important}" +
+               "h1,h2,.time,.row-title,.name,.title,.hero h1{font-family:Bahnschrift,'Segoe UI',sans-serif}" +
+               "h1{letter-spacing:.6px;text-shadow:0 0 18px rgba(" + a + ",.55)}" +
+               "h2 .icon,.logo{filter:drop-shadow(0 0 8px rgba(" + a + ",.7))}" +
+               "section,.list,.wg,.dialog,.card{box-shadow:0 0 0 1px rgba(" + a + ",.20),0 0 30px rgba(" + a + ",.07)}" +
+               ".btn.primary,.seg button.on{color:#fff!important;box-shadow:0 0 16px rgba(" + a + ",.55)}" +
+               ".btn:hover{border-color:rgba(" + a + ",.6)}" +
+               ".switch input:checked+.slider{box-shadow:0 0 12px rgba(" + a + ",.65)}" +
+               "input.text:focus,textarea.text:focus,.search:focus-within{border-color:rgb(" + a + ")!important;box-shadow:0 0 0 3px rgba(" + a + ",.22),0 0 20px rgba(" + a + ",.25)!important}" +
+               ".time{font-weight:300!important;letter-spacing:2px!important;filter:drop-shadow(0 0 16px rgba(" + a + ",.65)) drop-shadow(0 0 40px rgba(" + b + ",.25))}" +
+               ".tile .ic,.tile i{box-shadow:0 0 18px rgba(" + a + ",.35)}" +
+               "::selection{background:rgba(" + a + ",.45)}" +
+               "::-webkit-scrollbar-thumb{background-color:rgba(" + a + ",.35)!important}";
+    }
+
     /// <summary>Цветовые схемы помимо стандартных тёмной и светлой.</summary>
-    public static readonly string[] ExtraThemes = { "black", "nord", "forest", "sepia" };
+    public static readonly string[] ExtraThemes = { "black", "nord", "forest", "sepia", "neon" };
+    /// <summary>Тема «Неон»: свечение акцента в окне и на страницах.</summary>
+    public static bool Neon { get; private set; }
     static string pageBg = "";
 
     static Color Darken(Color c, float k) => Color.FromArgb((int)(c.R * (1 - k)), (int)(c.G * (1 - k)), (int)(c.B * (1 - k)));
@@ -72,6 +97,7 @@ static class Theme
     public static void ApplyPalette(string ui, string accent)
     {
         IsLight = ui == "light" || ui == "sepia" || (ui == "auto" && WindowsUsesLight());
+        Neon = ui == "neon";
         pageBg = "";
         var (a, b, _) = Accents.TryGetValue(accent, out var x) ? x : Accents["blue"];
         if (IsLight)
@@ -114,6 +140,15 @@ static class Theme
                     Line = Color.FromArgb(59, 66, 82); Menu = Color.FromArgb(46, 52, 64);
                     Text = Color.FromArgb(236, 239, 244); TextDim = Color.FromArgb(160, 170, 190);
                     pageBg = ":root{--bg:#242933;--card:rgba(236,239,244,.05);--text:#eceff4;--dim:#a0aabe}";
+                    break;
+                case "neon": // неон — почти чёрная, кислотно-розовый и бирюзовый, со свечением
+                    Frame = Color.FromArgb(6, 6, 10); Toolbar = Color.FromArgb(13, 11, 20); Field = Color.FromArgb(18, 15, 28);
+                    TabHover = Color.FromArgb(22, 17, 34); Hover = Color.FromArgb(48, 28, 66); Pressed = Color.FromArgb(70, 36, 96);
+                    Line = Color.FromArgb(62, 34, 88); Menu = Color.FromArgb(15, 12, 24);
+                    Text = Color.FromArgb(250, 246, 255); TextDim = Color.FromArgb(172, 160, 204);
+                    if (accent == "blue") (Accent, Accent2) = (Color.FromArgb(255, 46, 151), Color.FromArgb(0, 229, 255)); // свой акцент — если выбран другой
+                    Secure = Color.FromArgb(57, 255, 160); Danger = Color.FromArgb(255, 70, 110);
+                    pageBg = NeonCss();
                     break;
                 case "forest": // лес — тёмно-зелёная
                     Frame = Color.FromArgb(18, 26, 22); Toolbar = Color.FromArgb(28, 40, 34); Field = Color.FromArgb(20, 30, 25);
