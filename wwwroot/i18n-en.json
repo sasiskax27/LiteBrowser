@@ -1061,5 +1061,14 @@
 "Читать вслух онлайн-голосом, если в Windows нет голоса языка": "Read aloud with an online voice if Windows has no voice for the language",
 "Например, если нет русского голоса. Текст страницы уходит в Google; бесплатный голос Windows можно установить в Параметры → Время и язык → Речь": "For example, if there's no Russian voice. The page text goes to Google; you can install a free Windows voice in Settings → Time & language → Speech",
 "Защита от слежки по отпечатку браузера": "Browser fingerprint protection",
-"Сайты получают слегка искажённые данные холста, звука и видеокарты — узнать вас без cookies сложнее. Если сайт работает странно, нажмите щит 🛡 и выключите защиту для него": "Sites get slightly altered canvas, audio and GPU data, so it's harder to recognize you without cookies. If a site acts strangely, click the shield 🛡 and turn protection off for it"
+"Сайты получают слегка искажённые данные холста, звука и видеокарты — узнать вас без cookies сложнее. Если сайт работает странно, нажмите щит 🛡 и выключите защиту для него": "Sites get slightly altered canvas, audio and GPU data, so it's harder to recognize you without cookies. If a site acts strangely, click the shield 🛡 and turn protection off for it",
+"Тёмная тема для сайтов по расписанию": "Dark theme for sites on a schedule",
+"Вечером и ночью сайты тёмные, днём — как есть. Переключается само, без перезагрузки страниц": "Sites are dark in the evening and at night, as-is during the day. Switches by itself, without reloading pages",
+"до": "to",
+"Откройте видео на YouTube": "Open a YouTube video",
+"Включены субтитры на русском": "English subtitles are on",
+"Включён автоперевод субтитров на русский (с языка: ": "Auto-translated subtitles into English are on (from: ",
+"У этого видео нет субтитров — даже автоматических": "This video has no subtitles, not even automatic ones",
+"Плеер ещё не загрузился — попробуйте через пару секунд": "The player hasn't loaded yet — try again in a couple of seconds",
+"Субтитры YouTube на русском": "YouTube subtitles in English"
 }

@@ -192,7 +192,7 @@ sealed partial class MainForm : Form
         ApplyTabLayout();
 
         anim.Tick += (_, _) => Animate();
-        freezeTimer.Tick += async (_, _) => await FreezeIdleTabs();
+        freezeTimer.Tick += async (_, _) => { CheckDarkSchedule(); await FreezeIdleTabs(); };
         freezeTimer.Start();
 
         AppEnv.SettingsChanged += OnSettingsChanged;
@@ -1109,6 +1109,7 @@ sealed partial class MainForm : Form
         pageMenu.DropDownItems.Add(Theme.Item("Скриншот всей страницы", () => _ = TakeScreenshot(true), null, "\uE722"));
         pageMenu.DropDownItems.Add(Theme.Item("Мини-плеер поверх окон", () => { if (active != null) MiniPlayerForm.ShowFor(this, active); }, null, "\uE8B2"));
         pageMenu.DropDownItems.Add(Theme.Item("Текст с экрана (выделить область)", () => _ = RecognizeArea(), "Ctrl+Shift+X", "\uE8D2"));
+        if (active?.Core?.Source is { } ys && VideoContext.IsYouTubeVideo(ys)) pageMenu.DropDownItems.Add(Theme.Item("Субтитры YouTube на русском", () => _ = YouTubeSubtitles(), null, "\uE7F0"));
         pageMenu.DropDownItems.Add(Theme.Item("Сравнить цены в магазинах", () => _ = ComparePrices(), null, "\uE7BF"));
         pageMenu.DropDownItems.Add(Theme.Item(recorder != null ? "Остановить запись видео" : "Записать видео вкладки", () => _ = ToggleRecording(), "Alt+Shift+R", "\uE7C8"));
         pageMenu.DropDownItems.Add(Theme.Item("QR-код страницы", ShowQr, null, "\uED14"));

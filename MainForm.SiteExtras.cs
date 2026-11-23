@@ -40,7 +40,33 @@ sealed partial class MainForm
     // ================= Тёмная тема для любого сайта =================
 
     /// <summary>Скрипт тёмной темы: решает по адресу, нужна ли она, и не трогает сайты, которые и так тёмные.</summary>
-    string DarkScript() => DarkScriptFor(Cfg.ForceDark, Cfg.DarkSites, Cfg.DarkExclude);
+    string DarkScript() => DarkScriptFor(DarkAll, Cfg.DarkSites, Cfg.DarkExclude);
+
+    /// <summary>Тёмная тема для всех сайтов сейчас: включена всегда или по расписанию (например, с 21:00 до 07:00).</summary>
+    internal static bool DarkAll => Cfg.ForceDark || (Cfg.DarkSchedule && InSchedule(TimeOnly.FromDateTime(DateTime.Now), Cfg.DarkFrom, Cfg.DarkTo));
+
+    internal static bool InSchedule(TimeOnly now, string from, string to)
+    {
+        if (!TimeOnly.TryParse(from, out var f) || !TimeOnly.TryParse(to, out var t) || f == t) return false;
+        return f < t ? now >= f && now < t : now >= f || now < t; // через полночь: 21:00–07:00
+    }
+
+    bool lastDarkAll = DarkAll;
+
+    /// <summary>Раз в 30 секунд: наступило время ночной темы или кончилось — переключаем на открытых страницах сразу.</summary>
+    void CheckDarkSchedule()
+    {
+        if (!Cfg.DarkSchedule || Cfg.ForceDark) { lastDarkAll = DarkAll; return; }
+        bool now = DarkAll;
+        if (now == lastDarkAll) return;
+        lastDarkAll = now;
+        foreach (var t in tabs)
+        {
+            ApplyDarkScript(t);
+            if (t.Core == null) continue;
+            try { _ = t.Core.ExecuteScriptAsync(now ? DarkScript() : "(() => { const s = document.getElementById('lite-dark'); if (s) s.remove(); })()"); } catch { }
+        }
+    }
 
     public static string DarkScriptFor(bool all, List<string> on, List<string> off)
     {
@@ -74,13 +100,13 @@ sealed partial class MainForm
     {
         var core = tab.Core;
         if (core == null) return;
-        var sig = Cfg.ForceDark + "|" + string.Join(",", Cfg.DarkSites) + "|" + string.Join(",", Cfg.DarkExclude);
+        var sig = DarkAll + "|" + string.Join(",", Cfg.DarkSites) + "|" + string.Join(",", Cfg.DarkExclude);
         if (sig == tab.DarkSig) return;
         tab.DarkSig = sig;
         try
         {
             if (tab.DarkScriptId != null) { core.RemoveScriptToExecuteOnDocumentCreated(tab.DarkScriptId); tab.DarkScriptId = null; }
-            if (Cfg.ForceDark || Cfg.DarkSites.Count > 0) tab.DarkScriptId = await core.AddScriptToExecuteOnDocumentCreatedAsync(DarkScript());
+            if (DarkAll || Cfg.DarkSites.Count > 0) tab.DarkScriptId = await core.AddScriptToExecuteOnDocumentCreatedAsync(DarkScript());
         }
         catch { tab.DarkSig = ""; }
     }
@@ -88,7 +114,7 @@ sealed partial class MainForm
     bool DarkFor(string host)
     {
         var key = PasswordTools.HostKey(host);
-        return Cfg.ForceDark ? !Cfg.DarkExclude.Contains(key) : Cfg.DarkSites.Contains(key);
+        return DarkAll ? !Cfg.DarkExclude.Contains(key) : Cfg.DarkSites.Contains(key);
     }
 
     /// <summary>Тёмная тема для текущего сайта: вкл/выкл (с учётом общей настройки).</summary>

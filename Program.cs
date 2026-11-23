@@ -188,6 +188,12 @@ static class Program
             return;
         }
 
+        if (args.Length == 3 && args[0] == "--ytsubs-selftest")
+        {
+            ApplicationConfiguration.Initialize();
+            YtSubsSelfTest.Run(args[1], args[2]);
+            return;
+        }
         if (args.Length == 2 && args[0] == "--dl-selftest")
         {
             DirectDownloadSelfTest.Run(args[1]);

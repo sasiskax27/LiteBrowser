@@ -59,6 +59,7 @@ function render() {
   $('blStatus').textContent = bl.updating ? 'Загружается список…'
     : bl.count > 0 ? `Загружено ${bl.count.toLocaleString('ru-RU')} доменов, обновлено ${bl.updated}` : 'Список ещё не загружен';
 
+  $('darkFrom').value = state.darkFrom || '21:00'; $('darkTo').value = state.darkTo || '07:00';
   // Сайты в своём окне: чипы с крестиком
   const wr = $('winRules'); wr.innerHTML = '';
   const rules = state.windowRules || [];
@@ -458,3 +459,5 @@ $('settingsFind').addEventListener('input', runSearch);
 $('settingsFind').addEventListener('keydown', e => { if (e.key === 'Escape') { e.target.value = ''; runSearch(); } });
 window.addEventListener('hashchange', () => { if (!document.body.classList.contains('searching')) showSection(location.hash.slice(1)); });
 showSection(location.hash.slice(1));
+$('darkFrom').onchange = () => { state.darkFrom = $('darkFrom').value; save(); };
+$('darkTo').onchange = () => { state.darkTo = $('darkTo').value; save(); };

@@ -280,6 +280,9 @@ static class DevToolsSelfTest
                     Check("распознавание текста (OCR Windows)", ocrText.Contains("2026") && ocrText.Contains("Hello", StringComparison.OrdinalIgnoreCase), ocrText.Replace("\r", "").Replace("\n", " / "));
                 }
                 else log.Add("INFO распознавание текста: в этой Windows нет OCR");
+                // Ночная тема по расписанию, в т. ч. через полночь
+                Check("ночная тема: расписание 21:00–07:00", MainForm.InSchedule(new TimeOnly(23, 0), "21:00", "07:00") && MainForm.InSchedule(new TimeOnly(6, 59), "21:00", "07:00")
+                      && !MainForm.InSchedule(new TimeOnly(12, 0), "21:00", "07:00") && MainForm.InSchedule(new TimeOnly(10, 0), "09:00", "18:00") && !MainForm.InSchedule(new TimeOnly(20, 0), "09:00", "18:00"));
                 // Мини-плеер: кнопки сайта (Media Session) перехватываются и нажимаются
                 await core.ExecuteScriptAsync(MediaSessionHook.Script);
                 await core.ExecuteScriptAsync("window.__nx=0; navigator.mediaSession.metadata = new MediaMetadata({title:'Тестовый трек', artist:'Исполнитель'}); navigator.mediaSession.setActionHandler('nexttrack', () => window.__nx++);");
@@ -776,6 +779,50 @@ static class DirectDownloadSelfTest
             File.WriteAllLines(outFile, log);
             try { Directory.Delete(root, true); } catch { }
         }
+    }
+}
+
+/// <summary>Самотест субтитров YouTube: открыть видео, включить русские/автоперевод, проверить выбранную дорожку.</summary>
+static class YtSubsSelfTest
+{
+    public static void Run(string url, string outFile)
+    {
+        var log = new List<string>();
+        var root = Path.Combine(Path.GetTempPath(), "LiteYtTest-" + Guid.NewGuid().ToString("N"));
+        var form = new Form { Width = 1000, Height = 700, ShowInTaskbar = false, StartPosition = FormStartPosition.Manual, Location = new Point(-3000, -3000) };
+        var view = new WebView2 { Dock = DockStyle.Fill };
+        form.Controls.Add(view);
+        form.Shown += async (_, _) =>
+        {
+            try
+            {
+                var env = await CoreWebView2Environment.CreateAsync(null, Path.Combine(root, "data"));
+                await view.EnsureCoreWebView2Async(env);
+                view.CoreWebView2.IsMuted = true;
+                var loaded = new TaskCompletionSource<bool>();
+                view.CoreWebView2.NavigationCompleted += (_, e) => loaded.TrySetResult(e.IsSuccess);
+                view.CoreWebView2.Navigate(url);
+                await Task.WhenAny(loaded.Task, Task.Delay(30_000));
+                await Task.Delay(4000);
+                string r = "";
+                for (int i = 0; i < 4 && (r.Length == 0 || r.Contains("noplayer")); i++)
+                {
+                    var raw = await view.CoreWebView2.CallDevToolsProtocolMethodAsync("Runtime.evaluate",
+                        System.Text.Json.JsonSerializer.Serialize(new { expression = YouTubeSubs.Script("ru"), awaitPromise = true, returnByValue = true, userGesture = true }));
+                    r = raw;
+                    if (r.Contains("noplayer")) await Task.Delay(2000);
+                }
+                log.Add("результат: " + r);
+                await Task.Delay(1500);
+                var track = await view.CoreWebView2.ExecuteScriptAsync("(() => { const p = document.getElementById('movie_player'); try { return JSON.stringify(p.getOption('captions', 'track')); } catch (e) { return 'err ' + e; } })()");
+                log.Add("дорожка: " + track);
+                log.Add((track.Contains("ru") ? "OK   " : "FAIL ") + "субтитры на русском (свои или перевод)");
+            }
+            catch (Exception ex) { log.Add("FAIL исключение: " + ex.Message); }
+            finally { File.WriteAllLines(outFile, log); form.Close(); }
+        };
+        Application.Run(form);
+        try { Directory.Delete(root, true); } catch { }
     }
 }
 

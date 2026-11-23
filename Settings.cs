@@ -70,7 +70,10 @@ sealed class AppSettings
     public bool ListCookies { get; set; } = false;
     public bool CosmeticFiltering { get; set; } = true;
     public bool CookieBanners { get; set; } = true;
-    public bool AntiFingerprint { get; set; } = true;    // искажать отпечаток браузера (canvas, звук, видеокарта)
+    public bool AntiFingerprint { get; set; } = true;
+    public bool DarkSchedule { get; set; }              // тёмная тема для всех сайтов по расписанию
+    public string DarkFrom { get; set; } = "21:00";
+    public string DarkTo { get; set; } = "07:00";    // искажать отпечаток браузера (canvas, звук, видеокарта)
     public bool FullTextHistory { get; set; } = true;
     public bool OnlineTts { get; set; }                 // чтение вслух онлайн-голосом Google, если в Windows нет голоса языка (с согласия)
     public List<string> WindowRules { get; set; } = new();
@@ -183,6 +186,8 @@ sealed class AppSettings
         if (!UiScales.Contains(UiScale)) UiScale = 100;
         SidePanelWidth = Math.Clamp(SidePanelWidth, 260, 1000);
         if (HomeAnim is not ("" or "aurora" or "stars" or "waves")) HomeAnim = "";
+        if (!TimeOnly.TryParse(DarkFrom ?? "", out _)) DarkFrom = "21:00";
+        if (!TimeOnly.TryParse(DarkTo ?? "", out _)) DarkTo = "07:00";
         Containers = (Containers ?? new()).Select(c => (c ?? "").Trim()).Where(c => c.Length is > 0 and <= 30).Distinct().Take(12).ToList();
         WindowRules = (WindowRules ?? new()).Select(CleanSite).Where(x => x.Length > 0 && HostRx.IsMatch(x)).Distinct().Take(30).ToList();
         if (UiTheme is not ("dark" or "light" or "auto") && !Theme.ExtraThemes.Contains(UiTheme)) UiTheme = "dark";

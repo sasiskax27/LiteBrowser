@@ -96,6 +96,29 @@ sealed partial class MainForm
         catch (Exception ex) { MessageBox.Show(this, "Не удалось сделать скриншот: " + ex.Message, "Скриншот"); }
     }
 
+    // ================= Субтитры YouTube на своём языке =================
+
+    async Task YouTubeSubtitles()
+    {
+        var core = active?.Core;
+        if (core == null || !VideoContext.IsYouTubeVideo(core.Source)) { infoBar.ShowBar("ytsubs", "\uE7F0", L.T("Откройте видео на YouTube")); return; }
+        var lang = L.En ? "en" : "ru";
+        string r;
+        try
+        {
+            var raw = await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate",
+                System.Text.Json.JsonSerializer.Serialize(new { expression = YouTubeSubs.Script(lang), awaitPromise = true, returnByValue = true, userGesture = true }));
+            using var d = System.Text.Json.JsonDocument.Parse(raw);
+            r = d.RootElement.GetProperty("result").TryGetProperty("value", out var v) ? v.GetString() ?? "" : "";
+        }
+        catch { r = ""; }
+        var text = r.StartsWith("own") ? L.T("Включены субтитры на русском")
+            : r.StartsWith("translated") ? L.T("Включён автоперевод субтитров на русский (с языка: ") + r.Split(':')[1] + ")"
+            : r == "notracks" ? L.T("У этого видео нет субтитров — даже автоматических")
+            : L.T("Плеер ещё не загрузился — попробуйте через пару секунд");
+        infoBar.ShowBar("ytsubs", "\uE7F0", text);
+    }
+
     // ================= Текст с картинки (OCR) =================
 
     /// <summary>Выделить область вкладки мышью — текст из неё распознаётся (OCR Windows, без интернета) и копируется.</summary>

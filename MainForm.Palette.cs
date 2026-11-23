@@ -43,6 +43,7 @@ sealed partial class MainForm
         Cmd("", "Картинка в картинке", () => _ = PictureInPicture(), "Ctrl+Shift+V", "pip видео");
         Cmd("", "Скриншот видимой части", () => _ = TakeScreenshot(false), "Ctrl+Shift+S", "screenshot снимок");
         Cmd("", "Сравнить цены в магазинах", () => _ = ComparePrices(), "", "цена price магазин ozon wildberries маркет товар купить");
+        Cmd("", "Субтитры YouTube на русском", () => _ = YouTubeSubtitles(), "", "youtube субтитры перевод captions subtitles");
         Cmd("", "Текст с экрана (выделить область)", () => _ = RecognizeArea(), "Ctrl+Shift+X", "ocr распознать текст картинка скопировать");
         Cmd("", "Мини-плеер поверх окон", () => { if (active != null) MiniPlayerForm.ShowFor(this, active); }, "", "музыка плеер mini player поверх");
         Cmd("", "Диспетчер задач браузера", () => TaskManagerForm.ShowFor(this), "Shift+Esc", "память memory task manager процессы тормозит");
