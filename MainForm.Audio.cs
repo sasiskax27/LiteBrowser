@@ -82,6 +82,7 @@ sealed partial class MainForm
             menu.Items.Add(Theme.Item(L.T("Пауза / продолжить"), () => _ = form.TogglePlay(tab), null, ""));
             menu.Items.Add(Theme.Item(tab.Muted ? L.T("Включить звук") : L.T("Выключить звук"), () => { if (tab.Core != null) tab.Core.IsMuted = !tab.Core.IsMuted; }, null, tab.Muted ? "" : ""));
             menu.Items.Add(form.VolumeMenu(tab));
+            menu.Items.Add(Theme.Item(L.T("Мини-плеер поверх окон"), () => MiniPlayerForm.ShowFor(form, tab), null, "\uE8B2"));
             menu.Items.Add(Theme.Item(L.T("Перейти к вкладке"), () => form.ShowTabFromManager(tab), null, ""));
             menu.Items.Add(new ToolStripSeparator());
         }

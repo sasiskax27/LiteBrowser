@@ -264,6 +264,13 @@ static class DevToolsSelfTest
                 var loadedSet = AppSettings.Load(setDir);
                 Check("настройки: быстрое чтение совпадает", loadedSet.UiTheme == "forest" && loadedSet.ProxySites.SequenceEqual(new[] { "a.ru", "b.com" }) && !loadedSet.HomeWidgets && loadedSet.FreezeMinutes == 30
                       && System.Text.Json.JsonSerializer.Serialize(loadedSet, AppSettings.Json) == System.Text.Json.JsonSerializer.Serialize(sample.Normalize(), AppSettings.Json));
+                // Мини-плеер: кнопки сайта (Media Session) перехватываются и нажимаются
+                await core.ExecuteScriptAsync(MediaSessionHook.Script);
+                await core.ExecuteScriptAsync("window.__nx=0; navigator.mediaSession.metadata = new MediaMetadata({title:'Тестовый трек', artist:'Исполнитель'}); navigator.mediaSession.setActionHandler('nexttrack', () => window.__nx++);");
+                var msState = System.Text.Json.JsonSerializer.Deserialize<string>(await core.ExecuteScriptAsync(MediaSessionHook.StateJs)) ?? "";
+                var msAct = await core.ExecuteScriptAsync(MediaSessionHook.ActionJs("nexttrack"));
+                var nx = await core.ExecuteScriptAsync("window.__nx");
+                Check("мини-плеер: трек и «следующий» с сайта", msState.Contains("Тестовый трек") && msState.Contains("\"next\":true") && msAct.Contains("ms") && nx == "1", msState + " / " + msAct + " / " + nx);
                 // Чтение вслух (беззвучно): текст страницы делится на части, голос выбирается
                 await core.ExecuteScriptAsync("window.__liteSpeakVolume = 0; var art=document.createElement('article'); art.innerHTML='<h1>Заголовок</h1><p>Первое предложение статьи. Второе предложение!</p>'; document.body.appendChild(art);");
                 var spk = await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", System.Text.Json.JsonSerializer.Serialize(new { expression = MainForm.SpeakJs, userGesture = true, returnByValue = true }));

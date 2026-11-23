@@ -816,6 +816,7 @@ sealed partial class MainForm : Form
         // Скрипт менеджера паролей: находит формы входа на страницах
         _ = core.AddScriptToExecuteOnDocumentCreatedAsync(PasswordScripts.Page);
         _ = core.AddScriptToExecuteOnDocumentCreatedAsync(PageTools.Gestures);
+        _ = core.AddScriptToExecuteOnDocumentCreatedAsync(MediaSessionHook.Script);
         _ = core.AddScriptToExecuteOnDocumentCreatedAsync(PageTools.FocusPing);
         if (Cfg.SelectionTranslate) _ = core.AddScriptToExecuteOnDocumentCreatedAsync(SelectionTranslate.Script);
         SetupContextMenu(tab, core, env);
@@ -1090,6 +1091,7 @@ sealed partial class MainForm : Form
         pageMenu.DropDownItems.Add(Theme.Item("Сохранить для чтения без интернета", () => _ = SaveOffline(), "Ctrl+Shift+Y", "\uE78B"));
         pageMenu.DropDownItems.Add(Theme.Item("Скриншот видимой части", () => _ = TakeScreenshot(false), "Ctrl+Shift+S", "\uE722"));
         pageMenu.DropDownItems.Add(Theme.Item("Скриншот всей страницы", () => _ = TakeScreenshot(true), null, "\uE722"));
+        pageMenu.DropDownItems.Add(Theme.Item("Мини-плеер поверх окон", () => { if (active != null) MiniPlayerForm.ShowFor(this, active); }, null, "\uE8B2"));
         pageMenu.DropDownItems.Add(Theme.Item("Сравнить цены в магазинах", () => _ = ComparePrices(), null, "\uE7BF"));
         pageMenu.DropDownItems.Add(Theme.Item(recorder != null ? "Остановить запись видео" : "Записать видео вкладки", () => _ = ToggleRecording(), "Alt+Shift+R", "\uE7C8"));
         pageMenu.DropDownItems.Add(Theme.Item("QR-код страницы", ShowQr, null, "\uED14"));
