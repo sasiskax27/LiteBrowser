@@ -1070,5 +1070,7 @@
 "Включён автоперевод субтитров на русский (с языка: ": "Auto-translated subtitles into English are on (from: ",
 "У этого видео нет субтитров — даже автоматических": "This video has no subtitles, not even automatic ones",
 "Плеер ещё не загрузился — попробуйте через пару секунд": "The player hasn't loaded yet — try again in a couple of seconds",
-"Субтитры YouTube на русском": "YouTube subtitles in English"
+"Субтитры YouTube на русском": "YouTube subtitles in English",
+"Портативный режим: все данные в папке ": "Portable mode: all data is in the folder ",
+"Портативная версия: положите рядом с LiteBrowser.exe пустую папку «LiteBrowserData» (например, на флешке) — все данные будут храниться в ней": "Portable version: put an empty \"LiteBrowserData\" folder next to LiteBrowser.exe (e.g. on a USB stick) and all data will be stored there"
 }

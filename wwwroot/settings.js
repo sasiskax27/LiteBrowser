@@ -75,6 +75,7 @@ function render() {
     'Версия LiteBrowser: ' + info.version,
     'Движок: Chromium (Microsoft WebView2) ' + info.browserVersion + '. Обновляется автоматически вместе с Windows',
     'Данные браузера хранятся только на этом компьютере',
+    info.portable ? 'Портативный режим: все данные в папке ' + info.dataDir : 'Портативная версия: положите рядом с LiteBrowser.exe пустую папку «LiteBrowserData» (например, на флешке) — все данные будут храниться в ней',
     ...(info.startupMs > 0 ? ['Запуск до первой страницы: ' + (info.startupMs / 1000).toFixed(1) + ' с. Память по вкладкам — Shift+Esc'] : []),
   ]) { const d = document.createElement('div'); d.textContent = line; $('about').appendChild(d); }
 }

@@ -27,7 +27,7 @@ sealed partial class MainForm
             }
             catch { /* нет сети — проверим в другой раз */ }
         }
-        if (!IsDisposed && !Cfg.DefaultPromptDismissed && !SystemIntegration.IsDefaultBrowser()) ShowDefaultPrompt();
+        if (!IsDisposed && !AppEnv.Portable && !Cfg.DefaultPromptDismissed && !SystemIntegration.IsDefaultBrowser()) ShowDefaultPrompt(); // портативный — не трогаем настройки Windows
     }
 
     /// <summary>После неожиданного закрытия — предложить вернуть вкладки.</summary>

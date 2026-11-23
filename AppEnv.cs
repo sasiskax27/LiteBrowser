@@ -10,10 +10,39 @@ static class AppEnv
     public const string Version = "3.7.0";
     /// <summary>Сколько миллисекунд прошло от запуска процесса до первой загруженной страницы (0 — ещё не загрузилась).</summary>
     public static long StartupMs;
-    /// <summary>Папка данных. LITEBROWSER_DATA — отдельная папка для тестов (тогда и отдельный экземпляр браузера).</summary>
+    /// <summary>
+    /// Папка данных. LITEBROWSER_DATA — отдельная папка для тестов (тогда и отдельный экземпляр браузера).
+    /// Портативный режим: рядом с exe есть папка «LiteBrowserData» (или файл «portable.txt») — всё хранится там, например на флешке.
+    /// </summary>
     public static readonly string DataDir = Environment.GetEnvironmentVariable("LITEBROWSER_DATA") is { Length: > 0 } d ? d
-        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LiteBrowser");
-    public static string InstanceName => "LiteBrowser-" + Environment.UserName + (Environment.GetEnvironmentVariable("LITEBROWSER_DATA") is { Length: > 0 } d2 ? "-" + Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(Encoding.UTF8.GetBytes(d2)))[..8] : "");
+        : PortableDir() ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LiteBrowser");
+
+    /// <summary>Работаем в портативном режиме (данные рядом с программой).</summary>
+    public static bool Portable => Environment.GetEnvironmentVariable("LITEBROWSER_DATA") is not { Length: > 0 } && PortableDir() != null;
+
+    static string? PortableDir()
+    {
+        try
+        {
+            var exeDir = Path.GetDirectoryName(Environment.ProcessPath);
+            if (exeDir == null) return null;
+            var dir = Path.Combine(exeDir, "LiteBrowserData");
+            if (Directory.Exists(dir)) return dir;
+            if (File.Exists(Path.Combine(exeDir, "portable.txt"))) { Directory.CreateDirectory(dir); return dir; }
+        }
+        catch { }
+        return null;
+    }
+
+    /// <summary>Свой экземпляр для тестовой и для портативной папки: портативный браузер не мешает установленному.</summary>
+    public static string InstanceName
+    {
+        get
+        {
+            string? own = Environment.GetEnvironmentVariable("LITEBROWSER_DATA") is { Length: > 0 } d2 ? d2 : PortableDir();
+            return "LiteBrowser-" + Environment.UserName + (own != null ? "-" + Convert.ToHexString(System.Security.Cryptography.SHA1.HashData(Encoding.UTF8.GetBytes(own)))[..8] : "");
+        }
+    }
 
     /// <summary>Журнал для отладки — пишется только если задана переменная LITEBROWSER_DEBUG.</summary>
     public static void Log(string s)
