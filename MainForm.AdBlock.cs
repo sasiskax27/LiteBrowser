@@ -122,7 +122,8 @@ sealed partial class MainForm
         bool yt = Cfg.BlockAds && Cfg.YouTubeAds;
         var eng = AdBlock.Engine;
         bool cookies = Cfg.CookieBanners;
-        string sig = (cosmetic ? eng.Version : -1) + "|" + yt + "|" + cookies;
+        bool fp = Cfg.AntiFingerprint;
+        string sig = (cosmetic ? eng.Version : -1) + "|" + yt + "|" + cookies + "|" + (fp ? string.Join(",", Cfg.AdblockAllow.Concat(Cfg.TrustedSites)) : "-");
         if (sig == tab.AdSig) return;
         tab.AdSig = sig;
         try
@@ -130,9 +131,11 @@ sealed partial class MainForm
             if (tab.AdScriptId != null) { core.RemoveScriptToExecuteOnDocumentCreated(tab.AdScriptId); tab.AdScriptId = null; }
             if (tab.YtScriptId != null) { core.RemoveScriptToExecuteOnDocumentCreated(tab.YtScriptId); tab.YtScriptId = null; }
             if (tab.CookieScriptId != null) { core.RemoveScriptToExecuteOnDocumentCreated(tab.CookieScriptId); tab.CookieScriptId = null; }
+            if (tab.FpScriptId != null) { core.RemoveScriptToExecuteOnDocumentCreated(tab.FpScriptId); tab.FpScriptId = null; }
             if (cosmetic) tab.AdScriptId = await core.AddScriptToExecuteOnDocumentCreatedAsync(AdScripts.Cosmetic(eng.GenericCss));
             if (yt) tab.YtScriptId = await core.AddScriptToExecuteOnDocumentCreatedAsync(AdScripts.YouTube);
             if (cookies) tab.CookieScriptId = await core.AddScriptToExecuteOnDocumentCreatedAsync(CookieBanners.Script);
+            if (fp) tab.FpScriptId = await core.AddScriptToExecuteOnDocumentCreatedAsync(LiteBrowser.AntiFingerprint.Script(Cfg.AdblockAllow.Concat(Cfg.TrustedSites)));
         }
         catch { tab.AdSig = ""; }
     }

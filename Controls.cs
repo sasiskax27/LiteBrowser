@@ -31,6 +31,7 @@ sealed class BrowserTab
     public string? AdScriptId { get; set; }
     public string? YtScriptId { get; set; }
     public string? CookieScriptId { get; set; }
+    public string? FpScriptId { get; set; }
     public int Volume { get; set; } = 100;   // громкость вкладки, %
     public string? Container { get; set; }   // контейнер (отдельные cookies) или null
     public string AdSig { get; set; } = "";

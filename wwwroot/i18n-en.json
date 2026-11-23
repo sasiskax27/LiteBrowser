@@ -1059,5 +1059,7 @@
 " (онлайн-голос)": " (online voice)",
 "Онлайн-голос временно недоступен (слишком много запросов)": "The online voice is temporarily unavailable (too many requests)",
 "Читать вслух онлайн-голосом, если в Windows нет голоса языка": "Read aloud with an online voice if Windows has no voice for the language",
-"Например, если нет русского голоса. Текст страницы уходит в Google; бесплатный голос Windows можно установить в Параметры → Время и язык → Речь": "For example, if there's no Russian voice. The page text goes to Google; you can install a free Windows voice in Settings → Time & language → Speech"
+"Например, если нет русского голоса. Текст страницы уходит в Google; бесплатный голос Windows можно установить в Параметры → Время и язык → Речь": "For example, if there's no Russian voice. The page text goes to Google; you can install a free Windows voice in Settings → Time & language → Speech",
+"Защита от слежки по отпечатку браузера": "Browser fingerprint protection",
+"Сайты получают слегка искажённые данные холста, звука и видеокарты — узнать вас без cookies сложнее. Если сайт работает странно, нажмите щит 🛡 и выключите защиту для него": "Sites get slightly altered canvas, audio and GPU data, so it's harder to recognize you without cookies. If a site acts strangely, click the shield 🛡 and turn protection off for it"
 }

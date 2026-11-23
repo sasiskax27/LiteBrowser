@@ -70,6 +70,7 @@ sealed class AppSettings
     public bool ListCookies { get; set; } = false;
     public bool CosmeticFiltering { get; set; } = true;
     public bool CookieBanners { get; set; } = true;
+    public bool AntiFingerprint { get; set; } = true;    // искажать отпечаток браузера (canvas, звук, видеокарта)
     public bool FullTextHistory { get; set; } = true;
     public bool OnlineTts { get; set; }                 // чтение вслух онлайн-голосом Google, если в Windows нет голоса языка (с согласия)
     public List<string> WindowRules { get; set; } = new();
