@@ -18,7 +18,7 @@ sealed partial class MainForm
     /// <summary>Настройки для гостевого окна: только оформление и поисковик, без ваших плиток и данных.</summary>
     static AppSettings GuestSettings() => new()
     {
-        UiTheme = Cfg.UiTheme, Accent = Cfg.Accent, Engine = Cfg.Engine, Language = Cfg.Language, HomeWidgets = Cfg.HomeWidgets, HomeAnim = Cfg.HomeAnim,
+        UiTheme = Cfg.UiTheme, Accent = Cfg.Accent, Engine = Cfg.Engine, Language = Cfg.Language, HomeWidgets = Cfg.HomeWidgets, HomeAnim = Cfg.HomeAnim, Feeds = new(),
         WidgetCity = Cfg.WidgetCity, ImportOffered = true,
     };
 
@@ -115,7 +115,7 @@ sealed partial class MainForm
             return;
         }
         // Гостю — только чтение стартовой страницы, без ваших плиток, заметки и настроек
-        if (Guest && msgType is not ("get" or "home:widgets")) return;
+        if (Guest && msgType is not ("get" or "home:widgets" or "home:news")) return;
         switch (msgType)
         {
             case "get":
@@ -454,6 +454,14 @@ sealed partial class MainForm
                 if (note.Length > 2000) note = note[..2000];
                 if (!Incognito) CopyAndSave(x => x.HomeNote = note);
                 break;
+            case "home:news":
+            {
+                var feeds = Guest ? new List<string>() : Cfg.Feeds;
+                if (feeds.Count == 0) { Post(core, new { type = "news", items = Array.Empty<object>() }); break; }
+                var news = await Feeds.LatestAsync(feeds);
+                Post(core, new { type = "news", items = news.Select(n => new { title = n.Title, link = n.Link, source = n.Source, time = n.Time == DateTime.MinValue ? "" : n.Time.ToString(n.Time.Date == DateTime.Today ? "HH:mm" : "dd.MM") }) });
+                break;
+            }
             case "home:hideWidgets":
                 CopyAndSave(x => x.HomeWidgets = false);
                 break;

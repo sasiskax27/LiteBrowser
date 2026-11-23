@@ -25,6 +25,13 @@
   .engine:hover { color: var(--text); background: rgba(255,255,255,.14); }
   .widgets { display: none; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; width: min(700px, 92vw); margin-top: 26px; }
   .widgets.show { display: grid; }
+  .news { display: none; width: min(700px, 92vw); margin-top: 14px; background: rgba(255,255,255,.05); border: 1px solid var(--line); border-radius: 16px; padding: 10px 14px; backdrop-filter: blur(14px); }
+  .news.show { display: block; }
+  .news-head { font-size: 12px; color: var(--dim); text-transform: uppercase; letter-spacing: .06em; margin: 2px 0 6px; }
+  .news a { display: flex; gap: 10px; align-items: baseline; padding: 6px 4px; border-radius: 8px; color: var(--text); text-decoration: none; font-size: 13.5px; }
+  .news a:hover { background: rgba(255,255,255,.06); }
+  .news .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .news .s { color: var(--dim); font-size: 12px; white-space: nowrap; max-width: 30%; overflow: hidden; text-overflow: ellipsis; }
   .wg { background: rgba(255,255,255,.05); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; min-height: 96px; backdrop-filter: blur(14px); font-size: 13px; position: relative; }
   .wg .big { font-size: 28px; font-weight: 300; line-height: 1.1; }
   .wg .dim { color: var(--dim); font-size: 12px; margin-top: 3px; }
@@ -103,6 +110,8 @@
   <div class="wg" id="wgMoney"></div>
   <div class="wg note"><textarea id="wgNote" placeholder="Заметка на стартовой странице…" spellcheck="false" maxlength="2000"></textarea></div>
 </div>
+
+<div class="news" id="news"><div class="news-head">Новости</div><div id="newsList"></div></div>
 
 <div class="foot" id="foot"></div>
 <script src="homebg.js"></script>

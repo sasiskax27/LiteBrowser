@@ -112,6 +112,7 @@ if (wv) {
   wv.addEventListener('message', e => {
     const m = e.data;
     if (m.type === 'widgets') { renderWidgets(m); return; }
+    if (m.type === 'news') { renderNews(m.items); return; }
     if (m.type !== 'settings') return;
     const en = m.engines.find(x => x.id === m.settings.engine);
     const name = en ? en.name : 'интернете';
@@ -130,6 +131,20 @@ if (wv) {
   });
   wv.postMessage({ type: 'get' });
   wv.postMessage({ type: 'home:widgets' });
+  wv.postMessage({ type: 'home:news' });
   $('importClose').onclick = () => { $('import').classList.remove('show'); wv.postMessage({ type: 'dismissImport' }); };
 }
 $('q').focus();
+
+// Новости из подписок (RSS): заголовок, источник, время
+function renderNews(items) {
+  const box = $('news'), list = $('newsList');
+  box.classList.toggle('show', items.length > 0);
+  list.innerHTML = '';
+  for (const n of items) {
+    const a = document.createElement('a'); a.href = n.link;
+    const t = document.createElement('span'); t.className = 't'; t.textContent = n.title;
+    const s = document.createElement('span'); s.className = 's'; s.textContent = n.source + (n.time ? ' · ' + n.time : '');
+    a.append(t, s); list.appendChild(a);
+  }
+}

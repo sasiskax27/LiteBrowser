@@ -280,6 +280,14 @@ static class DevToolsSelfTest
                     Check("распознавание текста (OCR Windows)", ocrText.Contains("2026") && ocrText.Contains("Hello", StringComparison.OrdinalIgnoreCase), ocrText.Replace("\r", "").Replace("\n", " / "));
                 }
                 else log.Add("INFO распознавание текста: в этой Windows нет OCR");
+                // Новости: RSS 2.0 и Atom разбираются, внешние сущности (XXE) не подгружаются
+                var rss = Feeds.Parse("<?xml version=\"1.0\"?><rss version=\"2.0\"><channel><title>Тест-лента</title><item><title>Первая &amp; новость</title><link>https://ex.ru/1</link><pubDate>Mon, 23 Nov 2026 10:00:00 +0300</pubDate></item><item><title>Плохая</title><link>javascript:alert(1)</link></item></channel></rss>", "https://ex.ru/rss");
+                var atom = Feeds.Parse("<feed xmlns=\"http://www.w3.org/2005/Atom\"><title>Atom</title><entry><title>Атом</title><link rel=\"alternate\" href=\"https://ex.org/a\"/><updated>2026-11-22T08:00:00Z</updated></entry></feed>", "https://ex.org/atom");
+                bool xxeSafe;
+                try { var x = Feeds.Parse("<?xml version=\"1.0\"?><!DOCTYPE r [<!ENTITY e SYSTEM \"file:///c:/windows/win.ini\">]><rss><channel><item><title>&e;</title><link>https://ex.ru/x</link></item></channel></rss>", "https://ex.ru/x"); xxeSafe = x.All(i => !i.Title.Contains("fonts", StringComparison.OrdinalIgnoreCase)); }
+                catch { xxeSafe = true; }
+                Check("новости: RSS и Atom, опасные ссылки и XXE отсекаются", rss.Count == 1 && rss[0].Title == "Первая & новость" && rss[0].Source == "Тест-лента" && rss[0].Time.Year == 2026
+                      && atom.Count == 1 && atom[0].Link == "https://ex.org/a" && xxeSafe, $"rss {rss.Count}, atom {atom.Count}, xxe {(xxeSafe ? "защищено" : "УЯЗВИМО")}");
                 // Ночная тема по расписанию, в т. ч. через полночь
                 Check("ночная тема: расписание 21:00–07:00", MainForm.InSchedule(new TimeOnly(23, 0), "21:00", "07:00") && MainForm.InSchedule(new TimeOnly(6, 59), "21:00", "07:00")
                       && !MainForm.InSchedule(new TimeOnly(12, 0), "21:00", "07:00") && MainForm.InSchedule(new TimeOnly(10, 0), "09:00", "18:00") && !MainForm.InSchedule(new TimeOnly(20, 0), "09:00", "18:00"));

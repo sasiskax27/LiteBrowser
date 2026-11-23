@@ -96,6 +96,36 @@ sealed partial class MainForm
         catch (Exception ex) { MessageBox.Show(this, "Не удалось сделать скриншот: " + ex.Message, "Скриншот"); }
     }
 
+    // ================= Новости сайта на стартовой (RSS) =================
+
+    async Task SubscribeToSite()
+    {
+        var core = active?.Core;
+        if (core == null || !core.Source.StartsWith("http") || Incognito) return;
+        string feed = "";
+        try { feed = System.Text.Json.JsonSerializer.Deserialize<string>(await core.ExecuteScriptAsync(Feeds.FindFeedJs)) ?? ""; } catch { }
+        if (feed.Length == 0)
+        {
+            // Нет ссылки на ленту — пробуем обычные адреса
+            var origin = new Uri(core.Source).GetLeftPart(UriPartial.Authority);
+            foreach (var guess in new[] { "/feed", "/rss", "/rss.xml", "/feed.xml", "/atom.xml" })
+            {
+                try
+                {
+                    using var h = new HttpClient { Timeout = TimeSpan.FromSeconds(6) };
+                    var xml = await h.GetStringAsync(origin + guess);
+                    if (Feeds.Parse(xml, origin + guess).Count > 0) { feed = origin + guess; break; }
+                }
+                catch { }
+            }
+        }
+        if (feed.Length == 0) { infoBar.ShowBar("rss", "\uE8A1", L.T("У этого сайта не нашлось ленты новостей (RSS)")); return; }
+        if (Cfg.Feeds.Contains(feed)) { infoBar.ShowBar("rss", "\uE8A1", L.T("Вы уже подписаны — новости на стартовой странице")); return; }
+        CopyAndSave(x => x.Feeds = x.Feeds.Append(feed).ToList());
+        Feeds.Invalidate();
+        infoBar.ShowBar("rss", "\uE8A1", L.T("Подписка оформлена: новости сайта появятся на стартовой странице"));
+    }
+
     // ================= Субтитры YouTube на своём языке =================
 
     async Task YouTubeSubtitles()

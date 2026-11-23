@@ -75,6 +75,7 @@ sealed class AppSettings
     public string DarkFrom { get; set; } = "21:00";
     public string DarkTo { get; set; } = "07:00";    // искажать отпечаток браузера (canvas, звук, видеокарта)
     public bool FullTextHistory { get; set; } = true;
+    public List<string> Feeds { get; set; } = new();    // подписки на новости (RSS/Atom) для стартовой страницы
     public bool OnlineTts { get; set; }                 // чтение вслух онлайн-голосом Google, если в Windows нет голоса языка (с согласия)
     public List<string> WindowRules { get; set; } = new();
     public List<string> Containers { get; set; } = new() { "Работа", "Личное", "Покупки" }; // вкладки с отдельными cookies // сайты, которые всегда открываются в своём окне   // запоминать текст страниц для поиска по истории (только на этом компьютере)      // отклонять cookie-баннеры (или прятать, если отказаться нельзя)
@@ -188,6 +189,7 @@ sealed class AppSettings
         if (HomeAnim is not ("" or "aurora" or "stars" or "waves")) HomeAnim = "";
         if (!TimeOnly.TryParse(DarkFrom ?? "", out _)) DarkFrom = "21:00";
         if (!TimeOnly.TryParse(DarkTo ?? "", out _)) DarkTo = "07:00";
+        Feeds = (Feeds ?? new()).Where(f => Uri.TryCreate(f, UriKind.Absolute, out var fu) && fu.Scheme is "http" or "https").Distinct().Take(20).ToList();
         Containers = (Containers ?? new()).Select(c => (c ?? "").Trim()).Where(c => c.Length is > 0 and <= 30).Distinct().Take(12).ToList();
         WindowRules = (WindowRules ?? new()).Select(CleanSite).Where(x => x.Length > 0 && HostRx.IsMatch(x)).Distinct().Take(30).ToList();
         if (UiTheme is not ("dark" or "light" or "auto") && !Theme.ExtraThemes.Contains(UiTheme)) UiTheme = "dark";

@@ -1072,5 +1072,13 @@
 "Плеер ещё не загрузился — попробуйте через пару секунд": "The player hasn't loaded yet — try again in a couple of seconds",
 "Субтитры YouTube на русском": "YouTube subtitles in English",
 "Портативный режим: все данные в папке ": "Portable mode: all data is in the folder ",
-"Портативная версия: положите рядом с LiteBrowser.exe пустую папку «LiteBrowserData» (например, на флешке) — все данные будут храниться в ней": "Portable version: put an empty \"LiteBrowserData\" folder next to LiteBrowser.exe (e.g. on a USB stick) and all data will be stored there"
+"Портативная версия: положите рядом с LiteBrowser.exe пустую папку «LiteBrowserData» (например, на флешке) — все данные будут храниться в ней": "Portable version: put an empty \"LiteBrowserData\" folder next to LiteBrowser.exe (e.g. on a USB stick) and all data will be stored there",
+"У этого сайта не нашлось ленты новостей (RSS)": "This site has no news feed (RSS)",
+"Вы уже подписаны — новости на стартовой странице": "You're already subscribed — news is on the start page",
+"Подписка оформлена: новости сайта появятся на стартовой странице": "Subscribed: the site's news will appear on the start page",
+"Подписаться на новости сайта": "Subscribe to site news",
+"Новости": "News",
+"Новости на стартовой странице": "News on the start page",
+"Подписки на сайты (RSS). Подписаться: меню «Страница» → «Подписаться на новости сайта»": "Site subscriptions (RSS). To subscribe: Page menu → \"Subscribe to site news\"",
+"Подписок пока нет": "No subscriptions yet"
 }

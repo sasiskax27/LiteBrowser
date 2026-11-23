@@ -60,6 +60,15 @@ function render() {
     : bl.count > 0 ? `Загружено ${bl.count.toLocaleString('ru-RU')} доменов, обновлено ${bl.updated}` : 'Список ещё не загружен';
 
   $('darkFrom').value = state.darkFrom || '21:00'; $('darkTo').value = state.darkTo || '07:00';
+  const fl = $('feedList'); fl.innerHTML = '';
+  const feeds = state.feeds || [];
+  if (!feeds.length) fl.innerHTML = '<span class="row-sub">Подписок пока нет</span>';
+  for (const f of feeds) {
+    let label = f; try { label = new URL(f).hostname.replace(/^www\./, ''); } catch (e) { }
+    const b = document.createElement('button'); b.className = 'chip'; b.textContent = label + '  ✕'; b.title = f + ' — убрать';
+    b.onclick = () => { state.feeds = feeds.filter(x => x !== f); save(); render(); };
+    fl.appendChild(b);
+  }
   // Сайты в своём окне: чипы с крестиком
   const wr = $('winRules'); wr.innerHTML = '';
   const rules = state.windowRules || [];
