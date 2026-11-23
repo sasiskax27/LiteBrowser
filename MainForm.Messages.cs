@@ -13,7 +13,14 @@ sealed partial class MainForm
 {
     // ================= Сообщения от своих страниц =================
 
-    static void Post(CoreWebView2 core, object msg) => core.PostWebMessageAsJson(JsonSerializer.Serialize(msg, AppSettings.Json));
+    /// <summary>Ответ своей странице. Если вкладка «уснула», перезагружается или уже закрыта, WebView2 бросает
+    /// COMException (0x8007139F) или ObjectDisposedException — сообщение такой странице не нужно, браузер падать не должен.</summary>
+    static void Post(CoreWebView2 core, object msg)
+    {
+        try { core.PostWebMessageAsJson(JsonSerializer.Serialize(msg, AppSettings.Json)); }
+        catch (System.Runtime.InteropServices.COMException) { }
+        catch (InvalidOperationException) { }
+    }
 
     /// <summary>Настройки для гостевого окна: только оформление и поисковик, без ваших плиток и данных.</summary>
     static AppSettings GuestSettings() => new()
