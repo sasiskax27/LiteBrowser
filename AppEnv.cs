@@ -7,7 +7,7 @@ namespace LiteBrowser;
 /// <summary>Общие для всех окон: папка данных, настройки и движок WebView2.</summary>
 static class AppEnv
 {
-    public const string Version = "3.7.0";
+    public const string Version = "3.8.0";
     /// <summary>Сколько миллисекунд прошло от запуска процесса до первой загруженной страницы (0 — ещё не загрузилась).</summary>
     public static long StartupMs;
     /// <summary>
