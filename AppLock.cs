@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 
 namespace LiteBrowser;
@@ -45,8 +45,8 @@ sealed class LockForm : Form
 {
     readonly TextBox box = new() { UseSystemPasswordChar = true, BorderStyle = BorderStyle.FixedSingle, TextAlign = HorizontalAlignment.Center, MaxLength = 32 };
     readonly Label info = new() { AutoSize = false, TextAlign = ContentAlignment.MiddleCenter };
-    readonly Button ok = new() { FlatStyle = FlatStyle.Flat };
-    readonly Button hello = new() { FlatStyle = FlatStyle.Flat };
+    readonly RoundButton ok = new();
+    readonly RoundButton hello = new();
     bool helloRunning;
     int fails;
     DateTime lockedUntil = DateTime.MinValue;

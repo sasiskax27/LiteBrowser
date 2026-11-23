@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   --bg: #111217; --card: rgba(255,255,255,.045); --card2: rgba(255,255,255,.08); --line: rgba(255,255,255,.09);
   --text: #e8eaf2; --dim: #959bb0; --accent: #7c9cff; --accent2: #b07cff; --ok: #6ecf96; --warn: #ffb86b; --bad: #ff7878;
 }
@@ -62,3 +62,46 @@ input.text:focus, textarea.text:focus { border-color: var(--accent); box-shadow:
          display: flex; gap: 8px; align-items: center; box-shadow: 0 10px 30px rgba(0,0,0,.4); z-index: 10; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 .toast .icon { color: var(--ok); }
+
+/* ================= Шлифовка стиля (общая для всех страниц) ================= */
+/* Встроенные элементы (галочки, списки, поля даты, полосы прокрутки) — в тон тёмной теме */
+:root { color-scheme: dark; --radius: 14px; --ease: cubic-bezier(.2, .7, .2, 1); }
+body { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+::selection { background: rgba(124, 156, 255, .35); }
+a { color: var(--accent); }
+
+/* Поля ввода: одинаковые везде, мягкая подсветка фокуса */
+input.text, textarea.text, select.text { background: rgba(255,255,255,.05); border-color: var(--line); border-radius: 12px; }
+input.text:hover, textarea.text:hover { border-color: rgba(255,255,255,.16); }
+input.text::placeholder, textarea.text::placeholder { color: color-mix(in srgb, var(--dim) 75%, transparent); }
+input[type=checkbox], input[type=radio] { accent-color: var(--accent); width: 17px; height: 17px; cursor: pointer; }
+select { color-scheme: dark; }
+
+/* Кнопки: плавный отклик, видимый фокус с клавиатуры */
+.btn { transition: background .15s, border-color .15s, transform .1s, filter .15s; }
+.btn:active { transform: translateY(1px); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn:focus-visible, .seg button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: 2px; }
+
+/* Закреплённая строка поиска (история, загрузки, закладки): без «плашки», полупрозрачная с размытием */
+.bar { background: color-mix(in srgb, var(--bg) 62%, transparent) !important; backdrop-filter: blur(14px) saturate(1.2);
+       margin-left: -10px; margin-right: -10px; padding-left: 10px !important; padding-right: 10px !important; border-radius: 16px; }
+
+/* Списки: чуть больше воздуха и мягкие углы */
+.list { border-radius: 18px; backdrop-filter: blur(14px); }
+.item { transition: background .12s; }
+
+/* Пустые состояния: иконка над текстом (иконку задаёт страница через --empty-icon) */
+.empty { line-height: 1.6; }
+.empty::before { content: var(--empty-icon, none); display: block; font-family: "Segoe Fluent Icons", "Segoe MDL2 Assets"; font-size: 44px;
+  margin: 0 auto 14px; width: 84px; height: 84px; line-height: 84px; border-radius: 26px; color: var(--accent);
+  background: radial-gradient(circle at 30% 25%, rgba(124,156,255,.22), rgba(176,124,255,.10)); }
+
+/* Заголовок страницы: иконка-плашка вместо круга с буквой */
+header .logo.icon { border-radius: 16px; font-size: 24px; font-weight: 400; color: #fff; }
+
+/* Плавное появление содержимого страниц */
+main { animation: page-in .28s var(--ease); }
+@keyframes page-in { from { opacity: .4; transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { main { animation: none; } }

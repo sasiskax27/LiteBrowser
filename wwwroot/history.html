@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="ru">
 <head>
 <meta charset="utf-8">
@@ -26,6 +26,7 @@
   .item:hover .del { opacity: 1; }
   .del:hover { background: rgba(255,255,255,.1); color: var(--text); }
   .empty { color: var(--dim); text-align: center; padding: 60px 0; font-size: 14px; }
+  :root { --empty-icon: "\E81C"; }
   .off { color: var(--warn); font-size: 13px; margin-bottom: 10px; display: none; }
 </style>
 </head>
@@ -33,7 +34,7 @@
 <div class="glow"></div>
 <main>
   <header>
-    <div class="logo">L</div>
+    <div class="logo icon">&#xE81C;</div>
     <div><h1>История</h1><div class="sub">Хранится только на этом компьютере</div></div>
   </header>
   <div class="off" id="off">Сохранение истории выключено в <a href="settings.html#bookmarks" style="color:var(--accent)">настройках</a>.</div>

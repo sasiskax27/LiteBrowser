@@ -1,4 +1,4 @@
-namespace LiteBrowser;
+﻿namespace LiteBrowser;
 
 /// <summary>Выбор области на снимке страницы: затемнённый снимок поверх вкладки, тянем рамку мышью. Esc — отмена.</summary>
 sealed class AreaSelectForm : Form
@@ -73,7 +73,7 @@ sealed class TextResultForm : Form
         ClientSize = new Size(Theme.S(520), Theme.S(340));
         var box = new TextBox { Multiline = true, ScrollBars = ScrollBars.Vertical, Text = text.Replace("\n", "\r\n").Replace("\r\r", "\r"), BorderStyle = BorderStyle.FixedSingle,
                                 BackColor = Theme.Field, ForeColor = Theme.Text, Font = Theme.GetFont("Segoe UI", 10.5f) };
-        var copy = new Button { Text = L.T("Скопировать"), FlatStyle = FlatStyle.Flat, BackColor = Theme.Accent, ForeColor = Color.FromArgb(13, 16, 32), Font = Theme.GetFont("Segoe UI", 10f, FontStyle.Bold) };
+        var copy = new RoundButton { Text = L.T("Скопировать"), FlatStyle = FlatStyle.Flat, BackColor = Theme.Accent, ForeColor = Color.FromArgb(13, 16, 32), Font = Theme.GetFont("Segoe UI", 10f, FontStyle.Bold) };
         copy.FlatAppearance.BorderSize = 0;
         copy.Click += (_, _) => { if (box.Text.Length > 0) Clipboard.SetText(box.Text); Close(); };
         int pad = Theme.S(12), bh = Theme.S(36);

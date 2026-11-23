@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using Microsoft.Web.WebView2.Core;
 
 namespace LiteBrowser;
@@ -11,7 +11,7 @@ sealed class TaskManagerForm : Form
 {
     readonly ListView list = new() { View = View.Details, FullRowSelect = true, BorderStyle = BorderStyle.None, HeaderStyle = ColumnHeaderStyle.Nonclickable, MultiSelect = false };
     readonly Label total = new() { AutoSize = false, TextAlign = ContentAlignment.MiddleLeft };
-    readonly Button closeBtn = new() { FlatStyle = FlatStyle.Flat }, freezeBtn = new() { FlatStyle = FlatStyle.Flat };
+    readonly RoundButton closeBtn = new(), freezeBtn = new();
     readonly System.Windows.Forms.Timer timer = new() { Interval = 2000 };
     bool busy;
     static TaskManagerForm? open;
@@ -86,6 +86,9 @@ sealed class TaskManagerForm : Form
         freezeBtn.SetBounds(ClientSize.Width - pad - S(130), y, S(130), bh);
         closeBtn.SetBounds(freezeBtn.Left - S(8) - S(150), y, S(150), bh);
         total.SetBounds(pad, y, closeBtn.Left - pad * 2, bh);
+        // Первая колонка — на всю оставшуюся ширину: иначе справа от заголовков остаётся белый «хвост»
+        if (list.Columns.Count == 3)
+            list.Columns[0].Width = Math.Max(S(160), list.ClientSize.Width - list.Columns[1].Width - list.Columns[2].Width - SystemInformation.VerticalScrollBarWidth);
     }
 
     (MainForm form, BrowserTab tab)? Selected() =>

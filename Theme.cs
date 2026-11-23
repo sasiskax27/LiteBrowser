@@ -133,8 +133,8 @@ static class Theme
         static string Rgb(Color c) => $"{c.R},{c.G},{c.B}";
         var css = $"\n:root{{--accent:{H(Accent)};--accent2:{H(Accent2)};--accent-rgb:{Rgb(Accent)}}}\n";
         if (IsLight)
-            css += ":root{--bg:#f3f4f8;--card:rgba(255,255,255,.78);--card2:rgba(0,0,0,.05);--line:rgba(0,0,0,.1);--text:#1c1e24;--dim:#5f6476;--ok:#1e9650;--bad:#d23232;--warn:#c27012}\n" +
-                   ".glow{opacity:.45}.dialog{background:#fff!important}.toast{background:#fff!important;color:#1c1e24}" +
+            css += ":root{color-scheme:light;--bg:#f3f4f8;--card:rgba(255,255,255,.78);--card2:rgba(0,0,0,.05);--line:rgba(0,0,0,.1);--text:#1c1e24;--dim:#5f6476;--ok:#1e9650;--bad:#d23232;--warn:#c27012}\n" +
+                   ".glow{opacity:.45}input.text,textarea.text{background:rgba(0,0,0,.035)!important}input.text:hover{border-color:rgba(0,0,0,.2)}.dialog{background:#fff!important}.toast{background:#fff!important;color:#1c1e24}" +
                    "input.text,textarea.text{background:rgba(0,0,0,.035)!important}.slider{background:#c9ccd6}" +
                    ".time{background:linear-gradient(180deg,#1c1e24,#4a5070)!important;-webkit-background-clip:text!important}" +
                    ".search{background:rgba(255,255,255,.8)!important}.engine,.chip,.store,.seg,.filters{background:rgba(0,0,0,.04)}\n";
@@ -223,8 +223,11 @@ static class Theme
             Font = GetFont("Segoe UI", 9.5f),
             BackColor = Menu,
             ForeColor = Text,
-            Padding = new Padding(4),
+            Padding = new Padding(S(5), S(6), S(5), S(6)),
+            DropShadowEnabled = true,
         };
+        // Скруглённые углы и тонкая рамка (Windows 11)
+        m.HandleCreated += (_, _) => { try { StylePopup(m.Handle); } catch { } };
         m.Opened += (_, _) => { if (!openMenus.Contains(m)) openMenus.Add(m); };
         m.Closed += (_, _) => openMenus.Remove(m);
         return m;
@@ -259,7 +262,12 @@ static class Theme
 
     public static ToolStripMenuItem Item(string text, Action click, string? keys = null, string? glyph = null)
     {
-        var item = new ToolStripMenuItem(L.T(text)) { ForeColor = Text, Padding = new Padding(4, 4, 6, 4) };
+        var item = new ToolStripMenuItem(L.T(text)) { ForeColor = Text, Padding = new Padding(S(4), S(5), S(8), S(5)) };
+        // Подменю — в том же стиле, что и основное меню
+        item.DropDown.Renderer = new DarkMenuRenderer();
+        item.DropDown.BackColor = Menu;
+        item.DropDown.Padding = new Padding(S(5), S(6), S(5), S(6));
+        item.DropDown.HandleCreated += (_, _) => { try { StylePopup(item.DropDown.Handle); } catch { } };
         if (glyph != null) item.Image = Glyph(glyph);
         if (keys != null) item.ShortcutKeyDisplayString = keys;
         item.Click += (_, _) => click();
@@ -317,8 +325,38 @@ sealed class DarkMenuRenderer : ToolStripProfessionalRenderer
 
     protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
     {
-        e.TextColor = e.Item.Enabled ? Theme.Text : Theme.TextDim;
+        // Сочетания клавиш — приглушённым цветом, чтобы взгляд цеплялся за названия
+        bool shortcut = e.Item is ToolStripMenuItem mi && mi.ShortcutKeyDisplayString != null && e.Text == mi.ShortcutKeyDisplayString;
+        e.TextColor = !e.Item.Enabled || shortcut ? Theme.TextDim : Theme.Text;
         base.OnRenderItemText(e);
+    }
+
+    // Выделение пункта — скруглённая плашка с отступами, а не полоса во всю ширину
+    protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
+    {
+        if (!e.Item.Selected && !(e.Item is ToolStripMenuItem { DropDown.Visible: true })) return;
+        if (!e.Item.Enabled) return;
+        var g = e.Graphics;
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        var r = new RectangleF(Theme.S(2), Theme.S(1), e.Item.Width - Theme.S(4), e.Item.Height - Theme.S(2));
+        using var path = Theme.Round(r, Theme.S(6));
+        using var b = new SolidBrush(e.Item.Pressed ? Theme.Pressed : Theme.Hover);
+        g.FillPath(b, path);
+    }
+
+    // Разделитель — тонкая линия с отступами от краёв
+    protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)
+    {
+        int y = e.Item.Height / 2;
+        using var pen = new Pen(Theme.Line);
+        e.Graphics.DrawLine(pen, Theme.S(10), y, e.Item.Width - Theme.S(10), y);
+    }
+
+    // Рамку рисует сама Windows (скруглённую) — свою квадратную не рисуем
+    protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
+    {
+        if (e.ToolStrip is ToolStripDropDown) return;
+        base.OnRenderToolStripBorder(e);
     }
 
     // Поле под значками — того же цвета, что и меню
@@ -351,8 +389,8 @@ sealed class InputDialog : Form
         box.BackColor = Theme.Field;
         box.ForeColor = Theme.Text;
         box.SetBounds(Theme.S(16), Theme.S(18), Theme.S(348), Theme.S(28));
-        var ok = new Button { Text = "Сохранить", DialogResult = DialogResult.OK, FlatStyle = FlatStyle.Flat, BackColor = Theme.Accent, ForeColor = Color.FromArgb(13, 16, 32) };
-        var cancel = new Button { Text = "Отмена", DialogResult = DialogResult.Cancel, FlatStyle = FlatStyle.Flat, BackColor = Theme.Hover, ForeColor = Theme.Text };
+        var ok = new RoundButton { Text = "Сохранить", DialogResult = DialogResult.OK, FlatStyle = FlatStyle.Flat, BackColor = Theme.Accent, ForeColor = Color.FromArgb(13, 16, 32) };
+        var cancel = new RoundButton { Text = "Отмена", DialogResult = DialogResult.Cancel, FlatStyle = FlatStyle.Flat, BackColor = Theme.Hover, ForeColor = Theme.Text };
         ok.FlatAppearance.BorderSize = cancel.FlatAppearance.BorderSize = 0;
         ok.SetBounds(Theme.S(160), Theme.S(64), Theme.S(110), Theme.S(32));
         cancel.SetBounds(Theme.S(278), Theme.S(64), Theme.S(86), Theme.S(32));
@@ -377,6 +415,58 @@ sealed class InputDialog : Form
     {
         using var d = new InputDialog(title, "", password: true);
         return d.ShowDialog(owner) == DialogResult.OK ? d.box.Text : null;
+    }
+}
+
+/// <summary>
+/// Кнопка в стиле браузера: скруглённая, с подсветкой при наведении. Кнопка цвета акцента рисуется градиентом.
+/// Заменяет плоские квадратные кнопки Windows в диалогах.
+/// </summary>
+sealed class RoundButton : Button
+{
+    bool hover, down;
+    public RoundButton()
+    {
+        FlatStyle = FlatStyle.Flat;
+        FlatAppearance.BorderSize = 0;
+        Cursor = Cursors.Hand;
+        SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint | ControlStyles.SupportsTransparentBackColor, true);
+    }
+    protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
+    protected override void OnMouseLeave(EventArgs e) { hover = down = false; Invalidate(); base.OnMouseLeave(e); }
+    protected override void OnMouseDown(MouseEventArgs e) { down = true; Invalidate(); base.OnMouseDown(e); }
+    protected override void OnMouseUp(MouseEventArgs e) { down = false; Invalidate(); base.OnMouseUp(e); }
+    protected override void OnEnabledChanged(EventArgs e) { Invalidate(); base.OnEnabledChanged(e); }
+
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        g.Clear(Parent?.BackColor ?? Theme.Toolbar);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        var r = new RectangleF(0.5f, 0.5f + (down ? 1 : 0), Width - 1, Height - 1.5f);
+        using var path = Theme.Round(r, Math.Min(Theme.S(10), Height / 2f));
+        bool primary = BackColor.ToArgb() == Theme.Accent.ToArgb();
+        Color Lift(Color c) => !Enabled ? Color.FromArgb(110, c) : hover ? ControlPaint.Light(c, .12f) : c;
+        if (primary)
+        {
+            using var br = new LinearGradientBrush(new RectangleF(0, 0, Width, Height), Lift(Theme.Accent), Lift(Theme.Accent2), 0f);
+            g.FillPath(br, path);
+        }
+        else
+        {
+            using var br = new SolidBrush(Lift(BackColor));
+            g.FillPath(br, path);
+            using var pen = new Pen(Color.FromArgb(hover ? 60 : 30, Theme.Text));
+            g.DrawPath(pen, path);
+        }
+        if (Focused && ShowFocusCues)
+        {
+            using var fp = new Pen(Color.FromArgb(180, Theme.Accent), 1.5f);
+            using var fpath = Theme.Round(new RectangleF(2, 2, Width - 4, Height - 4), Math.Min(Theme.S(8), Height / 2f - 2));
+            g.DrawPath(fp, fpath);
+        }
+        var fg = Enabled ? ForeColor : Color.FromArgb(140, ForeColor);
+        TextRenderer.DrawText(g, Text, Font, new Rectangle(0, down ? 1 : 0, Width, Height), fg, Theme.Center | TextFormatFlags.EndEllipsis);
     }
 }
 

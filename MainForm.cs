@@ -48,6 +48,7 @@ sealed partial class MainForm : Form
     (string origin, string user, string pass, DateTime time)? pendingCapture;
     readonly IconButton zoomBtn, installBtn;
     bool showInstall;
+    bool showZoom;   // «100%» на панели — только если масштаб не обычный
 
     public bool Incognito { get; }
     internal IReadOnlyList<BrowserTab> Tabs => tabs;
@@ -241,7 +242,7 @@ sealed partial class MainForm : Form
         foreach (var b in new[] { menuBtn, sideBtn, extBtn, downloadsBtn, mediaBtn, focusBtn, proxyBtn, zoomBtn, installBtn })
         {
             // Visible до показа окна всегда false, поэтому храним желаемое состояние отдельно
-            bool want = b == downloadsBtn ? showDownloads : b == proxyBtn ? showProxy : b == installBtn ? showInstall : b == extBtn ? !Incognito : b == focusBtn ? showFocus : b == sideBtn ? !Guest : b == mediaBtn ? showMedia : true;
+            bool want = b == downloadsBtn ? showDownloads : b == proxyBtn ? showProxy : b == installBtn ? showInstall : b == extBtn ? !Incognito : b == focusBtn ? showFocus : b == sideBtn ? !Guest : b == mediaBtn ? showMedia : b == zoomBtn ? showZoom : true;
             b.Visible = want;
             if (!want) continue;
             int w = b == zoomBtn ? Theme.S(58) : b == installBtn ? Theme.S(200) : b == focusBtn ? Theme.S(84) : s;
@@ -1007,7 +1008,11 @@ sealed partial class MainForm : Form
         int z = CurrentZoom;
         zoomBtn.Glyph = z + "%";
         zoomBtn.GlyphColor = z == 100 ? Theme.TextDim : Theme.Accent;
+        if ((z != 100) != showZoom) { showZoom = z != 100; LayoutToolbar(); }
     }
+
+    /// <summary>Панель закладок: включена в настройках и есть что показать (пустая строка-подсказка только занимает место).</summary>
+    bool BookmarksBarWanted => Cfg.ShowBookmarksBar && !Guest && Store.Bookmarks.Count > 0;
 
     void SetZoom(int percent)
     {
@@ -1040,13 +1045,13 @@ sealed partial class MainForm : Form
             menu.Items.Add(Theme.Item((v == Cfg.UiScale ? "✓  " : "     ") + v + "%" + (v == 100 ? " (обычный)" : ""),
                 () => CopyAndSave(x => x.UiScale = value)));
         }
-        menu.Show(zoomBtn, new Point(zoomBtn.Width - menu.PreferredSize.Width, zoomBtn.Height + Theme.S(4)));
+        { Control anchor = zoomBtn.Visible ? zoomBtn : menuBtn; menu.Show(anchor, new Point(anchor.Width - menu.PreferredSize.Width, anchor.Height + Theme.S(4))); }
     }
 
     void ApplyChrome()
     {
         address.Box.PlaceholderText = $"Поиск в {SearchEngines.Get(Cfg.Engine).Name} или адрес сайта";
-        bookmarksBar.Visible = Cfg.ShowBookmarksBar && !Guest;
+        bookmarksBar.Visible = BookmarksBarWanted;
         showProxy = AppEnv.RunningSignature != "off" || Cfg.ProxyMode != "off";
         proxyBtn.GlyphColor = AppEnv.RestartNeeded ? Theme.Danger : Theme.Secure;
         tips.SetToolTip(proxyBtn, AppEnv.RestartNeeded
@@ -1057,7 +1062,11 @@ sealed partial class MainForm : Form
         LayoutToolbar();
     }
 
-    void OnBookmarksChanged() => UpdateStar();
+    void OnBookmarksChanged()
+    {
+        UpdateStar();
+        if (strip.Visible) bookmarksBar.Visible = BookmarksBarWanted; // первая закладка — панель появляется, удалили все — прячется
+    }
 
     void OnDownloadsChanged()
     {
@@ -1150,6 +1159,7 @@ sealed partial class MainForm : Form
         tools.DropDownItems.Add(Theme.Item("Очистить историю и данные", () => OpenLitePage(LitePages.Settings, "#data"), null, "\uE74D"));
         menu.Items.Add(tools);
         menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(Theme.Item($"Масштаб: {CurrentZoom}%", ShowZoomMenu, "Ctrl + / −", "\uE8A3"));
         menu.Items.Add(Theme.Item("Настройки", () => OpenLitePage(LitePages.Settings), "Ctrl+,", "\uE713"));
         menu.Items.Add(Theme.Item("Выход (запомнить все окна)", BrowserApp.Instance.ExitAll, "Ctrl+Shift+Q", "\uE7E8"));
         // Меню у правого края окна — подменю открываем влево, иначе они уходят за экран
@@ -1280,7 +1290,7 @@ sealed partial class MainForm : Form
         {
             FormBorderStyle = FormBorderStyle.Sizable;
             strip.Visible = toolbar.Visible = true;
-            bookmarksBar.Visible = Cfg.ShowBookmarksBar && !Guest;
+            bookmarksBar.Visible = BookmarksBarWanted;
             WindowState = stateBeforeFullscreen;
         }
         RefreshFrame();
