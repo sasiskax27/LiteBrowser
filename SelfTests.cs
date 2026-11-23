@@ -287,6 +287,11 @@ static class DevToolsSelfTest
                 var msAct = await core.ExecuteScriptAsync(MediaSessionHook.ActionJs("nexttrack"));
                 var nx = await core.ExecuteScriptAsync("window.__nx");
                 Check("мини-плеер: трек и «следующий» с сайта", msState.Contains("Тестовый трек") && msState.Contains("\"next\":true") && msAct.Contains("ms") && nx == "1", msState + " / " + msAct + " / " + nx);
+                // Какие голоса видит движок (голоса загружаются не сразу — ждём)
+                await core.ExecuteScriptAsync("speechSynthesis.getVoices()");
+                await Task.Delay(1500);
+                var voices = await core.ExecuteScriptAsync("speechSynthesis.getVoices().map(v => v.name + ' [' + v.lang + (v.localService ? '' : ', онлайн') + ']').join('; ')");
+                log.Add("INFO голоса движка: " + voices);
                 // Чтение вслух (беззвучно): текст страницы делится на части, голос выбирается
                 await core.ExecuteScriptAsync("window.__liteSpeakVolume = 0; var art=document.createElement('article'); art.innerHTML='<h1>Заголовок</h1><p>Первое предложение статьи. Второе предложение!</p>'; document.body.appendChild(art);");
                 var spk = await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", System.Text.Json.JsonSerializer.Serialize(new { expression = MainForm.SpeakJs, userGesture = true, returnByValue = true }));

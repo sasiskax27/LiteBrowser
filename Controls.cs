@@ -32,6 +32,7 @@ sealed class BrowserTab
     public string? YtScriptId { get; set; }
     public string? CookieScriptId { get; set; }
     public int Volume { get; set; } = 100;   // громкость вкладки, %
+    public string? Container { get; set; }   // контейнер (отдельные cookies) или null
     public string AdSig { get; set; } = "";
     public (string origin, string user)? LastUser { get; set; }
     public DevMonitor? Dev { get; set; }
@@ -591,6 +592,13 @@ sealed class TabStrip : Control
                 using var p = Vertical ? Theme.Round(r, S(9)) : Theme.Round(new RectangleF(r.X + S(3), r.Y + S(2), r.Width - S(6), r.Height - S(8)), S(8));
                 using var b = new SolidBrush(Color.FromArgb(22, Theme.Text));
                 g.FillPath(b, p);
+            }
+            if (t.Container != null)
+            {
+                // Вкладка контейнера — цветная полоска сверху (сбоку в вертикальных вкладках)
+                using var cb = new SolidBrush(MainForm.ContainerColor(t.Container));
+                if (Vertical) g.FillRectangle(cb, r.X + S(2), r.Y + S(8), S(3), r.Height - S(16));
+                else g.FillRectangle(cb, r.X + S(12), r.Y + S(2), r.Width - S(24), S(3));
             }
             if (t.Group != null)
             {

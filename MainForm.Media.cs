@@ -265,6 +265,21 @@ sealed partial class MainForm
                     items.Insert(pos++, env.CreateContextMenuItem("", null, CoreWebView2ContextMenuItemKind.Separator));
                 }
             }
+            // Ссылка — «Открыть в контейнере ▸» (отдельные cookies)
+            if (target.HasLinkUri && !Incognito && Cfg.Containers.Count > 0 && target.LinkUri.StartsWith("http"))
+            {
+                var link = target.LinkUri;
+                var sub = env.CreateContextMenuItem(L.T("Открыть в контейнере"), null, CoreWebView2ContextMenuItemKind.Submenu);
+                foreach (var cn in Cfg.Containers)
+                {
+                    var name = cn;
+                    var ci = env.CreateContextMenuItem(name, null, CoreWebView2ContextMenuItemKind.Command);
+                    ci.CustomItemSelected += (_, _) => BeginInvoke(() => _ = AddContainerTab(link, name));
+                    sub.Children.Add(ci);
+                }
+                int at = Math.Min(items.Count, 2);
+                items.Insert(at, sub);
+            }
             else if (!target.HasLinkUri)
             {
                 if (Cfg.AiEnabled) items.Insert(pos++, Item("✦ Пересказать страницу (ИИ)", () => OpenAi("summarize")));

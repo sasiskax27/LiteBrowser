@@ -277,6 +277,7 @@ sealed partial class MainForm : Form
                 if (info != null && i < info.Count)
                 {
                     t.Pinned = info[i].Pinned;
+                    if (info[i].Container is { } ctn && !Incognito) t.Container = ctn;
                     if (info[i].Group != null)
                     {
                         var key = info[i].Group + "|" + info[i].GroupColor;
@@ -326,6 +327,13 @@ sealed partial class MainForm : Form
                 var o = env.CreateCoreWebView2ControllerOptions();
                 o.IsInPrivateModeEnabled = true;
                 o.ProfileName = Guest ? "Guest" : "Incognito";
+                await tab.View.EnsureCoreWebView2Async(env, o);
+            }
+            else if (tab.Container != null)
+            {
+                // Контейнер — свой профиль движка: свои cookies, вход в аккаунты, хранилище сайтов
+                var o = env.CreateCoreWebView2ControllerOptions();
+                o.ProfileName = ContainerProfile(tab.Container);
                 await tab.View.EnsureCoreWebView2Async(env, o);
             }
             else await tab.View.EnsureCoreWebView2Async(env);
@@ -435,6 +443,7 @@ sealed partial class MainForm : Form
         if (tab.Core != null)
             menu.Items.Add(Theme.Item(tab.Core.IsMuted ? "Включить звук" : "Выключить звук", () => tab.Core.IsMuted = !tab.Core.IsMuted));
         if (tab.Core != null) menu.Items.Add(VolumeMenu(tab));
+        if (!Incognito) menu.Items.Add(ContainerMenu(L.T("Открыть в контейнере"), () => tab.Core?.Source ?? tab.PendingUrl));
         if (!Incognito && tab.Core?.Source is { } rs && rs.StartsWith("http") && Uri.TryCreate(rs, UriKind.Absolute, out var ru))
             menu.Items.Add(Theme.Item(RuleFor(ru.Host) is { } rr ? L.T("Не открывать ") + rr + L.T(" в отдельном окне") : L.T("Всегда открывать ") + RootDomain(ru.Host) + L.T(" в своём окне"), () => ToggleWindowRule(tab), null, "\uE737"));
         if (tab.SplitWith != null) menu.Items.Add(Theme.Item("Убрать разделение экрана", () => { SelectTab(tab); Unsplit(); }));
@@ -482,7 +491,7 @@ sealed partial class MainForm : Form
         Info = tabs.Select(t => new SessionTab
         {
             Url = TabUrl(t), Pinned = t.Pinned, Group = t.Group?.Name, GroupColor = t.Group != null ? ColorTranslator.ToHtml(t.Group.Color) : null,
-            GroupCollapsed = t.Group?.Collapsed ?? false,
+            GroupCollapsed = t.Group?.Collapsed ?? false, Container = t.Container,
         }).ToList(),
         Active = active == null ? 0 : Math.Max(0, tabs.IndexOf(active)),
         Window = WindowState == FormWindowState.Minimized ? null : new[] { RestoreBounds.X, RestoreBounds.Y, RestoreBounds.Width, RestoreBounds.Height, WindowState == FormWindowState.Maximized ? 1 : 0 },
@@ -804,6 +813,7 @@ sealed partial class MainForm : Form
             }
             var deferral = e.GetDeferral();
             var t = CreateTab(null, select: true);
+            t.Container = tab.Container; // окно, открытое сайтом, — в том же контейнере (движок требует тот же профиль)
             await InitTab(t);
             if (t.Core != null) e.NewWindow = t.Core;
             e.Handled = true;
@@ -1072,6 +1082,7 @@ sealed partial class MainForm : Form
         menu.Items.Add(Theme.Item("Новое окно", () => BrowserApp.Instance.OpenWindow(false), "Ctrl+N", "\uE7C4"));
         menu.Items.Add(Theme.Item("Окно инкогнито", () => BrowserApp.Instance.OpenWindow(true), "Ctrl+Shift+N", "\uE727"));
         menu.Items.Add(Theme.Item("Гостевое окно", BrowserApp.Instance.OpenGuest, "", "\uE77B"));
+        if (!Incognito) menu.Items.Add(ContainerMenu(L.T("Новая вкладка в контейнере"), () => homeUrl));
         if (WorkspacesHere) { var ws = WorkspacesMenu(); ws.Image = Theme.Glyph("\uE74C"); menu.Items.Add(ws); }
         menu.Items.Add(ProfilesMenu());
         menu.Items.Add(new ToolStripSeparator());

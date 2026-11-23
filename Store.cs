@@ -33,6 +33,7 @@ sealed class SessionTab
     public string? Group { get; set; }
     public string? GroupColor { get; set; }
     public bool GroupCollapsed { get; set; }
+    public string? Container { get; set; }
 }
 
 sealed class Session
