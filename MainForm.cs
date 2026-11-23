@@ -815,7 +815,7 @@ sealed partial class MainForm : Form
 
         // Скрипт менеджера паролей: находит формы входа на страницах
         _ = core.AddScriptToExecuteOnDocumentCreatedAsync(PasswordScripts.Page);
-        _ = core.AddScriptToExecuteOnDocumentCreatedAsync(PageTools.Gestures);
+        _ = core.AddScriptToExecuteOnDocumentCreatedAsync(PageTools.GesturesScript());
         _ = core.AddScriptToExecuteOnDocumentCreatedAsync(MediaSessionHook.Script);
         _ = core.AddScriptToExecuteOnDocumentCreatedAsync(PageTools.FocusPing);
         if (Cfg.SelectionTranslate) _ = core.AddScriptToExecuteOnDocumentCreatedAsync(SelectionTranslate.Script);

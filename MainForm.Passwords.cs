@@ -84,6 +84,8 @@ sealed partial class MainForm
                     case "D": core.Reload(); break;
                     case "DR": CloseTab(tab); break;
                     case "UD": ReopenClosedTab(); break;
+                    case "UL": { int i = tabs.IndexOf(tab); if (tabs.Count > 1) SelectTab(tabs[(i - 1 + tabs.Count) % tabs.Count]); break; }
+                    case "UR": { int i = tabs.IndexOf(tab); if (tabs.Count > 1) SelectTab(tabs[(i + 1) % tabs.Count]); break; }
                 }
             });
             return;

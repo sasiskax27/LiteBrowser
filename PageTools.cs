@@ -149,17 +149,24 @@ static class PageTools
     /// <summary>Сообщает браузеру о клике по странице (для разделённого экрана).</summary>
     public const string FocusPing = "if (window.top === window) document.addEventListener('pointerdown', () => { try { chrome.webview.postMessage({ type: 'lite-focus' }); } catch (e) { } }, true);";
 
+    /// <summary>
+    /// Жесты мышью: зажать правую кнопку и провести. Пока ведёте — виден след и подсказка, что произойдёт.
+    /// ← назад, → вперёд, ↑ новая вкладка, ↓ обновить, ↓→ закрыть вкладку, ↑↓ вернуть закрытую, ↑← / ↑→ — соседняя вкладка, →← наверх страницы.
+    /// </summary>
+    /// <summary>Скрипт жестов с подписями на языке интерфейса.</summary>
+    public static string GesturesScript() => !L.En ? Gestures : Gestures
+        .Replace("'Назад'", "'Back'").Replace("'Вперёд'", "'Forward'").Replace("'Новая вкладка'", "'New tab'").Replace("'Обновить'", "'Reload'")
+        .Replace("'Закрыть вкладку'", "'Close tab'").Replace("'Вернуть закрытую вкладку'", "'Reopen closed tab'").Replace("'Предыдущая вкладка'", "'Previous tab'")
+        .Replace("'Следующая вкладка'", "'Next tab'").Replace("'Наверх страницы'", "'Scroll to top'").Replace("'Нет такого жеста'", "'No such gesture'");
+
     public const string Gestures = """
 (() => {
   if (window.top !== window || !window.chrome || !window.chrome.webview) return;
-  let down = false, pts = [], suppress = false;
-  addEventListener('mousedown', e => { if (e.button === 2) { down = true; pts = [[e.screenX, e.screenY]]; } }, true);
-  addEventListener('mousemove', e => { if (down && pts.length < 2000) pts.push([e.screenX, e.screenY]); }, true);
-  addEventListener('mouseup', e => {
-    if (e.button !== 2 || !down) return;
-    down = false;
-    const dirs = [];
-    let [px, py] = pts[0];
+  const NAMES = { L: 'Назад', R: 'Вперёд', U: 'Новая вкладка', D: 'Обновить', DR: 'Закрыть вкладку', UD: 'Вернуть закрытую вкладку',
+                  UL: 'Предыдущая вкладка', UR: 'Следующая вкладка', RL: 'Наверх страницы' };
+  let down = false, pts = [], suppress = false, cv = null, ctx = null, tip = null;
+  const dirsOf = () => {
+    const dirs = []; let [px, py] = pts[0];
     for (const [x, y] of pts) {
       const dx = x - px, dy = y - py;
       if (Math.abs(dx) < 40 && Math.abs(dy) < 40) continue;
@@ -167,9 +174,47 @@ static class PageTools
       if (dirs[dirs.length - 1] !== d) dirs.push(d);
       px = x; py = y;
     }
-    if (dirs.length) { suppress = true; try { window.chrome.webview.postMessage({ type: 'gesture', g: dirs.join('').slice(0, 3) }); } catch (x) {} }
+    return dirs.join('').slice(0, 3);
+  };
+  const cleanup = () => { if (cv) { cv.remove(); cv = null; ctx = null; } if (tip) { tip.remove(); tip = null; } };
+  const draw = (cx, cy) => {
+    if (!cv) {
+      cv = document.createElement('canvas');
+      cv.style.cssText = 'position:fixed;inset:0;z-index:2147483646;pointer-events:none';
+      cv.width = innerWidth; cv.height = innerHeight;
+      tip = document.createElement('div');
+      tip.style.cssText = 'position:fixed;left:50%;top:40%;transform:translate(-50%,-50%);z-index:2147483647;pointer-events:none;padding:8px 16px;border-radius:10px;background:rgba(20,22,30,.85);color:#fff;font:600 15px Segoe UI,system-ui;box-shadow:0 6px 24px rgba(0,0,0,.35)';
+      (document.body || document.documentElement).append(cv, tip);
+      ctx = cv.getContext('2d');
+    }
+    ctx.strokeStyle = 'rgba(124,156,255,.85)'; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(pts[0][2], pts[0][3]);
+    for (const p of pts) ctx.lineTo(p[2], p[3]);
+    ctx.stroke();
+    const g = dirsOf();
+    tip.textContent = g ? (NAMES[g] || 'Нет такого жеста') : '';
+    tip.style.display = g ? '' : 'none';
+  };
+  addEventListener('mousedown', e => { if (e.button === 2) { down = true; pts = [[e.screenX, e.screenY, e.clientX, e.clientY]]; } }, true);
+  addEventListener('mousemove', e => {
+    if (!down || pts.length >= 2000) return;
+    pts.push([e.screenX, e.screenY, e.clientX, e.clientY]);
+    const [x0, y0] = pts[0];
+    if (cv || Math.abs(e.screenX - x0) + Math.abs(e.screenY - y0) > 15) draw();
+  }, true);
+  addEventListener('mouseup', e => {
+    if (e.button !== 2 || !down) return;
+    down = false;
+    const g = dirsOf();
+    cleanup();
+    if (g) {
+      suppress = true;
+      if (g === 'RL') { scrollTo({ top: 0, behavior: 'smooth' }); return; }
+      try { window.chrome.webview.postMessage({ type: 'gesture', g }); } catch (x) {}
+    }
   }, true);
   addEventListener('contextmenu', e => { if (suppress) { e.preventDefault(); e.stopImmediatePropagation(); suppress = false; } }, true);
+  addEventListener('blur', () => { down = false; cleanup(); });
 })();
 """;
 
