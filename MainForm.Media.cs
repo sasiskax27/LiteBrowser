@@ -96,6 +96,33 @@ sealed partial class MainForm
         catch (Exception ex) { MessageBox.Show(this, "Не удалось сделать скриншот: " + ex.Message, "Скриншот"); }
     }
 
+    // ================= Стикеры на странице =================
+
+    /// <summary>Новый стикер там, где открыли меню (координаты пересчитываем в координаты документа).</summary>
+    async Task AddSticky(BrowserTab tab, Point at)
+    {
+        var core = tab.Core;
+        if (core == null || Incognito) return;
+        int vw = Math.Max(1, tab.View.Width);
+        string pos;
+        try { pos = await core.ExecuteScriptAsync($"(() => {{ const k = innerWidth / {vw}; return [Math.round(scrollX + {at.X} * k), Math.round(scrollY + {at.Y} * k)].join(','); }})()"); }
+        catch { return; }
+        var xy = pos.Trim('"').Split(',');
+        if (xy.Length != 2 || !int.TryParse(xy[0], out int x) || !int.TryParse(xy[1], out int y)) return;
+        var key = Store.PageKey(core.Source);
+        var note = Stickies.Add(key, x, y);
+        try { await core.ExecuteScriptAsync(Stickies.Script(Stickies.For(key), note.Id)); } catch { }
+    }
+
+    void RenderStickies(BrowserTab tab)
+    {
+        var core = tab.Core;
+        if (core == null || Incognito || !core.Source.StartsWith("http")) return;
+        var notes = Stickies.For(Store.PageKey(core.Source));
+        if (notes.Count == 0) return;
+        try { _ = core.ExecuteScriptAsync(Stickies.Script(notes)); } catch { }
+    }
+
     // ================= Новости сайта на стартовой (RSS) =================
 
     async Task SubscribeToSite()
@@ -344,6 +371,11 @@ sealed partial class MainForm
                         if (!string.IsNullOrWhiteSpace(note))
                             Store.AddHighlight(new Highlight { Url = Store.PageKey(src), Title = core.DocumentTitle, Note = note });
                     }));
+                if (!Incognito)
+                {
+                    var loc = e.Location;
+                    items.Insert(pos++, Item("📌 Стикер здесь", () => _ = AddSticky(tab, loc)));
+                }
                 items.Insert(pos++, Item("Перевести страницу", TranslatePage));
                 items.Insert(pos++, Item("QR-код страницы", ShowQr));
                 items.Insert(pos++, env.CreateContextMenuItem("", null, CoreWebView2ContextMenuItemKind.Separator));

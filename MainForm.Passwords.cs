@@ -67,6 +67,20 @@ sealed partial class MainForm
             return;
         }
 
+        // Стикеры: правка и удаление — только стикеров этой же страницы
+        if (json.Contains("\"sticky:save\"") || json.Contains("\"sticky:del\""))
+        {
+            if (Incognito) return;
+            using var sd = JsonDocument.Parse(json);
+            var r = sd.RootElement;
+            var key = Store.PageKey(core.Source);
+            var id = r.TryGetProperty("id", out var iv) ? iv.GetString() ?? "" : "";
+            if (r.GetProperty("type").GetString() == "sticky:del") Stickies.Delete(key, id);
+            else Stickies.Update(key, id, r.TryGetProperty("text", out var tv) ? tv.GetString() ?? "" : "",
+                                 r.TryGetProperty("x", out var xv) && xv.TryGetInt32(out var x) ? x : 0, r.TryGetProperty("y", out var yv) && yv.TryGetInt32(out var y) ? y : 0);
+            return;
+        }
+
         // Жесты мышью (не чаще раза в 400 мс — на случай, если страница сама шлёт такие сообщения)
         if (json.Contains("\"gesture\""))
         {

@@ -732,6 +732,7 @@ sealed partial class MainForm : Form
         {
             tab.Loading = false;
             ReapplyVolume(tab);
+            if (e.IsSuccess) RenderStickies(tab);
             // Текст страницы — для поиска по истории «по содержимому»
             if (e.IsSuccess && !Incognito && Cfg.SaveHistory && Cfg.FullTextHistory && core.Source.StartsWith("http") && !core.Source.StartsWith(LitePages.Prefix))
                 _ = PageIndex.CaptureAsync(core, core.Source);
