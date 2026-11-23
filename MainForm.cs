@@ -1097,6 +1097,7 @@ sealed partial class MainForm : Form
         pageMenu.DropDownItems.Add(Theme.Item("Скриншот видимой части", () => _ = TakeScreenshot(false), "Ctrl+Shift+S", "\uE722"));
         pageMenu.DropDownItems.Add(Theme.Item("Скриншот всей страницы", () => _ = TakeScreenshot(true), null, "\uE722"));
         pageMenu.DropDownItems.Add(Theme.Item("Мини-плеер поверх окон", () => { if (active != null) MiniPlayerForm.ShowFor(this, active); }, null, "\uE8B2"));
+        pageMenu.DropDownItems.Add(Theme.Item("Текст с экрана (выделить область)", () => _ = RecognizeArea(), "Ctrl+Shift+X", "\uE8D2"));
         pageMenu.DropDownItems.Add(Theme.Item("Сравнить цены в магазинах", () => _ = ComparePrices(), null, "\uE7BF"));
         pageMenu.DropDownItems.Add(Theme.Item(recorder != null ? "Остановить запись видео" : "Записать видео вкладки", () => _ = ToggleRecording(), "Alt+Shift+R", "\uE7C8"));
         pageMenu.DropDownItems.Add(Theme.Item("QR-код страницы", ShowQr, null, "\uED14"));
@@ -1414,6 +1415,7 @@ sealed partial class MainForm : Form
             case Keys.Control | Keys.Shift | Keys.V: _ = PictureInPicture(); return true;
             case Keys.Control | Keys.Shift | Keys.S: _ = TakeScreenshot(false); return true;
             case Keys.Alt | Keys.Shift | Keys.R: _ = ToggleRecording(); return true;
+            case Keys.Control | Keys.Shift | Keys.X: _ = RecognizeArea(); return true;
             case Keys.Shift | Keys.Escape: TaskManagerForm.ShowFor(this); return true;
             case Keys.Control | Keys.H: OpenLitePage(LitePages.History); return true;
             case Keys.Control | Keys.Shift | Keys.P: OpenLitePage(LitePages.Passwords); return true;

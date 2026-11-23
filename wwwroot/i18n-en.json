@@ -1033,5 +1033,14 @@
 "Всегда открывать ": "Always open ",
 " в своём окне": " in its own window",
 "Сайты в своём окне": "Sites in their own window",
-"Эти сайты всегда открываются в отдельном окне — например, музыка в одном окне, работа в другом. Добавить: правый клик по вкладке": "These sites always open in a separate window — e.g. music in one window, work in another. To add one: right-click a tab"
+"Эти сайты всегда открываются в отдельном окне — например, музыка в одном окне, работа в другом. Добавить: правый клик по вкладке": "These sites always open in a separate window — e.g. music in one window, work in another. To add one: right-click a tab",
+"В этой Windows нет распознавания текста.": "This Windows has no text recognition.",
+"Текст с экрана": "Text from screen",
+"Текст в этой области не найден": "No text found in this area",
+"Текст скопирован: ": "Text copied: ",
+"Текст с экрана (выделить область)": "Text from screen (select an area)",
+"Выделите область с текстом · Esc — отмена": "Select an area with text · Esc to cancel",
+"В этой Windows нет распознавания текста": "This Windows has no text recognition",
+"В Windows не установлен язык для распознавания текста": "No text recognition language is installed in Windows",
+"Распознавание не удалось": "Recognition failed"
 }

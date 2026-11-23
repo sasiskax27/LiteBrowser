@@ -96,6 +96,43 @@ sealed partial class MainForm
         catch (Exception ex) { MessageBox.Show(this, "Не удалось сделать скриншот: " + ex.Message, "Скриншот"); }
     }
 
+    // ================= Текст с картинки (OCR) =================
+
+    /// <summary>Выделить область вкладки мышью — текст из неё распознаётся (OCR Windows, без интернета) и копируется.</summary>
+    async Task RecognizeArea()
+    {
+        var tab = active;
+        if (tab?.Core == null) return;
+        if (!WinOcr.Supported) { MessageBox.Show(this, L.T("В этой Windows нет распознавания текста."), L.T("Текст с экрана")); return; }
+        Bitmap shot;
+        try
+        {
+            using var ms = new MemoryStream();
+            await tab.Core.CapturePreviewAsync(Microsoft.Web.WebView2.Core.CoreWebView2CapturePreviewImageFormat.Png, ms);
+            ms.Position = 0;
+            shot = new Bitmap(ms);
+        }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, L.T("Текст с экрана")); return; }
+        using (shot)
+        {
+            var bounds = tab.View.RectangleToScreen(tab.View.ClientRectangle);
+            using var pick = new AreaSelectForm(shot, bounds);
+            if (pick.ShowDialog(this) != DialogResult.OK) return;
+            var r = Rectangle.Intersect(pick.Selection, new Rectangle(Point.Empty, shot.Size));
+            if (r.Width < 4 || r.Height < 4) return;
+            using var part = shot.Clone(r, shot.PixelFormat);
+            string text;
+            try { text = await WinOcr.RecognizeAsync(part); }
+            catch (Exception ex) { MessageBox.Show(this, ex.Message, L.T("Текст с экрана")); return; }
+            if (string.IsNullOrWhiteSpace(text)) { infoBar.ShowBar("ocr", "\uE8D2", L.T("Текст в этой области не найден")); return; }
+            Clipboard.SetText(text);
+            var preview = text.Replace("\r", " ").Replace("\n", " ");
+            if (preview.Length > 60) preview = preview[..60] + "…";
+            infoBar.ShowBar("ocr", "\uE8D2", L.T("Текст скопирован: ") + "«" + preview + "»",
+                (L.T("Показать"), () => { using var f = new TextResultForm(L.T("Текст с экрана"), text); f.ShowDialog(this); }, false));
+        }
+    }
+
     // ================= Сбои движка =================
 
     /// <summary>

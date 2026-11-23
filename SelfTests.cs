@@ -264,6 +264,22 @@ static class DevToolsSelfTest
                 var loadedSet = AppSettings.Load(setDir);
                 Check("настройки: быстрое чтение совпадает", loadedSet.UiTheme == "forest" && loadedSet.ProxySites.SequenceEqual(new[] { "a.ru", "b.com" }) && !loadedSet.HomeWidgets && loadedSet.FreezeMinutes == 30
                       && System.Text.Json.JsonSerializer.Serialize(loadedSet, AppSettings.Json) == System.Text.Json.JsonSerializer.Serialize(sample.Normalize(), AppSettings.Json));
+                // Распознавание текста встроенным OCR Windows
+                if (WinOcr.Supported)
+                {
+                    using var ocrBmp = new Bitmap(700, 120);
+                    using (var og = Graphics.FromImage(ocrBmp))
+                    {
+                        og.Clear(Color.White);
+                        og.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
+                        og.DrawString("Привет мир 2026", new Font("Segoe UI", 26), Brushes.Black, 10, 5);
+                        og.DrawString("Hello World", new Font("Segoe UI", 26), Brushes.Black, 10, 60);
+                    }
+                    string ocrText;
+                    try { ocrText = await WinOcr.RecognizeAsync(ocrBmp); } catch (Exception ex) { ocrText = "ошибка: " + ex.Message; }
+                    Check("распознавание текста (OCR Windows)", ocrText.Contains("2026") && ocrText.Contains("Hello", StringComparison.OrdinalIgnoreCase), ocrText.Replace("\r", "").Replace("\n", " / "));
+                }
+                else log.Add("INFO распознавание текста: в этой Windows нет OCR");
                 // Мини-плеер: кнопки сайта (Media Session) перехватываются и нажимаются
                 await core.ExecuteScriptAsync(MediaSessionHook.Script);
                 await core.ExecuteScriptAsync("window.__nx=0; navigator.mediaSession.metadata = new MediaMetadata({title:'Тестовый трек', artist:'Исполнитель'}); navigator.mediaSession.setActionHandler('nexttrack', () => window.__nx++);");
