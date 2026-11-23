@@ -193,6 +193,23 @@ static class Theme
         return f;
     }
 
+    public static Color Blend(Color a, Color b, float k) =>
+        Color.FromArgb((int)(a.R + (b.R - a.R) * k), (int)(a.G + (b.G - a.G) * k), (int)(a.B + (b.B - a.B) * k));
+
+    /// <summary>Подсветка строки во всплывающих списках: выбранная — с оттенком акцента и полоской слева, под мышью — просто светлее.</summary>
+    public static void PaintRow(Graphics g, Rectangle r, bool selected, bool hover, Color bg)
+    {
+        if (!selected && !hover) return;
+        using (var p = Round(r, S(8)))
+        using (var b = new SolidBrush(selected ? Blend(bg, Accent, IsLight ? .12f : Neon ? .20f : .15f) : Hover))
+            g.FillPath(b, p);
+        if (!selected) return;
+        var bar = new RectangleF(r.X + S(2), r.Y + r.Height * .28f, S(3), r.Height * .44f);
+        using var bp = Round(bar, S(1.5f));
+        using var bb = new LinearGradientBrush(bar, Accent, Accent2, 90f);
+        g.FillPath(bb, bp);
+    }
+
     public static GraphicsPath Round(RectangleF r, float rad)
     {
         var p = new GraphicsPath();
@@ -241,7 +258,7 @@ static class Theme
     /// <summary>Скруглённые углы и тёмная рамка для всплывающих окон.</summary>
     public static void StylePopup(IntPtr hwnd)
     {
-        int round = 2, on = IsLight ? 0 : 1, border = ColorTranslator.ToWin32(Line);
+        int round = 2, on = IsLight ? 0 : 1, border = ColorTranslator.ToWin32(Neon ? Blend(Line, Accent, .45f) : Line);
         DwmSetWindowAttribute(hwnd, 20, ref on, 4);
         DwmSetWindowAttribute(hwnd, 33, ref round, 4);
         DwmSetWindowAttribute(hwnd, 34, ref border, 4);

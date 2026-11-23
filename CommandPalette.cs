@@ -1,4 +1,4 @@
-using System.Drawing.Drawing2D;
+﻿using System.Drawing.Drawing2D;
 
 namespace LiteBrowser;
 
@@ -118,7 +118,17 @@ sealed class CommandPalette : Form
         g.Clear(BackColor);
         var icon = Theme.GetFont(Theme.IconFont, 11f);
         TextRenderer.DrawText(g, "", icon, new Rectangle(S(14), S(16), S(24), S(30)), Theme.Accent, Theme.Center);
-        using (var pen = new Pen(Theme.Line)) g.DrawLine(pen, 0, Top0 - S(6), Width, Top0 - S(6));
+        // Разделитель под строкой ввода — градиент акцента, гаснущий к краям
+        var sepR = new Rectangle(0, Top0 - S(7), Width, S(2));
+        using (var sep = new LinearGradientBrush(sepR, Color.Transparent, Color.Transparent, 0f))
+        {
+            sep.InterpolationColors = new ColorBlend
+            {
+                Colors = new[] { Color.FromArgb(0, Theme.Accent), Color.FromArgb(Theme.Neon ? 230 : 150, Theme.Accent), Color.FromArgb(Theme.Neon ? 230 : 150, Theme.Accent2), Color.FromArgb(0, Theme.Accent2) },
+                Positions = new[] { 0f, .25f, .75f, 1f },
+            };
+            g.FillRectangle(sep, sepR.X, sepR.Y, sepR.Width, Theme.Neon ? S(2) : 1);
+        }
         var title = Theme.GetFont("Segoe UI", 10f);
         var small = Theme.GetFont("Segoe UI", 8.5f);
         if (items.Count == 0)
@@ -130,12 +140,7 @@ sealed class CommandPalette : Form
         {
             int i = scroll + v;
             var r = RowRect(v);
-            if (i == selected || i == hover)
-            {
-                using var p = Theme.Round(r, S(8));
-                using var b = new SolidBrush(i == selected ? Theme.Pressed : Theme.Hover);
-                g.FillPath(b, p);
-            }
+            Theme.PaintRow(g, r, i == selected, i == hover, BackColor);
             var it = items[i];
             TextRenderer.DrawText(g, it.Glyph, it.Glyph.Length == 1 && it.Glyph[0] >= '' ? icon : title,
                 new Rectangle(r.X + S(8), r.Y, S(28), r.Height), it.Kind == "cmd" ? Theme.Accent : Theme.TextDim, Theme.Center);
@@ -145,9 +150,16 @@ sealed class CommandPalette : Form
             var tag = it.Keys.Length > 0 ? L.T(it.Keys) : L.T(KindName(it.Kind));
             var titleText = L.T(it.Title);
             var detailText = L.T(it.Detail);
-            int tagW = TextRenderer.MeasureText(tag, small).Width;
-            TextRenderer.DrawText(g, tag, small, new Rectangle(right - tagW, r.Y, tagW, r.Height), Theme.TextDim,
-                TextFormatFlags.Right | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.NoPrefix);
+            int tagW = tag.Length == 0 ? 0 : TextRenderer.MeasureText(tag, small, Size.Empty, TextFormatFlags.NoPadding).Width + S(14);
+            if (tagW > 0)
+            {
+                // Сочетание клавиш или тип — в «таблетке»
+                var tr = new Rectangle(right - tagW, r.Y + (r.Height - S(20)) / 2, tagW, S(20));
+                using (var tp = Theme.Round(tr, S(6)))
+                using (var tb = new SolidBrush(Theme.Blend(BackColor, Theme.Text, .08f)))
+                    g.FillPath(tb, tp);
+                TextRenderer.DrawText(g, tag, small, tr, i == selected ? Theme.Text : Theme.TextDim, Theme.Center | TextFormatFlags.NoPrefix);
+            }
             int avail = right - tagW - S(14) - tx;
             int titleW = Math.Min(TextRenderer.MeasureText(titleText, title).Width, detailText.Length > 0 ? avail * 2 / 3 : avail);
             TextRenderer.DrawText(g, titleText, title, new Rectangle(tx, r.Y, titleW, r.Height), Theme.Text,

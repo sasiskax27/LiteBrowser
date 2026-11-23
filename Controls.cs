@@ -301,8 +301,20 @@ sealed class AddressBox : Control
         {
             using var fill = new SolidBrush(Theme.Field);
             g.FillPath(fill, path);
-            using var pen = Box.Focused ? new Pen(Theme.Accent, Theme.S(1.6f)) : new Pen(Theme.Line, 1f);
-            g.DrawPath(pen, path);
+            if (Box.Focused)
+            {
+                // При вводе — мягкое свечение по краю и рамка градиентом акцента
+                using var glow = new Pen(Color.FromArgb(Theme.Neon ? 80 : 45, Theme.Accent), Theme.S(6f));
+                var clip = g.Clip; g.SetClip(path); g.DrawPath(glow, path); g.Clip = clip;
+                using var lg = new LinearGradientBrush(new RectangleF(0, 0, Width, Height), Theme.Accent, Theme.Accent2, 0f);
+                using var pen = new Pen(lg, Theme.S(1.6f));
+                g.DrawPath(pen, path);
+            }
+            else
+            {
+                using var pen = new Pen(Theme.Neon ? Theme.Blend(Theme.Line, Theme.Accent, .35f) : Theme.Line, 1f);
+                g.DrawPath(pen, path);
+            }
         }
 
         if (lockGlyph.Length > 0)
@@ -332,7 +344,7 @@ sealed class AddressBox : Control
             var kr = KeyRect;
             if (keyHover || keyActive)
             {
-                using var b = new SolidBrush(keyActive && !keyHover ? Color.FromArgb(44, 124, 156, 255) : Theme.Hover);
+                using var b = new SolidBrush(keyActive && !keyHover ? Color.FromArgb(44, Theme.Accent) : Theme.Hover);
                 g.FillEllipse(b, kr);
             }
             TextRenderer.DrawText(g, "", starFont, kr, keyActive ? Theme.Accent : Theme.TextDim, Theme.Center);
@@ -345,7 +357,7 @@ sealed class AddressBox : Control
             int w = pill.Width, h = pill.Height;
             var color = shieldOff ? Theme.TextDim : Theme.Accent;
             using var path = Theme.Round(pill, h / 2f);
-            using var b = new SolidBrush(shieldOff ? Color.FromArgb(pillHover ? 50 : 30, 255, 255, 255) : Color.FromArgb(pillHover ? 80 : 44, 124, 156, 255));
+            using var b = new SolidBrush(shieldOff ? Color.FromArgb(pillHover ? 50 : 30, 255, 255, 255) : Color.FromArgb(pillHover ? 80 : 44, Theme.Accent));
             g.FillPath(b, path);
             TextRenderer.DrawText(g, "", iconFont, new Rectangle(pill.X + Theme.S(6), pill.Y, Theme.S(16), h), color, Theme.Center);
             TextRenderer.DrawText(g, text, smallFont, new Rectangle(pill.X + Theme.S(23), pill.Y, w - Theme.S(23), h), color,

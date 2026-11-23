@@ -1,4 +1,4 @@
-using System.Drawing.Drawing2D;
+﻿using System.Drawing.Drawing2D;
 using System.Text.Json;
 
 namespace LiteBrowser;
@@ -149,14 +149,14 @@ sealed class SuggestPopup : Form
         for (int i = 0; i < items.Count; i++)
         {
             var r = RowRect(i);
-            if (i == selected || i == hover)
-            {
-                using var p = Theme.Round(r, S(8));
-                using var b = new SolidBrush(i == selected ? Theme.Pressed : Theme.Hover);
-                g.FillPath(b, p);
-            }
+            Theme.PaintRow(g, r, i == selected, i == hover, BackColor);
             var it = items[i];
-            TextRenderer.DrawText(g, it.Glyph, icon, new Rectangle(r.X + S(8), r.Y, S(26), r.Height), Theme.TextDim, Theme.Center);
+            // Значок — в маленькой скруглённой плитке
+            var tile = new Rectangle(r.X + S(9), r.Y + (r.Height - S(26)) / 2, S(26), S(26));
+            using (var tp = Theme.Round(tile, S(7)))
+            using (var tb = new SolidBrush(i == selected ? Theme.Blend(BackColor, Theme.Accent, .30f) : Theme.Blend(BackColor, Theme.Text, .07f)))
+                g.FillPath(tb, tp);
+            TextRenderer.DrawText(g, it.Glyph, icon, tile, i == selected ? Theme.Accent : Theme.TextDim, Theme.Center);
             int tx = r.X + S(42);
             int titleW = Math.Min(TextRenderer.MeasureText(it.Title, title).Width, (r.Width - S(50)) * 2 / 3);
             TextRenderer.DrawText(g, it.Title, title, new Rectangle(tx, r.Y, titleW, r.Height), Theme.Text,
