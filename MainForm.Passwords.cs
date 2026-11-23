@@ -290,6 +290,17 @@ sealed partial class MainForm
                 }
                 catch (Exception ex) { Post(core, new { type = "pwError", text = "Не удалось проверить: " + ex.Message }); }
                 break;
+            case "pw:change":
+            {
+                // Стандартный адрес смены пароля (/.well-known/change-password): сайты, которые его поддерживают, перенаправят на нужную страницу
+                var che = Vault.Get(Str("id"));
+                if (che == null || !Uri.TryCreate(che.Origin, UriKind.Absolute, out var cho) || cho.Scheme != "https") break;
+                var newPw = PasswordTools.Generate(20);
+                PasswordTools.CopySecret(newPw);
+                _ = AddTab(cho.GetLeftPart(UriPartial.Authority) + "/.well-known/change-password");
+                Post(core, new { type = "done", text = L.T("Новый надёжный пароль скопирован (буфер очистится через 30 секунд). Вставьте его на странице смены — браузер предложит обновить сохранённый") });
+                break;
+            }
             case "pw:copy":
                 var ce = Vault.Get(Str("id"));
                 if (ce == null) break;

@@ -119,6 +119,13 @@ function renderList() {
     if (it.weak) host.insertAdjacentHTML('beforeend', '<span class="badge weak">Слабый</span>');
     if (it.reused) host.insertAdjacentHTML('beforeend', '<span class="badge reused">Повторяется</span>');
     if (breached[it.id]) host.insertAdjacentHTML('beforeend', '<span class="badge reused">Утёк ×' + breached[it.id].toLocaleString('ru-RU') + '</span>');
+    // Проблемный пароль — кнопка смены: страница смены пароля сайта + новый надёжный пароль в буфере
+    if (it.weak || it.reused || breached[it.id]) {
+      const ch = document.createElement('button'); ch.className = 'badge change'; ch.textContent = 'Сменить';
+      ch.title = 'Откроет страницу смены пароля на сайте и скопирует новый надёжный пароль';
+      ch.onclick = e => { e.preventDefault(); send({ type: 'pw:change', id: it.id }); };
+      host.appendChild(ch);
+    }
     if (it.hasTotp) { const c = codes[it.id]; const b = document.createElement('span'); b.className = 'badge weak code2fa'; b.dataset.id = it.id; b.style.cursor = 'pointer'; b.title = 'Скопировать код 2FA'; b.textContent = c ? c.code.slice(0,3) + ' ' + c.code.slice(3) + ' · ' + c.left + 'с' : '2FA'; b.onclick = () => send({ type: 'pw:copyCode', id: it.id }); host.appendChild(b); }
     row.querySelector('.user').textContent = (it.username || '(без логина)') + ' · изменён ' + it.updated;
     const pw = row.querySelector('.pw');

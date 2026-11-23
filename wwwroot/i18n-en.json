@@ -1042,5 +1042,7 @@
 "Выделите область с текстом · Esc — отмена": "Select an area with text · Esc to cancel",
 "В этой Windows нет распознавания текста": "This Windows has no text recognition",
 "В Windows не установлен язык для распознавания текста": "No text recognition language is installed in Windows",
-"Распознавание не удалось": "Recognition failed"
+"Распознавание не удалось": "Recognition failed",
+"Откроет страницу смены пароля на сайте и скопирует новый надёжный пароль": "Opens the site's change-password page and copies a new strong password",
+"Новый надёжный пароль скопирован (буфер очистится через 30 секунд). Вставьте его на странице смены — браузер предложит обновить сохранённый": "A new strong password is copied (the clipboard clears in 30 seconds). Paste it on the change page — the browser will offer to update the saved one"
 }
