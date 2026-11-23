@@ -213,7 +213,7 @@ sealed partial class MainForm : Form
             suggest.Dispose();
         };
 
-        Load += (_, _) => { StartupTrace.Mark("окно: Load"); OpenStartTabs(); if (Cfg.SidePanelOpen && !Incognito) ToggleSidePanel(true); };
+        Load += (_, _) => { if (StartSession?.Rule is { } sr && Cfg.WindowRules.Contains(sr)) SetDedicated(sr); StartupTrace.Mark("окно: Load"); OpenStartTabs(); if (Cfg.SidePanelOpen && !Incognito) ToggleSidePanel(true); };
         if (guest) sideBtn.Visible = false;
         Shown += (_, _) => LayoutToolbar();
         ApplyChrome();
@@ -435,6 +435,8 @@ sealed partial class MainForm : Form
         if (tab.Core != null)
             menu.Items.Add(Theme.Item(tab.Core.IsMuted ? "Включить звук" : "Выключить звук", () => tab.Core.IsMuted = !tab.Core.IsMuted));
         if (tab.Core != null) menu.Items.Add(VolumeMenu(tab));
+        if (!Incognito && tab.Core?.Source is { } rs && rs.StartsWith("http") && Uri.TryCreate(rs, UriKind.Absolute, out var ru))
+            menu.Items.Add(Theme.Item(RuleFor(ru.Host) is { } rr ? L.T("Не открывать ") + rr + L.T(" в отдельном окне") : L.T("Всегда открывать ") + RootDomain(ru.Host) + L.T(" в своём окне"), () => ToggleWindowRule(tab), null, "\uE737"));
         if (tab.SplitWith != null) menu.Items.Add(Theme.Item("Убрать разделение экрана", () => { SelectTab(tab); Unsplit(); }));
         else if (active != null && tab != active) menu.Items.Add(Theme.Item("Открыть рядом с текущей вкладкой", () => SplitWith(active, tab)));
         else menu.Items.Add(Theme.Item("Разделить экран", ToggleSplit, "Ctrl+\\"));
@@ -484,6 +486,7 @@ sealed partial class MainForm : Form
         }).ToList(),
         Active = active == null ? 0 : Math.Max(0, tabs.IndexOf(active)),
         Window = WindowState == FormWindowState.Minimized ? null : new[] { RestoreBounds.X, RestoreBounds.Y, RestoreBounds.Width, RestoreBounds.Height, WindowState == FormWindowState.Maximized ? 1 : 0 },
+        Rule = DedicatedRule,
     };
 
     public Session? StartSession { get; init; }
@@ -620,6 +623,8 @@ sealed partial class MainForm : Form
         {
             if (Uri.TryCreate(e.Uri, UriKind.Absolute, out var u))
             {
+                // Сайт с правилом «в своём окне» — переносим туда
+                if (!e.IsRedirected && RouteToRuleWindow(tab, u, e.IsUserInitiated)) { e.Cancel = true; return; }
                 if (u.Host == LitePages.Host)
                 {
                     var qs = HttpUtility.ParseQueryString(u.Query);
@@ -1334,7 +1339,7 @@ sealed partial class MainForm : Form
     void UpdateTitle()
     {
         var title = active?.Title;
-        var suffix = Guest ? " — " + L.T("Гость") + " — LiteBrowser" : Incognito ? " — Инкогнито — LiteBrowser" : Profiles.Current.Length > 0 ? $" — {Profiles.Current} — LiteBrowser" : " — LiteBrowser";
+        var suffix = DedicatedRule != null ? $" — {DedicatedRule} — LiteBrowser" : Guest ? " — " + L.T("Гость") + " — LiteBrowser" : Incognito ? " — Инкогнито — LiteBrowser" : Profiles.Current.Length > 0 ? $" — {Profiles.Current} — LiteBrowser" : " — LiteBrowser";
         suffix = WorkspaceSuffix + suffix;
         Text = string.IsNullOrWhiteSpace(title) ? suffix[3..] : title + suffix;
     }

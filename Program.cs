@@ -430,6 +430,15 @@ sealed class BrowserApp : ApplicationContext
         foreach (var w in windows.ToList()) w.Close();
     }
 
+    /// <summary>Открыть адрес в окне, выделенном под сайт (или создать такое окно).</summary>
+    public void OpenInRuleWindow(string rule, string url)
+    {
+        var w = windows.FirstOrDefault(x => !x.IsDisposed && x.DedicatedRule == rule);
+        if (w != null) { w.OpenFromOutside(url); w.Activate(); return; }
+        var f = OpenWindow(false, url);
+        f.SetDedicated(rule);
+    }
+
     /// <summary>Гостевое окно — для того, кто сел за ваш компьютер: ваших данных не видно, после закрытия ничего не остаётся.</summary>
     public void OpenGuest() => OpenWindow(true, guest: true);
 

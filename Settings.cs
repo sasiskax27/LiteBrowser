@@ -70,7 +70,8 @@ sealed class AppSettings
     public bool ListCookies { get; set; } = false;
     public bool CosmeticFiltering { get; set; } = true;
     public bool CookieBanners { get; set; } = true;
-    public bool FullTextHistory { get; set; } = true;   // запоминать текст страниц для поиска по истории (только на этом компьютере)      // отклонять cookie-баннеры (или прятать, если отказаться нельзя)
+    public bool FullTextHistory { get; set; } = true;
+    public List<string> WindowRules { get; set; } = new(); // сайты, которые всегда открываются в своём окне   // запоминать текст страниц для поиска по истории (только на этом компьютере)      // отклонять cookie-баннеры (или прятать, если отказаться нельзя)
     public bool YouTubeAds { get; set; } = true;
     public bool BlockPopups { get; set; } = true;
     public List<string> AdblockAllow { get; set; } = new();
@@ -179,6 +180,7 @@ sealed class AppSettings
         if (!UiScales.Contains(UiScale)) UiScale = 100;
         SidePanelWidth = Math.Clamp(SidePanelWidth, 260, 1000);
         if (HomeAnim is not ("" or "aurora" or "stars" or "waves")) HomeAnim = "";
+        WindowRules = (WindowRules ?? new()).Select(CleanSite).Where(x => x.Length > 0 && HostRx.IsMatch(x)).Distinct().Take(30).ToList();
         if (UiTheme is not ("dark" or "light" or "auto") && !Theme.ExtraThemes.Contains(UiTheme)) UiTheme = "dark";
         if (TranslateService is not ("google" or "yandex")) TranslateService = "google";
         if (AiProvider is not ("local" or "ollama" or "openai")) AiProvider = "local";

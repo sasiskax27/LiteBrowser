@@ -1027,5 +1027,11 @@
 "Читать страницу вслух": "Read the page aloud",
 "Сам нажимает «Отклонить» или «Только необходимые» — сайт запоминает отказ. Если отказаться нельзя, прячет баннер. Список «Баннеры cookies» выше только прячет их": "Clicks \"Reject\" or \"Necessary only\" for you, so the site remembers your refusal. If there's no way to refuse, it hides the banner. The \"Cookie banners\" list above only hides them",
 "Мини-плеер поверх окон": "Mini player on top",
-"Зажмите правую кнопку и проведите — виден след и подсказка: ← назад, → вперёд, ↑ новая вкладка, ↓ обновить, ↓→ закрыть вкладку, ↑↓ вернуть закрытую, ↑← / ↑→ соседняя вкладка, →← наверх страницы": "Hold the right button and draw — you'll see a trail and a hint: ← back, → forward, ↑ new tab, ↓ reload, ↓→ close tab, ↑↓ reopen closed tab, ↑← / ↑→ neighbor tab, →← to top of page"
+"Зажмите правую кнопку и проведите — виден след и подсказка: ← назад, → вперёд, ↑ новая вкладка, ↓ обновить, ↓→ закрыть вкладку, ↑↓ вернуть закрытую, ↑← / ↑→ соседняя вкладка, →← наверх страницы": "Hold the right button and draw — you'll see a trail and a hint: ← back, → forward, ↑ new tab, ↓ reload, ↓→ close tab, ↑↓ reopen closed tab, ↑← / ↑→ neighbor tab, →← to top of page",
+"Не открывать ": "Don't open ",
+" в отдельном окне": " in a separate window",
+"Всегда открывать ": "Always open ",
+" в своём окне": " in its own window",
+"Сайты в своём окне": "Sites in their own window",
+"Эти сайты всегда открываются в отдельном окне — например, музыка в одном окне, работа в другом. Добавить: правый клик по вкладке": "These sites always open in a separate window — e.g. music in one window, work in another. To add one: right-click a tab"
 }

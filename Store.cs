@@ -42,6 +42,8 @@ sealed class Session
     public int Active { get; set; }
     /// <summary>Положение окна: x, y, ширина, высота, развёрнуто (1/0).</summary>
     public int[]? Window { get; set; }
+    /// <summary>Окно выделено под сайт (правило окон).</summary>
+    public string? Rule { get; set; }
 }
 
 /// <summary>Закладки, история и сессия. Пишется на диск с задержкой, чтобы не тормозить.</summary>

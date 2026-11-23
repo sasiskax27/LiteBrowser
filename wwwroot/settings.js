@@ -1,4 +1,4 @@
-﻿if (window.top !== window) document.documentElement.innerHTML = '';
+if (window.top !== window) document.documentElement.innerHTML = '';
 
 const $ = id => document.getElementById(id);
 const wv = window.chrome && window.chrome.webview;
@@ -58,6 +58,16 @@ function render() {
   const bl = info.blocklist;
   $('blStatus').textContent = bl.updating ? 'Загружается список…'
     : bl.count > 0 ? `Загружено ${bl.count.toLocaleString('ru-RU')} доменов, обновлено ${bl.updated}` : 'Список ещё не загружен';
+
+  // Сайты в своём окне: чипы с крестиком
+  const wr = $('winRules'); wr.innerHTML = '';
+  const rules = state.windowRules || [];
+  if (!rules.length) wr.innerHTML = '<span class="row-sub">Пока нет</span>';
+  for (const r of rules) {
+    const b = document.createElement('button'); b.className = 'chip'; b.textContent = r + '  ✕'; b.title = 'Убрать';
+    b.onclick = () => { state.windowRules = rules.filter(x => x !== r); save(); render(); };
+    wr.appendChild(b);
+  }
 
   $('about').innerHTML = '';
   for (const line of [
