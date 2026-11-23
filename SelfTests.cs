@@ -294,9 +294,23 @@ static class DevToolsSelfTest
                 log.Add("INFO голоса движка: " + voices);
                 // Чтение вслух (беззвучно): текст страницы делится на части, голос выбирается
                 await core.ExecuteScriptAsync("window.__liteSpeakVolume = 0; var art=document.createElement('article'); art.innerHTML='<h1>Заголовок</h1><p>Первое предложение статьи. Второе предложение!</p>'; document.body.appendChild(art);");
-                var spk = await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", System.Text.Json.JsonSerializer.Serialize(new { expression = MainForm.SpeakJs, userGesture = true, returnByValue = true }));
+                var spk = await core.CallDevToolsProtocolMethodAsync("Runtime.evaluate", System.Text.Json.JsonSerializer.Serialize(new { expression = MainForm.SpeakJs, userGesture = true, returnByValue = true, awaitPromise = true }));
                 await core.ExecuteScriptAsync("speechSynthesis.cancel()");
-                Check("чтение вслух: текст подготовлен", spk.Contains("\"ok:") || spk.Contains("nosynth"), spk.Length > 160 ? spk[..160] : spk);
+                bool hasRuVoice = voices.Contains("ru-RU", StringComparison.OrdinalIgnoreCase);
+                // Есть русский голос — читает им; нет — честно говорит «голоса нет» и отдаёт текст для онлайн-голоса
+                Check("чтение вслух: русский текст — голос или «нет голоса»", hasRuVoice ? spk.Contains("ok:") : spk.Contains("novoice") && spk.Contains("Первое предложение"),
+                      (hasRuVoice ? "есть русский голос: " : "русского голоса нет: ") + (spk.Length > 140 ? spk[..140] : spk));
+                var ttsParts = OnlineTts.Split(new[] { new string('а', 150) + " " + new string('б', 150) + ". Конец." }).ToList();
+                Check("чтение вслух: длинный текст делится для онлайн-голоса", ttsParts.All(x => x.Length <= 190) && string.Concat(ttsParts).Replace(" ", "").Length == 150 + 150 + ". Конец.".Length - 1, string.Join(" | ", ttsParts.Select(x => x.Length)));
+                try
+                {
+                    using var th = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                    th.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0 Safari/537.36");
+                    var mp3 = await th.GetByteArrayAsync("https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=ru&q=" + Uri.EscapeDataString("проверка голоса"));
+                    bool isMp3 = mp3.Length > 1000 && (mp3[0] == 'I' && mp3[1] == 'D' && mp3[2] == '3' || mp3[0] == 0xFF);
+                    log.Add((isMp3 ? "OK   " : "INFO ") + $"онлайн-голос отвечает звуком — {mp3.Length / 1024} КБ MP3");
+                }
+                catch (Exception ex) { log.Add("INFO онлайн-голос недоступен из этой сети: " + ex.Message); }
                 // Громкость вкладки: ставится существующим и новым видео/аудио
                 await core.ExecuteScriptAsync("var a1=document.createElement('audio');document.body.appendChild(a1);");
                 await core.ExecuteScriptAsync(MainForm.VolumeJs(40));

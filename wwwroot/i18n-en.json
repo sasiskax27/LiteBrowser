@@ -1048,5 +1048,16 @@
 "Новый контейнер…": "New container…",
 "Название контейнера (например, «Второй аккаунт»)": "Container name (e.g. \"Second account\")",
 "Открыть в контейнере": "Open in container",
-"Новая вкладка в контейнере": "New tab in container"
+"Новая вкладка в контейнере": "New tab in container",
+"русского": "Russian",
+"английского": "English",
+"В Windows нет голоса для ": "Windows has no voice for the ",
+" языка. Установить бесплатно или читать онлайн-голосом Google (текст уйдёт в Google)?": " language. Install one for free, or read with Google's online voice (the text goes to Google)?",
+"Установить голос": "Install a voice",
+"Онлайн-голос": "Online voice",
+"Параметры → Время и язык → Речь → «Добавить голоса» → Русский. Потом перезапустите браузер": "Settings → Time & language → Speech → \"Add voices\" → Russian. Then restart the browser",
+" (онлайн-голос)": " (online voice)",
+"Онлайн-голос временно недоступен (слишком много запросов)": "The online voice is temporarily unavailable (too many requests)",
+"Читать вслух онлайн-голосом, если в Windows нет голоса языка": "Read aloud with an online voice if Windows has no voice for the language",
+"Например, если нет русского голоса. Текст страницы уходит в Google; бесплатный голос Windows можно установить в Параметры → Время и язык → Речь": "For example, if there's no Russian voice. The page text goes to Google; you can install a free Windows voice in Settings → Time & language → Speech"
 }

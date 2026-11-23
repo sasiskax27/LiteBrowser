@@ -71,6 +71,7 @@ sealed class AppSettings
     public bool CosmeticFiltering { get; set; } = true;
     public bool CookieBanners { get; set; } = true;
     public bool FullTextHistory { get; set; } = true;
+    public bool OnlineTts { get; set; }                 // чтение вслух онлайн-голосом Google, если в Windows нет голоса языка (с согласия)
     public List<string> WindowRules { get; set; } = new();
     public List<string> Containers { get; set; } = new() { "Работа", "Личное", "Покупки" }; // вкладки с отдельными cookies // сайты, которые всегда открываются в своём окне   // запоминать текст страниц для поиска по истории (только на этом компьютере)      // отклонять cookie-баннеры (или прятать, если отказаться нельзя)
     public bool YouTubeAds { get; set; } = true;
